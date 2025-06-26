@@ -42,6 +42,24 @@ const [profile, setProfile] = useState<Profile | null>(null)
       }
 
       setProfile(profileData)
+
+    // Redirect based on role
+    switch (profileData.role) {
+    case 'admin':
+        router.push('/admin')
+        break
+    case 'driver':
+        router.push('/driver')
+        break
+    case 'dispatcher':
+        router.push('/dispatcher')
+        break
+    case 'inventory_staff':
+        router.push('/inventory')
+        break
+    default:
+        router.push('/dashboard')
+    }
       setLoading(false)
     }
 
