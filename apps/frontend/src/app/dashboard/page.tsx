@@ -4,36 +4,56 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
 
-export default function Dashboard() {
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<User | null>(null)
+export default function DashboardPage() {
   const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  type Profile = {
+  id: string
+  full_name: string
+  role: 'admin' | 'driver' | 'dispatcher' | 'inventory_staff'
+  contact_number?: string
+}
+
+const [user, setUser] = useState<User | null>(null)
+const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
       if (!user) {
         router.push('/login')
-      } else {
-        setUser(user)
-        setLoading(false)
+        return
       }
-    })
+
+      setUser(user)
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (!profileData) {
+        router.push('/awaiting-approval')
+        return
+      }
+
+      setProfile(profileData)
+      setLoading(false)
+    }
+
+    loadUser()
   }, [router])
 
-  if (loading) return <p className="p-4">Loading...</p>
+  if (loading) return <p>Loading...</p>
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Welcome, {user?.email}</h1>
-      <button
-        className="mt-4 px-4 py-2 bg-red-600 text-white rounded"
-        onClick={async () => {
-          await supabase.auth.signOut()
-          router.push('/login')
-        }}
-      >
-        Logout
-      </button>
-    </div>
-  )
+  <div className="p-6">
+    <h1 className="text-xl font-bold">Welcome, {profile?.full_name || user?.email}!</h1>
+    <p>You&apos;re logged in as <strong>{profile?.role}</strong>.</p>
+  </div>
+)
 }

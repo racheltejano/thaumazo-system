@@ -14,14 +14,25 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
 
-    const { data, error } = isLogin
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password })
+    if (isLogin) {
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
-      setError(error.message)
-    } else if (data.session) {
-      router.push('/dashboard')
+
+      if (loginError) {
+        setError(loginError.message)
+      } else {
+        router.push('/dashboard') //Check if the user is approved
+      }
+    } else {
+      const { error: signupError } = await supabase.auth.signUp({ email, password })
+
+
+      if (signupError) {
+        setError(signupError.message)
+      } else {
+        // After successful signup, redirect to waiting page
+        router.push('/awaiting-approval')
+      }
     }
   }
 
