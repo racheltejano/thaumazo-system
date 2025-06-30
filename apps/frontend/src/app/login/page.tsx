@@ -12,9 +12,17 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // Client-side validation for empty fields
+    if (!email || !password) {
+      setError('Invalid email or password.')
+      return
+    }
+
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
     if (loginError) {
-      setError(loginError.message)
+      // Always show a generic error message
+      setError('Invalid email or password.')
     } else {
       router.push('/dashboard') //Check if the user is approved
     }
