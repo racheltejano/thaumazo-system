@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 interface User {
@@ -8,13 +9,38 @@ interface User {
 }
 
 export default function AdminApprovalsPage() {
+  const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    fetchUnapprovedUsers()
-  }, [])
+    const checkAdminAndFetch = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push('/login')
+        return
+      }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (error || profile?.role !== 'admin') {
+        router.push('/dashboard') // redirect non-admins
+        return
+      }
+
+      fetchUnapprovedUsers()
+    }
+
+    checkAdminAndFetch()
+  }, [router])
 
   const fetchUnapprovedUsers = async () => {
     const { data, error } = await supabase.rpc('get_unapproved_users')
@@ -47,8 +73,8 @@ export default function AdminApprovalsPage() {
   }
 
   const handleDeny = async (userId: string) => {
-    // Optional: delete from `auth.users` or just hide from this list
     setUsers(users.filter(u => u.id !== userId))
+    // Optional: Call backend route to delete auth user
   }
 
   if (loading) return <p className="p-4">Loading users...</p>
