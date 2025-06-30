@@ -61,7 +61,6 @@ export default function AdminApprovalsPage() {
 
     const { error } = await supabase.from('profiles').insert({
       id: userId,
-      full_name: 'Pending Name',
       role: role,
     })
 

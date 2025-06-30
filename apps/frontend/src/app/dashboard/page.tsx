@@ -8,11 +8,12 @@ export default function DashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   type Profile = {
-  id: string
-  full_name: string
-  role: 'admin' | 'driver' | 'dispatcher' | 'inventory_staff'
-  contact_number?: string
-}
+    id: string
+    first_name?: string
+    last_name?: string
+    role: 'admin' | 'driver' | 'dispatcher' | 'inventory_staff'
+    contact_number?: string
+  }
 
 const [user, setUser] = useState<User | null>(null)
 const [profile, setProfile] = useState<Profile | null>(null)
@@ -70,7 +71,7 @@ const [profile, setProfile] = useState<Profile | null>(null)
 
   return (
   <div className="p-6">
-    <h1 className="text-xl font-bold">Welcome, {profile?.full_name || user?.email}!</h1>
+    <h1 className="text-xl font-bold">Welcome, {(profile?.first_name || "") + (profile?.last_name ? ` ${profile.last_name}` : "") || user?.email}!</h1>
     <p>You&apos;re logged in as <strong>{profile?.role}</strong>.</p>
   </div>
 )

@@ -43,16 +43,17 @@ export default function LoginPage() {
           {isLogin ? 'Login' : 'Sign Up'}
         </h2>
 
+        <label htmlFor="email" className="block font-medium mb-1">Email address</label>
         <input
+          id="email"
           className="w-full p-2 border rounded"
-          placeholder="Email"
           type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
         />
         <input
+          id="password"
           className="w-full p-2 border rounded"
-          placeholder="Password"
           type="password"
           value={password}
           onChange={e => setPassword(e.target.value)}
