@@ -57,6 +57,17 @@ export default function LoginPage() {
           value={password}
           onChange={e => setPassword(e.target.value)}
         />
+        {/* Forgot password link, only show on login */}
+        {isLogin && (
+          <div className="text-right">
+            <a
+              href="/forgot-password"
+              className="text-blue-600 underline text-sm"
+            >
+              Forgot password?
+            </a>
+          </div>
+        )}
         <button className="w-full p-2 bg-black text-white rounded">
           {isLogin ? 'Login' : 'Sign Up'}
         </button>
