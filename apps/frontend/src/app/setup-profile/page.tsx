@@ -3,59 +3,49 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
-export default function SettingsPage() {
+export default function SetupProfilePage() {
   const router = useRouter()
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+  const [loading, setLoading] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
         router.push("/login")
-        return
+      } else {
+        setUserId(user.id)
       }
-      setUserId(user.id)
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("first_name, last_name")
-        .eq("id", user.id)
-        .single()
-      if (profile) {
-        setFirstName(profile.first_name || "")
-        setLastName(profile.last_name || "")
-      }
-      setLoading(false)
     })
   }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    setSuccess("")
-    setSaving(true)
-    const { error } = await supabase.from("profiles").update({
+    if (!firstName || !lastName) {
+      setError("Please fill in all fields.")
+      return
+    }
+    setLoading(true)
+    const { error } = await supabase.from("profiles").upsert({
+      id: userId,
       first_name: firstName,
       last_name: lastName
-    }).eq("id", userId)
-    setSaving(false)
+    })
+    setLoading(false)
     if (error) {
-      setError("Failed to update profile. Please try again.")
+      setError("Failed to save profile. Please try again.")
     } else {
-      setSuccess("Profile updated successfully.")
+      router.push("/awaiting-approval")
     }
   }
-
-  if (loading) return <div className="p-8 text-center">Loading...</div>
 
   return (
     <main className="flex flex-col items-center justify-center h-screen p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        <h2 className="text-2xl font-bold text-center mb-4">User Settings</h2>
+        <h2 className="text-2xl font-bold text-center mb-4">Set up your profile</h2>
         <label htmlFor="firstName" className="block font-medium mb-1">First name</label>
         <input
           id="firstName"
@@ -73,12 +63,11 @@ export default function SettingsPage() {
           onChange={e => setLastName(e.target.value)}
         />
         {error && <p className="text-red-500 text-sm">{error}</p>}
-        {success && <p className="text-green-600 text-sm">{success}</p>}
         <button
           className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold disabled:opacity-50"
-          disabled={saving}
+          disabled={loading}
         >
-          {saving ? "Saving..." : "Save changes"}
+          {loading ? "Saving..." : "Save profile"}
         </button>
       </form>
     </main>

@@ -7,41 +7,23 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isLogin, setIsLogin] = useState(true)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (isLogin) {
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-
-
-      if (loginError) {
-        setError(loginError.message)
-      } else {
-        router.push('/dashboard') //Check if the user is approved
-      }
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+    if (loginError) {
+      setError(loginError.message)
     } else {
-      const { error: signupError } = await supabase.auth.signUp({ email, password })
-
-
-      if (signupError) {
-        setError(signupError.message)
-      } else {
-        // After successful signup, redirect to waiting page
-        router.push('/awaiting-approval')
-      }
+      router.push('/dashboard') //Check if the user is approved
     }
   }
 
   return (
     <main className="flex flex-col items-center justify-center h-screen p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        <h2 className="text-2xl font-bold text-center">
-          {isLogin ? 'Login' : 'Sign Up'}
-        </h2>
+        <h2 className="text-2xl font-bold text-center mb-4">Sign in to Thaumazo</h2>
 
         <label htmlFor="email" className="block font-medium mb-1">Email address</label>
         <input
@@ -51,6 +33,11 @@ export default function LoginPage() {
           value={email}
           onChange={e => setEmail(e.target.value)}
         />
+
+        <div className="flex items-center justify-between">
+          <label htmlFor="password" className="block font-medium mb-1">Password</label>
+          <a href="/forgot-password" className="text-blue-600 text-sm underline ml-2">Forgot password?</a>
+        </div>
         <input
           id="password"
           className="w-full p-2 border rounded"
@@ -58,32 +45,16 @@ export default function LoginPage() {
           value={password}
           onChange={e => setPassword(e.target.value)}
         />
-        {/* Forgot password link, only show on login */}
-        {isLogin && (
-          <div className="text-right">
-            <a
-              href="/forgot-password"
-              className="text-blue-600 underline text-sm"
-            >
-              Forgot password?
-            </a>
-          </div>
-        )}
-        <button className="w-full p-2 bg-black text-white rounded">
-          {isLogin ? 'Login' : 'Sign Up'}
+
+        <button className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold">
+          Sign in
         </button>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
 
         <p className="text-center text-sm text-gray-500">
-          {isLogin ? "Don't have an account?" : 'Already registered?'}{' '}
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-blue-600 underline"
-          >
-            {isLogin ? 'Sign Up' : 'Login'}
-          </button>
+          New to Thaumazo?{' '}
+          <a href="/register" className="text-blue-600 underline">Create an account</a>
         </p>
       </form>
     </main>
