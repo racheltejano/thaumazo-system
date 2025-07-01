@@ -18,16 +18,41 @@ const sidebarMenus: SidebarMenus = {
   admin: [
     {
       label: 'Dashboard',
-      icon: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+        </svg>
+      ),
       href: '/admin',
     },
     {
       label: 'Staff Management',
-      icon: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><circle cx="16" cy="8" r="4"/><path d="M2 20c0-2.5 3-4.5 6-4.5s6 2 6 4.5"/><path d="M14 20c0-2.5 3-4.5 6-4.5s6 2 6 4.5"/></svg>,
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="8" cy="8" r="4" />
+          <circle cx="16" cy="8" r="4" />
+          <path d="M2 20c0-2.5 3-4.5 6-4.5s6 2 6 4.5" />
+          <path d="M14 20c0-2.5 3-4.5 6-4.5s6 2 6 4.5" />
+        </svg>
+      ),
       href: '/admin/staff',
     },
+    {
+      label: 'Pending Approvals',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M9 12l2 2l4 -4" />
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+      ),
+      href: '/admin/approvals',
+    },
   ],
-};
+}
+
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
