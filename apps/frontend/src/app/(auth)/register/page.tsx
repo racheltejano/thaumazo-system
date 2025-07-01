@@ -45,17 +45,11 @@ export default function RegisterPage() {
   return (
     <>
       {/* Tab Navigation */}
-      <div className="flex justify-center space-x-8 text-sm font-medium mb-4">
-        <Link
-          href="/login"
-          className="text-gray-400 hover:text-orange-500 transition-colors"
-        >
-          SIGN IN
-        </Link>
-        <span className="text-orange-600 border-b-2 border-orange-500 pb-1 font-semibold">
-          SIGN UP
-        </span>
+      <div className="flex space-x-6 mb-4 justify-center">
+        <Link href="/login" className="text-gray-500 hover:text-orange-500">SIGN IN</Link>
+        <span className="font-bold border-b-2 border-orange-500 text-orange-600">SIGN UP</span>
       </div>
+
 
       {success ? (
         <div className="space-y-6 text-center">

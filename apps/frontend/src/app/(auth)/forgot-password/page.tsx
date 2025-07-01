@@ -31,26 +31,18 @@ export default function ForgotPasswordPage() {
   return (
     <>
       {/* Tab Navigation */}
-      <div className="flex justify-center space-x-8 text-sm font-medium mb-4">
-        <Link
-          href="/login"
-          className="text-orange-500 hover:text-orange-600 transition-colors"
-        >
-          SIGN IN
-        </Link>
-        <Link
-          href="/register"
-          className="text-gray-400 hover:text-orange-500 transition-colors"
-        >
-          SIGN UP
-        </Link>
+      <div className="flex space-x-6 mb-4 justify-center">
+        <Link href="/login" className="text-gray-500 hover:text-orange-500">SIGN IN</Link>
+        <Link href="/register" className="text-gray-500 hover:text-orange-500">SIGN UP</Link>
       </div>
+
+
 
       {message ? (
         <div className="space-y-6 text-center">
           <p className="text-lg text-gray-700">{message}</p>
           <button
-            className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold"
+            className="w-full p-3 bg-green-600 hover:bg-green-700 text-white rounded font-semibold"
             onClick={() => router.push('/login')}
           >
             Return to Sign In
@@ -58,26 +50,34 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <h2 className="text-2xl font-bold text-center">Reset your password</h2>
+          <h2 className="text-2xl font-bold text-center text-gray-800">Reset your password</h2>
           <p className="text-sm text-gray-600 text-center">
             Enter your account&#39;s verified email address and we&#8217;ll send you a password reset link.
           </p>
+
           <input
             id="email"
-            className="w-full p-2 border rounded"
-            placeholder="Enter your email address"
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
+            placeholder="Enter your email address"
+            className="w-full p-3 border border-gray-300 rounded text-black bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#f26522]"
           />
+
           <button
             type="submit"
-            className="w-full p-2 bg-orange-500 hover:bg-orange-600 text-white rounded disabled:opacity-50"
             disabled={!isValidEmail(email)}
+            className={`w-full p-3 rounded text-white font-medium ${
+              isValidEmail(email)
+                ? "bg-[#f26522] hover:bg-[#d9541c]"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }`}
           >
             Send password reset email
           </button>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+
+
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
         </form>
       )}
     </>
