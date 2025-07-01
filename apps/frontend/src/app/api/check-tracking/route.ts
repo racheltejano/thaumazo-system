@@ -1,31 +1,39 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { supabase } from '@/lib/supabase'
+import { NextResponse } from 'next/server'
 
 export async function GET(req: Request) {
-  const url = new URL(req.url)
-  const trackingId = url.searchParams.get('trackingId')
+  const { searchParams } = new URL(req.url)
+  const trackingId = searchParams.get('trackingId')
 
-  const cookieStore = (cookies() as unknown) as {
-    get(name: string): { value: string } | undefined
+  if (!trackingId) {
+    return NextResponse.json({ error: 'Missing tracking ID' }, { status: 400 })
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value ?? ''
-        },
-      },
-    }
-  )
-
-  const { data } = await supabase
+  // Step 1: Get client by tracking ID
+  const { data: client, error: clientError } = await supabase
     .from('clients')
     .select('id')
     .eq('tracking_id', trackingId)
     .single()
 
-  return Response.json({ exists: !!data })
+  if (clientError || !client) {
+    return NextResponse.json({ exists: false }) // Not a valid tracking ID
+  }
+
+  // Step 2: Check if an order exists for the client
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('client_id', client.id)
+    .maybeSingle()
+
+  if (orderError) {
+    console.error(orderError)
+    return NextResponse.json({ error: 'Error checking order' }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    exists: true,
+    hasOrder: !!order,
+  })
 }

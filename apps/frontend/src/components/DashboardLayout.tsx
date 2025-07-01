@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
+// import Image from 'next/image'; [Not yet in use dawg]
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -80,11 +80,13 @@ export default function DashboardLayout({
   }, [profileMenuOpen]);
 
   // Placeholder logout handler
-  const handleLogout = async () => {
+    const handleLogout = async () => {
     setProfileMenuOpen(false);
-    const { error } = await supabase.auth.signOut();
+    await supabase.auth.signOut();
     router.push('/login');
   };
+
+
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -96,19 +98,20 @@ export default function DashboardLayout({
         `}
       >
         <nav className="flex-1 py-6 px-2 flex flex-col gap-2">
-          {menus.map((item: SidebarMenuItem, idx: number) => (
-            <a
-              key={item.label}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
-                text-gray-700 hover:bg-orange-50 hover:text-orange-600
-                ${collapsed ? 'justify-center' : ''} text-xs md:text-sm'
-              `}
-            >
-              <span className="text-xl">{item.icon}</span>
-              {!collapsed && <span className="font-medium">{item.label}</span>}
-            </a>
-          ))}
+          {menus.map((item: SidebarMenuItem) => (
+        <a
+          key={item.label}
+          href={item.href}
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
+            text-gray-700 hover:bg-orange-50 hover:text-orange-600
+            ${collapsed ? 'justify-center' : ''} text-xs md:text-sm'
+          `}
+        >
+          <span className="text-xl">{item.icon}</span>
+          {!collapsed && <span className="font-medium">{item.label}</span>}
+        </a>
+      ))}
+
         </nav>
         {/* Toggle button */}
         <button

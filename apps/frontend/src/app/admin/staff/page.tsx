@@ -1,6 +1,6 @@
 'use client';
 
-import DashboardLayout from '../../components/DashboardLayout';
+import DashboardLayout from '../../../components/DashboardLayout';
 import React, { useState } from 'react';
 
 // Temporary placeholder data for staff table
