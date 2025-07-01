@@ -1,6 +1,8 @@
-"use client"
+'use client'
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
 function isValidEmail(email: string) {
@@ -17,31 +19,49 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setMessage("")
     setError("")
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`
     })
+
     if (error) setError(error.message)
     else setMessage("Check your email for a link to reset your password. If it doesn't appear within a few minutes, check your spam folder.")
   }
 
   return (
-    <main className="flex flex-col items-center justify-center h-screen p-4">
+    <>
+      {/* Tab Navigation */}
+      <div className="flex justify-center space-x-8 text-sm font-medium mb-4">
+        <Link
+          href="/login"
+          className="text-orange-500 hover:text-orange-600 transition-colors"
+        >
+          SIGN IN
+        </Link>
+        <Link
+          href="/register"
+          className="text-gray-400 hover:text-orange-500 transition-colors"
+        >
+          SIGN UP
+        </Link>
+      </div>
+
       {message ? (
-        <div className="w-full max-w-sm space-y-6 text-center">
+        <div className="space-y-6 text-center">
           <p className="text-lg text-gray-700">{message}</p>
           <button
-            className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded"
+            className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold"
             onClick={() => router.push('/login')}
           >
-            Return to sign in
+            Return to Sign In
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-          <h2 className="text-2xl font-bold text-center mb-4">Reset your password</h2>
-          <label htmlFor="email" className="block text-gray-700 text-sm mb-1">
-            Enter your account's verified email address and we will send you a password reset link.
-          </label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-2xl font-bold text-center">Reset your password</h2>
+          <p className="text-sm text-gray-600 text-center">
+            Enter your account&#39;s verified email address and we&#8217;ll send you a password reset link.
+          </p>
           <input
             id="email"
             className="w-full p-2 border rounded"
@@ -51,7 +71,8 @@ export default function ForgotPasswordPage() {
             onChange={e => setEmail(e.target.value)}
           />
           <button
-            className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50"
+            type="submit"
+            className="w-full p-2 bg-orange-500 hover:bg-orange-600 text-white rounded disabled:opacity-50"
             disabled={!isValidEmail(email)}
           >
             Send password reset email
@@ -59,6 +80,6 @@ export default function ForgotPasswordPage() {
           {error && <p className="text-red-500 text-sm">{error}</p>}
         </form>
       )}
-    </main>
+    </>
   )
-} 
+}
