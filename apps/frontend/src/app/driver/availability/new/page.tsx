@@ -12,7 +12,7 @@ const SHIFT_PRESETS = {
   full_day: { label: 'Full Day (8AM–5PM)', start: '08:00', end: '17:00', hours: 9 },
 }
 
-const UNAVAILABLE_REASONS = ['vl', 'sl', 'ooo'] // vacation, sick, out of office
+const UNAVAILABLE_REASONS = ['vl', 'sl', 'ooo']
 
 type DayEntry = {
   day: string
@@ -26,13 +26,12 @@ export default function DriverAvailabilityForm() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Set current week days
   useEffect(() => {
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }) // Monday
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
     const days = Array.from({ length: 7 }, (_, i) => {
       const date = addDays(weekStart, i)
       return {
-        day: date.toISOString().split('T')[0], // YYYY-MM-DD
+        day: date.toISOString().split('T')[0],
         shift: '',
         available: true,
         unavailableReason: '',
@@ -117,78 +116,93 @@ export default function DriverAvailabilityForm() {
   }
 
   return (
-    <main className="p-6 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">📆 Set Weekly Availability</h1>
-      <p className="text-sm text-gray-500">Please select your shifts for this week (Minimum: 20 hours).</p>
+    <main className="bg-brand-light min-h-screen py-8 px-6 max-w-5xl mx-auto font-sans">
+  <div className="text-center mb-8">
+    <h1 className="text-3xl font-bold text-brand-orange">📅 Weekly Driver Availability</h1>
+    <p className="text-sm text-brand-gray mt-1">
+      Please schedule at least <span className="font-semibold">20 hours</span> for the week.
+    </p>
+  </div>
 
-      <table className="w-full border text-sm">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="p-2 text-left">Date</th>
-            <th className="p-2">Available?</th>
-            <th className="p-2">Shift</th>
-            <th className="p-2">Reason (if Unavailable)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {weekData.map((d, i) => (
-            <tr key={i} className="border-t">
-              <td className="p-2">{d.day}</td>
-              <td className="p-2 text-center">
-                <input
-                  type="checkbox"
-                  checked={d.available}
-                  onChange={(e) => handleAvailabilityToggle(d.day, e.target.checked)}
-                />
-              </td>
-              <td className="p-2">
-                {d.available ? (
-                  <select
-                    value={d.shift}
-                    onChange={(e) => handleShiftChange(d.day, e.target.value as keyof typeof SHIFT_PRESETS)}
-                    className="border p-1 rounded w-full"
-                  >
-                    <option value="">-- Select Shift --</option>
-                    {Object.entries(SHIFT_PRESETS).map(([key, s]) => (
-                      <option key={key} value={key}>{s.label}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="text-gray-400 italic">Unavailable</span>
-                )}
-              </td>
-              <td className="p-2">
-                {!d.available && (
-                  <select
-                    value={d.unavailableReason}
-                    onChange={(e) => handleReasonChange(d.day, e.target.value)}
-                    className="border p-1 rounded w-full"
-                  >
-                    <option value="">-- Select Reason --</option>
-                    {UNAVAILABLE_REASONS.map(r => (
-                      <option key={r} value={r}>
-                        {r === 'vl' ? 'Vacation Leave' : r === 'sl' ? 'Sick Leave' : 'Out of Office'}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="text-right text-sm text-gray-600">Total hours scheduled: {totalHours} hrs</div>
-
-      {message && <div className="text-center text-sm mt-2 text-blue-600">{message}</div>}
-
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {weekData.map((d, i) => (
+      <div
+        key={i}
+        className="bg-white rounded-2xl shadow-md p-5 space-y-4 border-t-4 border-brand-orange"
       >
-        {loading ? 'Submitting...' : 'Submit Availability'}
-      </button>
-    </main>
+        <h2 className="text-lg font-semibold text-brand-gray">
+          {new Date(d.day).toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </h2>
+
+        <label className="flex items-center gap-2 text-sm text-brand-gray">
+          <input
+            type="checkbox"
+            checked={d.available}
+            onChange={(e) => handleAvailabilityToggle(d.day, e.target.checked)}
+            className="accent-brand-orange"
+          />
+          Available
+        </label>
+
+        {d.available ? (
+          <select
+            value={d.shift}
+            onChange={(e) => handleShiftChange(d.day, e.target.value as keyof typeof SHIFT_PRESETS)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange"
+          >
+            <option value="">-- Select Shift --</option>
+            {Object.entries(SHIFT_PRESETS).map(([key, s]) => (
+              <option key={key} value={key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select
+            value={d.unavailableReason}
+            onChange={(e) => handleReasonChange(d.day, e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange"
+          >
+            <option value="">-- Unavailable Reason --</option>
+            {UNAVAILABLE_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r === 'vl'
+                  ? 'Vacation Leave'
+                  : r === 'sl'
+                  ? 'Sick Leave'
+                  : 'Out of Office'}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    ))}
+  </div>
+
+  <div className="mt-6 text-right text-sm text-brand-gray">
+    Total Scheduled: <span className="font-semibold">{totalHours} hrs</span>
+  </div>
+
+  {message && (
+    <div className="mt-4 text-center text-sm font-medium text-brand-orange">
+      {message}
+    </div>
+  )}
+
+  <div className="mt-6 text-center">
+    <button
+      onClick={handleSubmit}
+      disabled={loading}
+      className="bg-brand-orange text-white px-8 py-2 rounded-full shadow hover:bg-orange-600 transition disabled:opacity-50"
+    >
+      {loading ? 'Submitting...' : 'Submit Availability'}
+    </button>
+  </div>
+</main>
+
   )
 }
