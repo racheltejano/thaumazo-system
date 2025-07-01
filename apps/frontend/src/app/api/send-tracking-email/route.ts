@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       subject: 'Your Delivery Tracking ID from Thaumazo Logistics',
       html: `
         <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto;">
-          <h2 style="color: #E2725B;">🚚 Thaumazo Logistics</h2>
+          <h2 style="color: #ef6c00;">🚚 Thaumazo EXpress Transport Solutions (TEXTS)</h2>
           <p>Dear Valued Client,</p>
 
           <p>Thank you for choosing <strong>Thaumazo Logistics</strong> for your delivery needs.</p>
@@ -30,8 +30,8 @@ export async function POST(req: Request) {
           <p>To proceed with your delivery request, please click the link below to complete your order details:</p>
 
           <p style="text-align: center; margin: 20px 0;">
-            <a href="https://yourdomain.com/create-order/${trackingId}" 
-               style="background-color: #E2725B; color: white; padding: 12px 20px; border-radius: 6px; text-decoration: none;">
+            <a href="http://localhost:3000/track" 
+               style="background-color: #ef6c00; color: white; padding: 12px 20px; border-radius: 6px; text-decoration: none;">
               Complete My Order
             </a>
           </p>
