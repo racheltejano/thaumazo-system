@@ -19,7 +19,7 @@ export default function SettingsPage() {
       } else {
         setUserId(user.id)
         // Fetch profile info
-        const { data, error } = await supabase
+        const { data} = await supabase
           .from("profiles")
           .select("first_name, last_name")
           .eq("id", user.id)

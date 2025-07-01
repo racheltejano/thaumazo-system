@@ -130,7 +130,7 @@ export default function StaffManagementPage() {
                     <td colSpan={5} className="text-center py-8 text-gray-400">No staff found.</td>
                   </tr>
                 ) : (
-                  paginated.map((staff, idx) => (
+                  paginated.map((staff) => (
                     <tr key={staff.email} className="border-b last:border-b-0 hover:bg-orange-50 transition-colors text-black">
                       <td className="px-4 py-3 font-medium text-black">{staff.name}</td>
                       <td className="px-4 py-3 text-black">{staff.position}</td>
