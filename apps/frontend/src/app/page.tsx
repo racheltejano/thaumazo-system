@@ -126,8 +126,8 @@ export default function Home() {
         <Image
           src="/texts-avatars.png"
           alt="TEXTS Team Avatars"
-          width={900}
-          height={700}
+          width={800}
+          height={600}
           className="object-contain"
         />
       </div>
