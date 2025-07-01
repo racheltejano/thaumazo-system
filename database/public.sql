@@ -18,6 +18,16 @@ CREATE TABLE public.clients (
   pickup_longitude double precision,
   CONSTRAINT clients_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.driver_availability (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  driver_id uuid,
+  title text NOT NULL,
+  start_time timestamp without time zone NOT NULL,
+  end_time timestamp without time zone NOT NULL,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT driver_availability_pkey PRIMARY KEY (id),
+  CONSTRAINT driver_availability_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.order_dropoffs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   order_id uuid,
@@ -57,8 +67,10 @@ CREATE TABLE public.orders (
   tail_lift_required boolean,
   special_instructions text,
   estimated_cost numeric,
+  driver_id uuid,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
-  CONSTRAINT orders_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
+  CONSTRAINT orders_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
+  CONSTRAINT orders_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -67,6 +79,7 @@ CREATE TABLE public.profiles (
   created_at timestamp without time zone DEFAULT now(),
   first_name text,
   last_name text,
+  profile_pic text,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
