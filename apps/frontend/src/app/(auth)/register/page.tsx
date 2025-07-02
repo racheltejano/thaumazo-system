@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import api from '@/lib/api'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -32,13 +32,16 @@ export default function RegisterPage() {
       return
     }
     setLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password })
-    if (error) {
-      setErrors({ email: 'Registration failed. Please try again.' })
-      setLoading(false)
-      return
+    try {
+      const response = await api.post('/auth/register', { email, password })
+      if (response.data && !response.data.error) {
+        setSuccess(true)
+      } else {
+        setErrors({ email: 'Registration failed. Please try again.' })
+      }
+    } catch (err: any) {
+      setErrors({ email: err.response?.data?.message || 'Registration failed. Please try again.' })
     }
-    setSuccess(true)
     setLoading(false)
   }
 

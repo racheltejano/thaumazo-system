@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import api from '@/lib/api'
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -19,13 +19,12 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setMessage("")
     setError("")
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`
-    })
-
-    if (error) setError(error.message)
-    else setMessage("Check your email for a link to reset your password. If it doesn't appear within a few minutes, check your spam folder.")
+    try {
+      await api.post('/auth/forgot-password', { email })
+      setMessage("Check your email for a link to reset your password. If it doesn't appear within a few minutes, check your spam folder.")
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to send reset email.')
+    }
   }
 
   return (

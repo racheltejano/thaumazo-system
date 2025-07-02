@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import api from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     // Only run on the client
@@ -26,28 +27,46 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (!email || !password) {
-      setError('Invalid email or password.')
-      return
-    }
+    setIsLoading(true)
 
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+      if (!email || !password) {
+        setError('Please enter both email and password.')
+        return
+      }
 
-      if (loginError) {
-        setError('Invalid email or password.')
-      } else {
+      const response = await api.post('/auth/login', { 
+        email, 
+        password 
+      })
+      
+      console.log('Login response:', response.data)
+      
+      // The response from Supabase includes both session and user
+      if (response.data?.session?.access_token) {
+        // Store the session data
+        localStorage.setItem('session', JSON.stringify(response.data.session))
+        localStorage.setItem('access_token', response.data.session.access_token)
+        
         if (rememberMe) {
           localStorage.setItem('remembered-email', email)
         } else {
           localStorage.removeItem('remembered-email')
         }
 
-        router.push('/dashboard')
+        // Update the Authorization header for future requests
+        api.defaults.headers.common['Authorization'] = `Bearer ${response.data.session.access_token}`
+        
+        // Use replace instead of push to prevent going back to login page
+        router.replace('/dashboard')
+      } else {
+        setError('Login failed. Please try again.')
       }
-    } catch {
-      setError('Something went wrong. Please try again.')
+    } catch (err: any) {
+      console.error('Login error:', err)
+      setError(err.response?.data?.message || 'Invalid email or password.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -64,6 +83,7 @@ export default function LoginPage() {
         className="w-full p-2 border rounded"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        disabled={isLoading}
       />
       <input
         type="password"
@@ -71,6 +91,7 @@ export default function LoginPage() {
         className="w-full p-2 border rounded"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        disabled={isLoading}
       />
 
       <div className="flex justify-between items-center text-sm">
@@ -80,6 +101,7 @@ export default function LoginPage() {
             className="form-checkbox text-orange-500"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
+            disabled={isLoading}
           />
           <span className="text-gray-700">Remember Me</span>
         </label>
@@ -88,8 +110,12 @@ export default function LoginPage() {
 
       {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-      <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 rounded">
-        Sign In
+      <button 
+        type="submit" 
+        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 rounded disabled:opacity-50"
+        disabled={isLoading}
+      >
+        {isLoading ? 'Signing In...' : 'Sign In'}
       </button>
 
       <Link href="/track" className="block text-center text-sm text-gray-500 hover:text-orange-600 mt-2">

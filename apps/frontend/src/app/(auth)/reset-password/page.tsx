@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { useRouter, useSearchParams } from "next/navigation"
+import api from '@/lib/api'
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("")
@@ -10,23 +10,22 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setMessage("")
     setError("")
     setLoading(true)
-
-    const { error } = await supabase.auth.updateUser({ password })
-
-    setLoading(false)
-
-    if (error) {
-      setError(error.message)
-    } else {
+    try {
+      const accessToken = searchParams.get('access_token') || ''
+      await api.post('/auth/reset-password', { accessToken, newPassword: password })
       setMessage("Password updated! You can now log in.")
       setTimeout(() => router.push("/login"), 2000)
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to reset password.')
     }
+    setLoading(false)
   }
 
   return (
