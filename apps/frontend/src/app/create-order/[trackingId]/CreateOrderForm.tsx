@@ -304,17 +304,64 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
 
       {/* Section: Drop-offs */}
       <fieldset className="border p-4 rounded">
-        <legend className="font-semibold">📍 Drop-offs</legend>
-        {dropoffs.map((d, i) => (
-          <div key={i} className="space-y-2 border rounded p-3 mb-4">
-            <input value={d.name} onChange={e => updateDropoff(i, 'name', e.target.value)} placeholder="Recipient Name" className="border p-2 w-full" />
-            <input value={d.address} onChange={e => updateDropoff(i, 'address', e.target.value)} placeholder="Address" className="border p-2 w-full" />
-            <input value={d.contact} onChange={e => updateDropoff(i, 'contact', e.target.value)} placeholder="Contact Person" className="border p-2 w-full" />
-            <input value={d.phone} onChange={e => updateDropoff(i, 'phone', e.target.value)} placeholder="Phone" className="border p-2 w-full" />
-          </div>
-        ))}
-        <button type="button" onClick={addDropoff} className="text-blue-600">+ Add Drop-off</button>
-      </fieldset>
+  <legend className="font-semibold">📍 Drop-offs</legend>
+  {dropoffs.map((d, i) => (
+    <div key={i} className="relative border rounded p-3 mb-6 bg-black/10">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-semibold text-sm">Drop-off #{i + 1}</h3>
+        {dropoffs.length > 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              const updated = dropoffs.filter((_, index) => index !== i)
+              setDropoffs(updated)
+            }}
+            className="text-sm text-red-600 hover:underline"
+          >
+            ❌ Remove
+          </button>
+        )}
+      </div>
+
+      <input
+        value={d.name}
+        onChange={e => updateDropoff(i, 'name', e.target.value)}
+        placeholder="Recipient Name"
+        className="border p-2 w-full my-1"
+      />
+      <input
+        value={d.address}
+        onChange={e => updateDropoff(i, 'address', e.target.value)}
+        placeholder="Address"
+        className="border p-2 w-full my-1"
+      />
+      {d.latitude && d.longitude && (
+        <div className="relative w-full h-40 my-2 rounded overflow-hidden shadow">
+          <Image
+            src={getMapboxMapUrl(d.latitude, d.longitude)}
+            alt="Drop-off Map"
+            layout="fill"
+            objectFit="cover"
+          />
+        </div>
+      )}
+      <input
+        value={d.contact}
+        onChange={e => updateDropoff(i, 'contact', e.target.value)}
+        placeholder="Contact Person"
+        className="border p-2 w-full my-1"
+      />
+      <input
+        value={d.phone}
+        onChange={e => updateDropoff(i, 'phone', e.target.value)}
+        placeholder="Phone"
+        className="border p-2 w-full my-1"
+      />
+    </div>
+  ))}
+  <button type="button" onClick={addDropoff} className="text-blue-600 mt-2 hover:underline">+ Add Drop-off</button>
+</fieldset>
+
 
       {/* Section: Logistics */}
       <fieldset className="border p-4 rounded">
