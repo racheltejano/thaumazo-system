@@ -38,26 +38,36 @@ type ClientForm = {
   pickup_longitude?: number
 }
 
+
 export default function CreateOrderForm({ trackingId }: { trackingId: string }) {
   const [form, setForm] = useState<ClientForm>({
     client_type: 'first_time',
+    client_pin: '',
+    business_name: '',
     contact_person: '',
     contact_number: '',
+    email: '',
     pickup_address: '',
+    landmark: '',
     pickup_area: '',
     pickup_date: '',
-    estimated_cost: 2500,
-    tail_lift_required: false,
     truck_type: '',
+    tail_lift_required: false,
     special_instructions: '',
+    estimated_cost: 2500,
   })
 
   const [products, setProducts] = useState<Product[]>([{ name: '', quantity: 1 }])
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([{ name: '', address: '', contact: '', phone: '' }])
-  // const [clientVerified, setClientVerified] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+
+  const getMapboxMapUrl = (lat: number, lon: number) =>
+  `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${lon},${lat})/${lon},${lat},16/600x200?access_token=${mapboxToken}`
+
 
   useEffect(() => {
     const fetchClient = async () => {
@@ -68,21 +78,18 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
         .single()
 
       if (data && !error) {
-        if (data.client_type === 'returning') {
-          setForm(prev => ({ ...prev, client_type: 'returning' }))
-        } else {
-          setForm(prev => ({
-            ...prev,
-            contact_person: data.contact_person,
-            contact_number: data.contact_number,
-            email: data.email,
-            pickup_address: data.pickup_address,
-            landmark: data.landmark,
-            pickup_area: data.pickup_area,
-            pickup_latitude: data.pickup_latitude,
-            pickup_longitude: data.pickup_longitude,
-          }))
-        }
+        setForm(prev => ({
+          ...prev,
+          client_type: data.client_type,
+          contact_person: data.contact_person,
+          contact_number: data.contact_number,
+          email: data.email,
+          pickup_address: data.pickup_address,
+          landmark: data.landmark,
+          pickup_area: data.pickup_area,
+          pickup_latitude: data.pickup_latitude,
+          pickup_longitude: data.pickup_longitude,
+        }))
       }
 
       setLoading(false)
@@ -90,6 +97,38 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
 
     fetchClient()
   }, [trackingId])
+
+  useEffect(() => {
+    const updateCoords = async () => {
+      if (form.pickup_address) {
+        const coords = await geocodeAddress(form.pickup_address)
+        if (coords) {
+          setForm(prev => ({
+            ...prev,
+            pickup_latitude: coords.lat,
+            pickup_longitude: coords.lon,
+          }))
+        }
+      }
+    }
+
+    updateCoords()
+  }, [form.pickup_address])
+
+  useEffect(() => {
+    dropoffs.forEach(async (d, i) => {
+      if (!d.address) return
+      const coords = await geocodeAddress(d.address)
+      if (coords) {
+        setDropoffs(prev => {
+          const updated = [...prev]
+          updated[i].latitude = coords.lat
+          updated[i].longitude = coords.lon
+          return updated
+        })
+      }
+    })
+  }, [dropoffs.map(d => d.address).join(',')])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -115,17 +154,23 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   const addProduct = () => setProducts([...products, { name: '', quantity: 1 }])
 
   const geocodeAddress = async (address: string) => {
-    try {
-      const res = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
-      if (res.data?.length > 0) {
-        const { lat, lon } = res.data[0]
-        return { lat: parseFloat(lat), lon: parseFloat(lon) }
+  if (!address) return null
+  try {
+    const res = await axios.get(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
+    )
+    if (res.data && res.data.length > 0) {
+      return {
+        lat: parseFloat(res.data[0].lat),
+        lon: parseFloat(res.data[0].lon),
       }
-    } catch {
-      console.warn('❌ Failed to geocode address')
     }
-    return null
+  } catch (error) {
+    console.warn('Geocoding failed', error)
   }
+  return null
+}
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,17 +250,6 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     setSubmitted(true)
   }
 
-  const renderMap = (lat?: number, lon?: number) =>
-  lat && lon ? (
-    <div className="relative w-full h-40 mt-2 rounded overflow-hidden shadow">
-      <Image
-        src={`https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=15&size=600x200&markers=${lat},${lon},red`}
-        alt="Map preview"
-        layout="fill"
-        objectFit="cover"
-      />
-    </div>
-  ) : null
 
 
   if (loading) return <p className="p-6">Loading...</p>
@@ -239,7 +273,18 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       <fieldset className="border p-4 rounded">
         <legend className="font-semibold">📍 Pickup</legend>
         <input name="pickup_address" value={form.pickup_address} onChange={handleChange} placeholder="Pickup Address" className="border p-2 w-full my-2" />
-        {renderMap(form.pickup_latitude, form.pickup_longitude)}
+       {form.pickup_latitude && form.pickup_longitude && (
+          <div className="relative w-full h-40 mt-2 rounded overflow-hidden shadow">
+            <Image
+              src={getMapboxMapUrl(form.pickup_latitude, form.pickup_longitude)}
+              alt="Map preview"
+              layout="fill"
+              objectFit="cover"
+            />
+          </div>
+        )}
+
+
         <input name="pickup_area" value={form.pickup_area || ''} onChange={handleChange} placeholder="Pickup Area" className="border p-2 w-full my-2" />
         <input name="landmark" value={form.landmark || ''} onChange={handleChange} placeholder="Landmark" className="border p-2 w-full my-2" />
         <input name="pickup_date" type="date" value={form.pickup_date} onChange={handleChange} className="border p-2 w-full my-2" />
