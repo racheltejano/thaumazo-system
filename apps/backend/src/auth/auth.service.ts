@@ -3,6 +3,9 @@ import { Injectable, UnauthorizedException } from '@nestjs/common'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { SupabaseService } from '../supabase/supabase.service'
 import { createClient } from '@supabase/supabase-js'
+import { RegisterDto } from './dto/register.dto'
+import { LoginDto } from './dto/login.dto'
+import { UsersService, UserProfile } from '../users/users.service'
 
 const SUPABASE_JWT_ISSUER = 'https://your-project.supabase.co' // Replace with your real project URL
 const JWKS_URL = `${SUPABASE_JWT_ISSUER}/auth/v1/keys`
@@ -11,9 +14,12 @@ const JWKS_URL = `${SUPABASE_JWT_ISSUER}/auth/v1/keys`
 export class AuthService {
   private JWKS = createRemoteJWKSet(new URL(JWKS_URL))
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly usersService: UsersService,
+  ) {}
 
-  async verifyToken(authorizationHeader?: string) {
+  async verifyToken(authorizationHeader?: string): Promise<UserProfile> {
     if (!authorizationHeader) {
       throw new UnauthorizedException('Missing authorization header')
     }
@@ -25,18 +31,19 @@ export class AuthService {
         issuer: SUPABASE_JWT_ISSUER,
         audience: undefined, // no audience claim required
       })
-
-      return {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role,
+      // Fetch user profile from DB
+      const profile = await this.usersService.getUserProfileById(payload.sub as string)
+      if (!profile) {
+        throw new UnauthorizedException('User profile not found')
       }
+      return profile
     } catch (err) {
       throw new UnauthorizedException('Invalid token')
     }
   }
 
-  async register(email: string, password: string) {
+  async register(body: RegisterDto): Promise<{ user: any; profile: UserProfile }> {
+    const { email, password, name, role } = body
     const supabase = this.supabaseService.getClient()
     const { data, error } = await supabase.auth.admin.createUser({
       email,
@@ -44,14 +51,24 @@ export class AuthService {
       email_confirm: false,
     })
     if (error) throw new UnauthorizedException(error.message)
-    return { user: data.user }
+    // Create user profile in DB
+    const profile = await this.usersService.createUserProfile({
+      id: data.user.id,
+      email,
+      name,
+      role,
+    })
+    return { user: data.user, profile }
   }
 
-  async login(email: string, password: string) {
+  async login(body: LoginDto): Promise<any & { profile: UserProfile | undefined }> {
+    const { email, password } = body
     const supabase = this.supabaseService.getClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new UnauthorizedException(error.message)
-    return data
+    // Fetch user profile from DB
+    const profile = await this.usersService.getUserProfileById(data.user.id)
+    return { ...data, profile }
   }
 
   async forgotPassword(email: string) {

@@ -2,6 +2,8 @@ import { Controller, Post, Body, Get, Req, UseGuards, Logger } from '@nestjs/com
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { JwtGuard } from './jwt/jwt.guard';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -9,13 +11,13 @@ export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
   @Post('register')
-  async register(@Body() body: { email: string; password: string }) {
-    return this.authService.register(body.email, body.password);
+  async register(@Body() body: RegisterDto) {
+    return this.authService.register(body);
   }
 
   @Post('login')
-  async login(@Body() body: { email: string; password: string }) {
-    return this.authService.login(body.email, body.password);
+  async login(@Body() body: LoginDto) {
+    return this.authService.login(body);
   }
 
   @Post('forgot-password')

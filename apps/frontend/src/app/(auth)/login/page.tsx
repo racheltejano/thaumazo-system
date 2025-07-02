@@ -40,24 +40,12 @@ export default function LoginPage() {
         password 
       })
       
-      console.log('Login response:', response.data)
-      
-      // The response from Supabase includes both session and user
-      if (response.data?.session?.access_token) {
-        // Store the session data
-        localStorage.setItem('session', JSON.stringify(response.data.session))
-        localStorage.setItem('access_token', response.data.session.access_token)
-        
+      if (response.status === 200 || response.status === 201) {
         if (rememberMe) {
           localStorage.setItem('remembered-email', email)
         } else {
           localStorage.removeItem('remembered-email')
         }
-
-        // Update the Authorization header for future requests
-        api.defaults.headers.common['Authorization'] = `Bearer ${response.data.session.access_token}`
-        
-        // Use replace instead of push to prevent going back to login page
         router.replace('/dashboard')
       } else {
         setError('Login failed. Please try again.')

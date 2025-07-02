@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import api from '@/lib/api';
 
 type SidebarMenuItem = {
   label: string;
@@ -107,7 +108,7 @@ export default function DashboardLayout({
 
   const handleLogout = async () => {
     setProfileMenuOpen(false);
-    await supabase.auth.signOut();
+    await api.post('/auth/logout');
     router.push('/login');
   };
 
