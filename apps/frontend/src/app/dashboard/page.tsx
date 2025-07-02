@@ -1,78 +1,72 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { User } from '@supabase/supabase-js'
+import { fetchMe } from '@/lib/api'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
   type Profile = {
     id: string
     first_name?: string
     last_name?: string
     role: 'admin' | 'driver' | 'dispatcher' | 'inventory_staff'
     contact_number?: string
+    email?: string
   }
 
-const [user, setUser] = useState<User | null>(null)
 const [profile, setProfile] = useState<Profile | null>(null)
+const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      console.log('[Dashboard] Loading user...')
+      try {
+        console.log('[Dashboard] Calling fetchMe...')
+        const user = await fetchMe()
+        console.log('[Dashboard] fetchMe result:', user)
+        setProfile(user)
 
-      if (!user) {
+        // Redirect based on role
+        switch (user.role) {
+          case 'admin':
+            console.log('[Dashboard] Redirecting to /admin')
+            router.push('/admin')
+            break
+          case 'driver':
+            console.log('[Dashboard] Redirecting to /driver')
+            router.push('/driver')
+            break
+          case 'dispatcher':
+            console.log('[Dashboard] Redirecting to /dispatcher')
+            router.push('/dispatcher')
+            break
+          case 'inventory_staff':
+            console.log('[Dashboard] Redirecting to /inventory')
+            router.push('/inventory')
+            break
+          default:
+            console.log('[Dashboard] Redirecting to /dashboard')
+            router.push('/dashboard')
+        }
+      } catch (err) {
+        console.error('[Dashboard] Error in fetchMe or not authenticated:', err)
         router.push('/login')
-        return
+      } finally {
+        setLoading(false)
+        console.log('[Dashboard] Loading finished.')
       }
-
-      setUser(user)
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (!profileData) {
-        router.push('/awaiting-approval')
-        return
-      }
-
-      setProfile(profileData)
-
-    // Redirect based on role
-    switch (profileData.role) {
-    case 'admin':
-        router.push('/admin')
-        break
-    case 'driver':
-        router.push('/driver')
-        break
-    case 'dispatcher':
-        router.push('/dispatcher')
-        break
-    case 'inventory_staff':
-        router.push('/inventory')
-        break
-    default:
-        router.push('/dashboard')
     }
-      setLoading(false)
-    }
-
     loadUser()
   }, [router])
 
   if (loading) return <p>Loading...</p>
 
   return (
-  <div className="p-6">
-    <h1 className="text-xl font-bold">Welcome, {(profile?.first_name || "") + (profile?.last_name ? ` ${profile.last_name}` : "") || user?.email}!</h1>
-    <p>You&apos;re logged in as <strong>{profile?.role}</strong>.</p>
-  </div>
-)
+    <div className="p-6">
+      <h1 className="text-xl font-bold">
+        Welcome, {(profile?.first_name || "") + (profile?.last_name ? ` ${profile.last_name}` : "") || profile?.email}!
+      </h1>
+      <p>You&apos;re logged in as <strong>{profile?.role}</strong>.</p>
+    </div>
+  )
 }
