@@ -21,6 +21,18 @@ export default function LoginPage() {
         setRememberMe(true)
       }
     }
+
+    const checkIfLoggedIn = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        router.push('/dashboard')
+      }
+    }
+
+    checkIfLoggedIn()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,14 +73,15 @@ export default function LoginPage() {
       <input
         type="email"
         placeholder="Email"
-        className="w-full p-2 border rounded"
+        className="w-full p-2 border rounded text-gray-800"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
+
       <input
         type="password"
         placeholder="Password"
-        className="w-full p-2 border rounded"
+        className="w-full p-2 border rounded text-gray-800"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />

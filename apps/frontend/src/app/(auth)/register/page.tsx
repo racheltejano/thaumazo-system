@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -13,6 +13,21 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+  const checkIfLoggedIn = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      router.push('/dashboard')
+    }
+  }
+
+  checkIfLoggedIn()
+  }, [router])
+
 
   function validate() {
     const errs: { [key: string]: string } = {}
@@ -68,7 +83,7 @@ export default function RegisterPage() {
           <input
             type="email"
             placeholder="Email address"
-            className={`w-full p-2 border rounded ${errors.email ? 'border-red-500' : ''}`}
+            className={`w-full p-2 border rounded text-gray-800 placeholder-gray-500 ${errors.email ? 'border-red-500' : ''}`}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -78,7 +93,7 @@ export default function RegisterPage() {
             <input
               type={showPassword ? 'text' : 'password'}
               placeholder="Password"
-              className={`w-full p-2 border rounded pr-10 ${errors.password ? 'border-red-500' : ''}`}
+              className={`w-full p-2 border rounded pr-10 text-gray-800 placeholder-gray-500 ${errors.password ? 'border-red-500' : ''}`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />

@@ -1,7 +1,8 @@
 'use client'
-import DashboardLayout from '@/components/DashboardLayout'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import DashboardLayout from '@/components/DashboardLayout'
 
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -9,12 +10,41 @@ function generateTrackingId(prefix = 'TXT') {
 }
 
 export default function AdminDashboard() {
+  const router = useRouter()
+  const [loadingAuth, setLoadingAuth] = useState(true)
   const [trackingId, setTrackingId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState('')
   const [emailStatus, setEmailStatus] = useState('')
+    useEffect(() => {
+    const checkAccess = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push('/dashboard')
+        return
+      }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (error || !profile || profile.role !== 'admin') {
+        router.push('/dashboard')
+        return
+      }
+
+      setLoadingAuth(false)
+    }
+
+    checkAccess()
+  }, [router])
 
   const handleGenerate = async () => {
     setLoading(true)
