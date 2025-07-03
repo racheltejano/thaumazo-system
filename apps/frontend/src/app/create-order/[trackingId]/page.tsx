@@ -5,11 +5,12 @@ import Link from 'next/link'
 
 
 interface Props {
-  params: { trackingId: string }
+  params: Promise<{ trackingId: string }>
 }
 
 export default async function CreateOrderPage({ params }: Props) {
-  const trackingId = params.trackingId
+  // Await params before accessing its properties
+  const { trackingId } = await params
 
   // Await the cookie store if needed
   const cookieStore = await cookies()
