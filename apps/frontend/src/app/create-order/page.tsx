@@ -21,8 +21,6 @@ export default function EnterTrackingIdPage() {
     }
 
     try {
-      console.log(`[EnterTrackingIdPage] Checking for existing order with tracking ID: ${trackingId.trim()}`)
-      
       // Check if an order with this tracking ID already exists
       const { data: existingOrder, error: checkError } = await supabase
         .from('orders')
@@ -30,11 +28,8 @@ export default function EnterTrackingIdPage() {
         .eq('tracking_id', trackingId.trim())
         .single()
 
-      console.log(`[EnterTrackingIdPage] Query result:`, { existingOrder, checkError })
-
       if (checkError && checkError.code !== 'PGRST116') {
         // PGRST116 is "no rows returned" - which is what we want
-        console.error('[EnterTrackingIdPage] Error checking order:', checkError)
         setError('Unable to verify tracking ID. Please try again.')
         setLoading(false)
         return
@@ -42,17 +37,14 @@ export default function EnterTrackingIdPage() {
 
       if (existingOrder) {
         // Order already exists - show error
-        console.log(`[EnterTrackingIdPage] Order already exists:`, existingOrder)
         setError(`⚠️ Your order is already being tracked! Order was placed on ${new Date(existingOrder.created_at).toLocaleDateString()} with status: ${existingOrder.status.replace('_', ' ').toUpperCase()}`)
         setLoading(false)
         return
       }
 
       // No existing order found - proceed to create order page
-      console.log(`[EnterTrackingIdPage] No existing order found, redirecting to create-order page`)
       router.push(`/create-order/${trackingId.trim()}`)
     } catch (err) {
-      console.error('[EnterTrackingIdPage] Unexpected error:', err)
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
