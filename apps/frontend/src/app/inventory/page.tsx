@@ -1,56 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { User } from '@supabase/supabase-js'
+import { useState } from 'react'
+import { useInventory } from './hooks/useInventory'
+import { InventoryTable } from './components/InventoryTable'
+import { AddInventoryModal } from './components/AddInventoryModal'
+import { EditQuantityModal } from './components/EditQuantityModal'
+import { EditQtyItem } from './types/inventory.types'
 
 export default function InventoryDashboard() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<string | null>(null)
+  const {
+    loading,
+    inventory,
+    inventoryError,
+    products,
+    handleLogout,
+    refreshData,
+  } = useInventory()
 
-  useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/dashboard') // not logged in
-        return
-      }
-
-      setUser(user)
-
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (error || !profile) {
-        router.push('/dashboard')
-        return
-      }
-
-      if (profile.role !== 'inventory_staff') {
-        router.push('/dashboard') // not the right role
-        return
-      }
-
-      setRole(profile.role)
-      setLoading(false)
-    }
-
-    checkAccess()
-  }, [router])
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editQtyItem, setEditQtyItem] = useState<EditQtyItem | null>(null)
 
   if (loading) return <p>Loading...</p>
 
@@ -61,12 +29,44 @@ export default function InventoryDashboard() {
         Welcome! Manage warehouse stock and incoming/outgoing deliveries here.
       </p>
       
-      <button
-        onClick={handleLogout}
-        className="mt-4 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded font-semibold"
-      >
-        Log Out
-      </button>
+      <div className="mt-4 space-x-4">
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded font-semibold"
+        >
+          Log Out
+        </button>
+
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+        >
+          ➕ Add Inventory
+        </button>
+      </div>
+
+      {inventoryError && <p className="text-red-500">Error: {inventoryError}</p>}
+
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-2">📦 Current Inventory</h2>
+        <InventoryTable 
+          inventory={inventory} 
+          onEditQuantity={setEditQtyItem}
+        />
+      </div>
+
+      <AddInventoryModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        products={products}
+        onSuccess={refreshData}
+      />
+
+      <EditQuantityModal
+        editQtyItem={editQtyItem}
+        onClose={() => setEditQtyItem(null)}
+        onSuccess={refreshData}
+      />
     </div>
   )
 }

@@ -1,8 +1,14 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase' // make sure this is correctly imported
 
 export default function AwaitingApprovalPage() {
   const router = useRouter()
+
+  const handleReturnToLogin = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <main className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
@@ -13,7 +19,7 @@ export default function AwaitingApprovalPage() {
         </p>
         <button
           className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition"
-          onClick={() => router.push('/login')}
+          onClick={handleReturnToLogin}
         >
           Return to Sign In
         </button>
