@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import axios from 'axios'
 import Image from 'next/image'
+import dayjs from 'dayjs'
 
 type Dropoff = {
   name: string
@@ -128,19 +129,31 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   }, [form.pickup_address])
 
   useEffect(() => {
-    dropoffs.forEach(async (d, i) => {
-      if (!d.address) return
+  const doGeocode = async () => {
+    const updates = await Promise.all(dropoffs.map(async (d, i) => {
+      if (!d.address || (d.latitude && d.longitude)) return null
       const coords = await geocodeAddress(d.address)
-      if (coords) {
-        setDropoffs(prev => {
-          const updated = [...prev]
-          updated[i].latitude = coords.lat
-          updated[i].longitude = coords.lon
-          return updated
-        })
-      }
+      return coords ? { index: i, coords } : null
+    }))
+
+    setDropoffs(prev => {
+      const newDropoffs = [...prev]
+      updates.forEach(update => {
+        if (update) {
+          const { index, coords } = update
+          newDropoffs[index].latitude = coords.lat
+          newDropoffs[index].longitude = coords.lon
+        }
+      })
+      return newDropoffs
     })
-  }, [dropoffs.map(d => d.address).join(',')])
+  }
+
+  doGeocode()
+}, [JSON.stringify(dropoffs.map(d => d.address))])
+
+
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -264,8 +277,11 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       special_instructions: form.special_instructions,
       estimated_cost: form.estimated_cost,
       status: 'order_placed',
-      tracking_id: trackingId, // Add tracking_id to order
+      tracking_id: trackingId,
+      estimated_total_duration: null,
+      estimated_end_time: null,
     }
+
 
     addDebugInfo(`Order data: ${JSON.stringify(orderData)}`)
 
@@ -339,15 +355,76 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     // Step 5: Notify dispatch 
-    // addDebugInfo('Notifying dispatch...')
-    // try {
-    //   await supabase.functions.invoke('notify_dispatch', { 
-    //     body: { tracking_id: trackingId } 
-    //   })
-    //   addDebugInfo('Dispatch notification sent')
-    // } catch (notifyError) {
-    //   addDebugInfo(`Dispatch notification error: ${JSON.stringify(notifyError)}`)
-    // }
+    // Step 4.5: Estimate delivery durations
+    addDebugInfo('Estimating delivery durations...')
+
+const allCoordsValid = [
+  form.pickup_latitude,
+  form.pickup_longitude,
+  ...dropoffs.flatMap(d => [d.latitude, d.longitude])
+].every(Boolean)
+
+if (!allCoordsValid) {
+  addDebugInfo('❌ Skipping duration estimation — missing coordinates')
+  return
+}
+
+try {
+  const allPoints = [
+    [form.pickup_longitude!, form.pickup_latitude!],
+    ...dropoffs.map(d => [d.longitude!, d.latitude!]),
+  ]
+
+  const waypoints = allPoints.map(([lon, lat]) => `${lon},${lat}`).join(';')
+
+  const res = await axios.get(
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}`,
+    {
+      params: {
+        access_token: mapboxToken,
+        geometries: 'geojson',
+        overview: 'full',
+        annotations: 'duration',
+      },
+    }
+  )
+
+  const route = res.data.routes[0]
+  const durationSeconds = route.duration
+  const estimatedTotalDuration = Math.round(durationSeconds / 60)
+  const estimatedEndTime = dayjs().add(estimatedTotalDuration, 'minute').toISOString()
+
+  addDebugInfo(`Total estimated duration: ${estimatedTotalDuration} mins`)
+  addDebugInfo(`Estimated end time: ${estimatedEndTime}`)
+
+  await supabase.from('orders').update({
+    estimated_total_duration: estimatedTotalDuration,
+    estimated_end_time: estimatedEndTime,
+  }).eq('id', order.id)
+
+  const legs = route.legs || []
+  const dropoffDurations = legs.slice(1).map((leg: { duration: number }) => Math.round(leg.duration / 60))
+
+
+  await Promise.all(
+    dropoffs.map((dropoff, i) => {
+      const duration = dropoffDurations[i] || null
+      return supabase
+        .from('order_dropoffs')
+        .update({ estimated_duration_mins: duration })
+        .match({
+          order_id: order.id,
+          dropoff_address: dropoff.address,
+        })
+    })
+  )
+
+} catch (error) {
+  console.warn('❌ Failed to fetch Mapbox directions:', error)
+  addDebugInfo('❌ Failed to calculate directions from Mapbox')
+}
+
+
 
     addDebugInfo('Order submission completed successfully!')
     setSubmitted(true)
