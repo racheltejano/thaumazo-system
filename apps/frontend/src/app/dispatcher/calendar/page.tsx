@@ -6,7 +6,6 @@ import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
-
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
 
@@ -20,8 +19,8 @@ type Order = {
   id: string
   pickup_date: string
   pickup_time: string
-  delivery_window_start: string
-  delivery_window_end: string
+  delivery_window_start: string | null
+  delivery_window_end: string | null
   special_instructions: string
   client_id: string
   status: string
@@ -35,54 +34,62 @@ export default function DispatcherCalendarPage() {
   const [assigning, setAssigning] = useState(false)
 
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: availabilityData, error: availError } = await supabase
-        .from('driver_availability')
-        .select('title, start_time, end_time')
+  const fetchData = async () => {
+    setLoading(true);
 
-      const { data: unassignedOrders, error: orderError } = await supabase
-        .from('orders')
-        .select('id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status')
-        .eq('status', 'order_placed')
+    const { data: availabilityData, error: availError } = await supabase
+      .from('driver_availability')
+      .select('title, start_time, end_time');
 
-      if (availError || orderError) {
-        console.error(availError || orderError)
-        return
-      }
+    console.log('📦 Driver availability:', availabilityData);
 
-      const formattedEvents = (availabilityData || []).map(e => ({
-        title: e.title,
-        start: new Date(e.start_time),
-        end: new Date(e.end_time),
-      }))
+    const { data: unassignedOrders, error: orderError } = await supabase
+      .from('orders')
+      .select(
+        'id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status'
+      )
+      .eq('status', 'order_placed');
 
-      setEvents(formattedEvents)
-      setOrders(unassignedOrders || [])
-      setLoading(false)
+    if (availError || orderError) {
+      console.error('❌ Supabase error:', availError || orderError);
+      return;
     }
 
-    fetchData()
-  }, [])
+    const formattedEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
+      title: e.title || 'Driver Available',
+      start: new Date(e.start_time + 'Z'), // ✅ Convert safely
+      end: new Date(e.end_time + 'Z'),     // ✅ Convert safely
+    }));
+
+    console.log('📅 Formatted calendar events:', formattedEvents); // ✅ Log to verify
+
+    setEvents(formattedEvents);
+    setOrders(unassignedOrders || []);
+    setLoading(false);
+  };
+
+  fetchData();
+}, []);
+
 
   const handleAutoAssign = async () => {
-  setAssigning(true)
+    setAssigning(true)
 
-  try {
-    const res = await fetch('/api/auto-assign', { method: 'POST' })
-    const data = await res.json()
+    try {
+      const res = await fetch('/api/auto-assign', { method: 'POST' })
+      const data = await res.json()
 
-    if (!res.ok) throw new Error(data.error)
+      if (!res.ok) throw new Error(data.error || 'Auto-assign failed')
 
-    alert(`✅ ${data.message}`)
-    window.location.reload()
-  } catch (err: any) {
-    console.error('Auto-assign failed:', err)
-    alert(`❌ Auto-assign failed: ${err.message}`)
-  } finally {
-    setAssigning(false)
+      alert(`✅ ${data.message}`)
+      window.location.reload()
+    } catch (err: any) {
+      console.error('Auto-assign failed:', err)
+      alert(`❌ ${err.message}`)
+    } finally {
+      setAssigning(false)
+    }
   }
-}
-
 
   if (loading) return <p className="p-6">Loading calendar...</p>
 
