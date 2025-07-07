@@ -21,8 +21,6 @@
     "react": "^19.0.0",
     "react-big-calendar": "^1.19.4",
     "react-calendar": "^6.0.0",
-    "react-dnd": "^16.0.1",
-    "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^19.0.0",
     "resend": "^4.6.0",
     "uuid": "^11.1.0"
