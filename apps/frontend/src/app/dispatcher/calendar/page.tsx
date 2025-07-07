@@ -1,162 +1,226 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { Calendar, momentLocalizer, View } from 'react-big-calendar'
-import moment from 'moment-timezone'
-import { supabase } from '@/lib/supabase'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
+import { useEffect, useState } from 'react';
+import { Calendar, momentLocalizer, View } from 'react-big-calendar';
+import moment from 'moment-timezone';
+import { supabase } from '@/lib/supabase';
+import DashboardLayout from '@/components/DashboardLayout';
+import { DndProvider, useDrag } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-moment.tz.setDefault('Asia/Manila')
-const localizer = momentLocalizer(moment)
+moment.tz.setDefault('Asia/Manila');
+const localizer = momentLocalizer(moment);
+const DnDCalendar = withDragAndDrop(Calendar);
 
 type DriverEvent = {
-  title: string
-  start: Date
-  end: Date
-}
+  id?: string;
+  title: string;
+  start: Date;
+  end: Date;
+  type: 'availability' | 'order';
+  status?: 'assigned' | 'unassigned';
+};
 
 type Order = {
-  id: string
-  pickup_date: string
-  pickup_time: string
-  delivery_window_start: string | null
-  delivery_window_end: string | null
-  special_instructions: string
-  client_id: string
-  status: string
-}
+  id: string;
+  pickup_date: string;
+  pickup_time: string;
+  delivery_window_start: string | null;
+  delivery_window_end: string | null;
+  special_instructions: string;
+  client_id: string;
+  status: string;
+};
 
-export default function DispatcherCalendarPage() {
-  const [events, setEvents] = useState<DriverEvent[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
-  const [currentView, setCurrentView] = useState<View>('week')
-  const [loading, setLoading] = useState(true)
-  const [assigning, setAssigning] = useState(false)
-
-  useEffect(() => {
-  const fetchData = async () => {
-    setLoading(true);
-
-    const { data: availabilityData, error: availError } = await supabase
-      .from('driver_availability')
-      .select('title, start_time, end_time');
-
-    console.log('📦 Driver availability:', availabilityData);
-
-    const { data: unassignedOrders, error: orderError } = await supabase
-      .from('orders')
-      .select(
-        'id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status'
-      )
-      .eq('status', 'order_placed');
-
-    if (availError || orderError) {
-      console.error('❌ Supabase error:', availError || orderError);
-      return;
-    }
-
-    const formattedEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
-      title: e.title || 'Driver Available',
-      start: new Date(e.start_time + 'Z'), // ✅ Convert safely
-      end: new Date(e.end_time + 'Z'),     // ✅ Convert safely
-    }));
-
-    console.log('📅 Formatted calendar events:', formattedEvents); // ✅ Log to verify
-
-    setEvents(formattedEvents);
-    setOrders(unassignedOrders || []);
-    setLoading(false);
-  };
-
-  fetchData();
-}, []);
-
-
-  const handleAutoAssign = async () => {
-    setAssigning(true)
-
-    try {
-      const res = await fetch('/api/auto-assign', { method: 'POST' })
-      const data = await res.json()
-
-      if (!res.ok) throw new Error(data.error || 'Auto-assign failed')
-
-      alert(`✅ ${data.message}`)
-      window.location.reload()
-    } catch (err: any) {
-      console.error('Auto-assign failed:', err)
-      alert(`❌ ${err.message}`)
-    } finally {
-      setAssigning(false)
-    }
-  }
-
-  if (loading) return <p className="p-6">Loading calendar...</p>
+const DraggableOrder = ({ order }: { order: Order }) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: 'ORDER',
+    item: order,
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }));
 
   return (
-    <main className="h-screen flex bg-gray-50 text-gray-800">
-      {/* Sidebar */}
-      <aside className="w-1/5 border-r bg-white p-4 overflow-y-auto shadow-md">
-        <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
-        {orders.length === 0 ? (
-          <p className="text-sm text-gray-500">All orders are assigned!</p>
-        ) : (
-          <div className="space-y-3">
-            {orders.map(o => (
-              <div
-                key={o.id}
-                className="bg-gray-100 rounded-md p-3 shadow-sm border border-gray-200"
-              >
-                <p className="text-sm font-medium">
-                  Pickup: {o.pickup_date} @ {o.pickup_time}
-                </p>
-                <p className="text-xs text-gray-600">
-                  {o.special_instructions || 'No special instructions'}
-                </p>
+    <div
+      ref={drag}
+      className={`bg-orange-100 rounded-md p-3 shadow-sm border border-orange-300 cursor-move ${
+        isDragging ? 'opacity-50' : ''
+      }`}
+    >
+      <p className="text-sm font-medium">
+        Pickup: {order.pickup_date} @ {order.pickup_time}
+      </p>
+      <p className="text-xs text-gray-600">
+        {order.special_instructions || 'No special instructions'}
+      </p>
+    </div>
+  );
+};
+
+export default function DispatcherCalendarPage() {
+  const [events, setEvents] = useState<DriverEvent[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [draggedOrder, setDraggedOrder] = useState<Order | null>(null);
+  const [currentView, setCurrentView] = useState<View>('month');
+  const [loading, setLoading] = useState(true);
+  const [assigning, setAssigning] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+
+      const { data: availabilityData, error: availError } = await supabase
+        .from('driver_availability')
+        .select('title, start_time, end_time');
+
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .select(
+          'id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status'
+        );
+
+      if (availError || orderError) {
+        console.error('❌ Supabase error:', availError || orderError);
+        return;
+      }
+
+      const availEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
+        title: e.title || 'Driver Available',
+        start: new Date(e.start_time + 'Z'),
+        end: new Date(e.end_time + 'Z'),
+        type: 'availability',
+      }));
+
+      const orderEvents: DriverEvent[] = (orderData || []).map((o) => ({
+        id: o.id,
+        title: `Order #${o.id}`,
+        start: new Date(`${o.pickup_date}T${o.pickup_time}`),
+        end: new Date(`${o.pickup_date}T${o.pickup_time}`),
+        type: 'order',
+        status: o.status === 'order_placed' ? 'unassigned' : 'assigned',
+      }));
+
+      setEvents([...availEvents, ...orderEvents]);
+      setOrders(orderData?.filter((o) => o.status === 'order_placed') || []);
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  const handleAutoAssign = async () => {
+    setAssigning(true);
+    try {
+      const res = await fetch('/api/auto-assign', { method: 'POST' });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Auto-assign failed');
+
+      alert(`✅ ${data.message}`);
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Auto-assign failed:', err);
+      alert(`❌ ${err.message}`);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout role="admin" userName="Dispatcher">
+        <p className="p-6">Loading calendar...</p>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout role="admin" userName="Dispatcher">
+      <DndProvider backend={HTML5Backend}>
+        <main className="flex bg-gray-50 text-gray-800 h-[calc(100vh-4rem)] px-4 py-4 gap-4 overflow-hidden">
+          {/* Sidebar */}
+          <aside className="w-1/5 bg-white p-4 overflow-y-auto rounded-xl shadow-sm h-full border border-gray-200">
+            <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
+            {orders.length === 0 ? (
+              <p className="text-sm text-gray-500">All orders are assigned!</p>
+            ) : (
+              <div className="space-y-3">
+                {orders.map((order) => (
+                  <DraggableOrder key={order.id} order={order} />
+                ))}
+                <button
+                  onClick={handleAutoAssign}
+                  disabled={assigning}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
+                >
+                  {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
+                </button>
               </div>
-            ))}
-            <button
-              onClick={handleAutoAssign}
-              disabled={assigning}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
-            >
-              {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
-            </button>
-          </div>
-        )}
-      </aside>
+            )}
+          </aside>
 
-      {/* Main Calendar */}
-      <section className="w-4/5 p-6 space-y-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">🚛 Driver Availability Calendar</h1>
+          {/* Calendar */}
+          <section className="w-4/5 flex flex-col h-full">
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-2xl font-bold">🚛 Driver Availability Calendar</h1>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">View:</label>
+                <select
+                  value={currentView}
+                  onChange={(e) => setCurrentView(e.target.value as View)}
+                  className="border rounded-md px-3 py-1 text-sm"
+                >
+                  <option value="month">Month</option>
+                  <option value="week">Week</option>
+                  <option value="day">Day</option>
+                </select>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">View:</label>
-            <select
-              value={currentView}
-              onChange={(e) => setCurrentView(e.target.value as View)}
-              className="border rounded-md px-3 py-1 text-sm"
-            >
-              <option value="month">Month</option>
-              <option value="week">Week</option>
-              <option value="day">Day</option>
-            </select>
-          </div>
-        </div>
+            <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+              <DnDCalendar
+                localizer={localizer}
+                events={events}
+                startAccessor="start"
+                endAccessor="end"
+                view={currentView}
+                onView={(view) => setCurrentView(view)}
+                onDropFromOutside={({ start }) => {
+                  if (!draggedOrder) return;
 
-        <div className="h-[85%] bg-white rounded-lg shadow border overflow-hidden">
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            view={currentView}
-            onView={(view) => setCurrentView(view)}
-            style={{ height: '100%' }}
-          />
-        </div>
-      </section>
-    </main>
-  )
+                  const newEvent: DriverEvent = {
+                    id: draggedOrder.id,
+                    title: `Order #${draggedOrder.id}`,
+                    start,
+                    end: start,
+                    type: 'order',
+                    status: 'assigned',
+                  };
+
+                  setEvents((prev) => [...prev, newEvent]);
+                  setOrders((prev) => prev.filter((o) => o.id !== draggedOrder.id));
+                  setDraggedOrder(null);
+                }}
+                handleDragStart={(event: any) => {
+                  setDraggedOrder(event);
+                }}
+                draggableAccessor={(event) => event.type === 'order'}
+                eventPropGetter={(event) => {
+                  let backgroundColor = '#3182ce'; // availability: blue
+                  if (event.type === 'order') {
+                    backgroundColor = event.status === 'assigned' ? '#38a169' : '#ed8936'; // green or orange
+                  }
+                  return { style: { backgroundColor, color: '#fff' } };
+                }}
+                style={{ height: '100%' }}
+              />
+            </div>
+          </section>
+        </main>
+      </DndProvider>
+    </DashboardLayout>
+  );
 }
