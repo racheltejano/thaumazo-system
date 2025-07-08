@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import axios from 'axios'
 import Image from 'next/image'
 import dayjs from 'dayjs'
+import { createSupabaseWithTracking } from '@/lib/supabase'
 
 type Dropoff = {
   name: string
@@ -40,7 +40,7 @@ type ClientForm = {
 }
 
 export default function CreateOrderForm({ trackingId }: { trackingId: string }) {
-  
+  const supabase = createSupabaseWithTracking(trackingId)
   const [form, setForm] = useState<ClientForm>({
     client_type: 'first_time',
     client_pin: '',
@@ -57,7 +57,6 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     special_instructions: '',
     estimated_cost: 2500,
   })
-
   const [products, setProducts] = useState<Product[]>([{ name: '', quantity: 1 }])
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([{ name: '', address: '', contact: '', phone: '' }])
   const [submitted, setSubmitted] = useState(false)
@@ -111,48 +110,50 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     fetchClient()
   }, [trackingId])
 
-  useEffect(() => {
-    const updateCoords = async () => {
-      if (form.pickup_address) {
-        const coords = await geocodeAddress(form.pickup_address)
-        if (coords) {
-          setForm(prev => ({
-            ...prev,
-            pickup_latitude: coords.lat,
-            pickup_longitude: coords.lon,
-          }))
-        }
+    const handlePickupBlur = async () => {
+    if (form.pickup_address) {
+      const coords = await geocodeAddress(form.pickup_address)
+      if (coords) {
+        setForm(prev => ({
+          ...prev,
+          pickup_latitude: coords.lat,
+          pickup_longitude: coords.lon,
+        }))
       }
     }
-
-    updateCoords()
-  }, [form.pickup_address])
-
-  useEffect(() => {
-  const doGeocode = async () => {
-    const updates = await Promise.all(dropoffs.map(async (d, i) => {
-      if (!d.address || (d.latitude && d.longitude)) return null
-      const coords = await geocodeAddress(d.address)
-      return coords ? { index: i, coords } : null
-    }))
-
-    setDropoffs(prev => {
-      const newDropoffs = [...prev]
-      updates.forEach(update => {
-        if (update) {
-          const { index, coords } = update
-          newDropoffs[index].latitude = coords.lat
-          newDropoffs[index].longitude = coords.lon
-        }
-      })
-      return newDropoffs
-    })
   }
 
-  doGeocode()
-}, [JSON.stringify(dropoffs.map(d => d.address))])
+ const handleDropoffBlur = async (index: number, address: string) => {
+  if (!address) return
+
+  const coords = await geocodeAddress(address)
+  if (!coords) {
+    addDebugInfo(`❌ Geocoding failed for drop-off #${index + 1}`)
+    return
+  }
+
+  setDropoffs(prev => {
+    const updated = [...prev]
+    updated[index] = {
+      ...updated[index],
+      latitude: coords.lat,
+      longitude: coords.lon,
+    }
+    return updated
+  })
+
+  addDebugInfo(`✅ Geocoded drop-off #${index + 1}: ${coords.lat}, ${coords.lon}`)
+}
 
 
+
+useEffect(() => {
+  const checkHeader = async () => {
+    const { data, error } = await supabase.rpc('show_tracking_header')
+    console.log('👀 HEADER DEBUG:', data, error)
+  }
+  checkHeader()
+}, [])
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -225,8 +226,25 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       return
     }
 
-    const pickupCoords = await geocodeAddress(form.pickup_address)
+    const pickupCoords = {
+      lat: form.pickup_latitude,
+      lon: form.pickup_longitude,
+    }
     addDebugInfo(`Pickup coordinates: ${JSON.stringify(pickupCoords)}`)
+
+    
+    // Validate drop-offs
+    for (let i = 0; i < dropoffs.length; i++) {
+      const d = dropoffs[i]
+      if (!d.address.trim()) {
+        setError(`Drop-off #${i + 1} is missing an address.`)
+        return
+      }
+      if (!d.contact.trim() && !d.phone.trim()) {
+        setError(`Drop-off #${i + 1} must have either a contact name or a phone.`)
+        return
+      }
+    }
 
     // Step 1: Upsert client
     addDebugInfo('Upserting client...')
@@ -308,19 +326,23 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     // Step 3: Create dropoffs
     addDebugInfo('Creating dropoffs...')
     const dropoffEntries = await Promise.all(
-      dropoffs.filter(d => d.address.trim()).map(async d => {
-        const coords = await geocodeAddress(d.address)
-        return {
-          order_id: order.id,
-          dropoff_name: d.name,
-          dropoff_address: d.address,
-          dropoff_contact: d.contact,
-          dropoff_phone: d.phone,
-          latitude: coords?.lat,
-          longitude: coords?.lon,
-        }
-      })
-    )
+  dropoffs.filter(d => d.address.trim()).map(async d => {
+    const coords = d.latitude && d.longitude
+      ? { lat: d.latitude, lon: d.longitude }
+      : await geocodeAddress(d.address)
+
+    return {
+      order_id: order.id,
+      dropoff_name: d.name,
+      dropoff_address: d.address,
+      dropoff_contact: d.contact,
+      dropoff_phone: d.phone,
+      latitude: coords?.lat,
+      longitude: coords?.lon,
+    }
+  })
+)
+
 
     if (dropoffEntries.length > 0) {
       const { error: dropoffError } = await supabase
@@ -438,140 +460,107 @@ try {
   )
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">📦 Create Order</h1>
-      {error && <p className="text-red-600">{error}</p>}
+  <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+    <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-md max-w-3xl mx-auto space-y-8">
+      <h1 className="text-3xl font-bold text-gray-900">📦 Create Order</h1>
 
-      {/* Debug Info */}
+      {error && <p className="text-red-600 font-semibold">{error}</p>}
+
       {debugInfo.length > 0 && (
-        <div className="bg-gray-100 p-4 rounded">
-          <h3 className="font-bold mb-2">Debug Information:</h3>
-          <div className="text-sm space-y-1 max-h-40 overflow-y-auto">
+        <div className="bg-gray-100 p-4 rounded text-sm">
+          <h3 className="font-semibold mb-2 text-gray-800">Debug Info:</h3>
+          <div className="font-mono max-h-40 overflow-y-auto space-y-1 text-gray-700">
             {debugInfo.map((info, i) => (
-              <div key={i} className="font-mono text-xs">{info}</div>
+              <div key={i}>{info}</div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Section: Contact Info */}
-      <fieldset className="border p-4 rounded">
-        <legend className="font-semibold">🧍 Client Info</legend>
-        <input name="business_name" value={form.business_name || ''} onChange={handleChange} placeholder="Business Name" className="border p-2 w-full my-2" />
-        <input name="contact_person" value={form.contact_person} onChange={handleChange} placeholder="Contact Person*" className="border p-2 w-full my-2" required />
-        <input name="contact_number" value={form.contact_number} onChange={handleChange} placeholder="Contact Number*" className="border p-2 w-full my-2" required />
-        <input name="email" value={form.email || ''} onChange={handleChange} placeholder="Email" className="border p-2 w-full my-2" />
+      {/* Client Info */}
+      <fieldset className="space-y-4">
+        <legend className="font-semibold text-lg text-gray-800">🧍 Client Info</legend>
+        <input name="business_name" value={form.business_name || ''} onChange={handleChange} placeholder="Business Name" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+        <input name="contact_person" value={form.contact_person} onChange={handleChange} placeholder="Contact Person*" className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
+        <input name="contact_number" value={form.contact_number} onChange={handleChange} placeholder="Contact Number*" className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
+        <input name="email" value={form.email || ''} onChange={handleChange} placeholder="Email" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
       </fieldset>
 
-      {/* Section: Pickup */}
-      <fieldset className="border p-4 rounded">
-        <legend className="font-semibold">📍 Pickup</legend>
-        <input name="pickup_address" value={form.pickup_address} onChange={handleChange} placeholder="Pickup Address*" className="border p-2 w-full my-2" required />
+      {/* Pickup Info */}
+      <fieldset className="space-y-4">
+        <legend className="font-semibold text-lg text-gray-800">📍 Pickup Info</legend>
+        <input name="pickup_address" value={form.pickup_address} onChange={handleChange} onBlur={handlePickupBlur} placeholder="Pickup Address*" className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
         {form.pickup_latitude && form.pickup_longitude && (
           <div className="relative w-full h-40 mt-2 rounded overflow-hidden shadow">
-            <Image
-              src={getMapboxMapUrl(form.pickup_latitude, form.pickup_longitude)}
-              alt="Map preview"
-              layout="fill"
-              objectFit="cover"
-            />
+            <Image src={getMapboxMapUrl(form.pickup_latitude, form.pickup_longitude)} alt="Pickup Map" layout="fill" objectFit="cover" />
           </div>
         )}
-        <input name="pickup_area" value={form.pickup_area || ''} onChange={handleChange} placeholder="Pickup Area" className="border p-2 w-full my-2" />
-        <input name="landmark" value={form.landmark || ''} onChange={handleChange} placeholder="Landmark" className="border p-2 w-full my-2" />
-        <input name="pickup_date" type="date" value={form.pickup_date} onChange={handleChange} className="border p-2 w-full my-2" required />
+        <input name="pickup_area" value={form.pickup_area || ''} onChange={handleChange} placeholder="Pickup Area" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+        <input name="landmark" value={form.landmark || ''} onChange={handleChange} placeholder="Landmark" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+        <input type="date" name="pickup_date" value={form.pickup_date} onChange={handleChange} className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
       </fieldset>
 
-      {/* Section: Products */}
-      <fieldset className="border p-4 rounded">
-        <legend className="font-semibold">📦 Products</legend>
+      {/* Products */}
+      <fieldset className="space-y-4">
+        <legend className="font-semibold text-lg text-gray-800">📦 Products</legend>
         {products.map((p, i) => (
-          <div key={i} className="flex gap-2 mb-2">
-            <input value={p.name} onChange={e => updateProduct(i, 'name', e.target.value)} placeholder="Product Name" className="border p-2 w-full" />
-            <input type="number" value={p.quantity} onChange={e => updateProduct(i, 'quantity', +e.target.value)} placeholder="Qty" className="border p-2 w-24" />
+          <div key={i} className="flex gap-2">
+            <input value={p.name} onChange={e => updateProduct(i, 'name', e.target.value)} placeholder="Product Name" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+            <input type="number" value={p.quantity} onChange={e => updateProduct(i, 'quantity', +e.target.value)} placeholder="Qty" className="border border-gray-400 p-3 w-24 rounded text-gray-900" />
           </div>
         ))}
-        <button type="button" onClick={addProduct} className="text-blue-600">+ Add Product</button>
+        <button type="button" onClick={addProduct} className="text-orange-600 hover:underline">+ Add Product</button>
       </fieldset>
 
-      {/* Section: Drop-offs */}
-      <fieldset className="border p-4 rounded">
-        <legend className="font-semibold">📍 Drop-offs</legend>
+      {/* Drop-offs */}
+      <fieldset className="space-y-4">
+        <legend className="font-semibold text-lg text-gray-800">📍 Drop-offs</legend>
         {dropoffs.map((d, i) => (
-          <div key={i} className="relative border rounded p-3 mb-6 bg-black/10">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-sm">Drop-off #{i + 1}</h3>
+          <div key={i} className="bg-gray-50 p-4 rounded border border-gray-300 shadow space-y-2">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold text-sm text-gray-700">Drop-off #{i + 1}</h3>
               {dropoffs.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const updated = dropoffs.filter((_, index) => index !== i)
-                    setDropoffs(updated)
-                  }}
-                  className="text-sm text-red-600 hover:underline"
-                >
-                  ❌ Remove
-                </button>
+                <button type="button" onClick={() => setDropoffs(dropoffs.filter((_, idx) => idx !== i))} className="text-sm text-red-600 hover:underline">❌ Remove</button>
               )}
             </div>
-
-            <input
-              value={d.name}
-              onChange={e => updateDropoff(i, 'name', e.target.value)}
-              placeholder="Recipient Name"
-              className="border p-2 w-full my-1"
-            />
-            <input
-              value={d.address}
-              onChange={e => updateDropoff(i, 'address', e.target.value)}
-              placeholder="Address"
-              className="border p-2 w-full my-1"
-            />
+            <input value={d.name} onChange={e => updateDropoff(i, 'name', e.target.value)} placeholder="Recipient Name" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+            <input value={d.address} onChange={e => updateDropoff(i, 'address', e.target.value)} onBlur={e => handleDropoffBlur(i, e.target.value)} placeholder="Address*" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
             {d.latitude && d.longitude && (
               <div className="relative w-full h-40 my-2 rounded overflow-hidden shadow">
-                <Image
-                  src={getMapboxMapUrl(d.latitude, d.longitude)}
-                  alt="Drop-off Map"
-                  layout="fill"
-                  objectFit="cover"
-                />
+                <Image src={getMapboxMapUrl(d.latitude, d.longitude)} alt="Drop-off Map" layout="fill" objectFit="cover" />
               </div>
             )}
-            <input
-              value={d.contact}
-              onChange={e => updateDropoff(i, 'contact', e.target.value)}
-              placeholder="Contact Person"
-              className="border p-2 w-full my-1"
-            />
-            <input
-              value={d.phone}
-              onChange={e => updateDropoff(i, 'phone', e.target.value)}
-              placeholder="Phone"
-              className="border p-2 w-full my-1"
-            />
+            <input value={d.contact} onChange={e => updateDropoff(i, 'contact', e.target.value)} placeholder="Contact Person" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+            <input value={d.phone} onChange={e => updateDropoff(i, 'phone', e.target.value)} placeholder="Phone" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
           </div>
         ))}
-        <button type="button" onClick={addDropoff} className="text-blue-600 mt-2 hover:underline">+ Add Drop-off</button>
+        <button type="button" onClick={addDropoff} className="text-orange-600 hover:underline">+ Add Drop-off</button>
       </fieldset>
 
-      {/* Section: Logistics */}
-      <fieldset className="border p-4 rounded">
-        <legend className="font-semibold">🚛 Logistics</legend>
-        <select name="truck_type" value={form.truck_type} onChange={handleChange} className="border p-2 w-full my-2" required>
+      {/* Logistics */}
+      <fieldset className="space-y-4">
+        <legend className="font-semibold text-lg text-gray-800">🚛 Logistics</legend>
+        <select name="truck_type" value={form.truck_type} onChange={handleChange} className="border border-gray-400 p-3 w-full rounded text-gray-900" required>
           <option value="">Select Truck Type*</option>
           <option value="van">Van</option>
           <option value="6-wheeler">6-Wheeler</option>
           <option value="10-ton truck">10-Ton Truck</option>
         </select>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 text-gray-800">
           <input type="checkbox" name="tail_lift_required" checked={form.tail_lift_required || false} onChange={handleChange} />
           Tail Lift Required
         </label>
-        <textarea name="special_instructions" value={form.special_instructions || ''} onChange={handleChange} placeholder="Special Instructions" className="border p-2 w-full my-2" />
-        <p className="text-sm text-gray-600">Estimated Cost: ₱{form.estimated_cost?.toFixed(2)}</p>
+        <textarea name="special_instructions" value={form.special_instructions || ''} onChange={handleChange} placeholder="Special Instructions" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
+        <p className="text-sm text-gray-700">Estimated Cost: ₱{form.estimated_cost?.toFixed(2)}</p>
       </fieldset>
 
-      <button type="submit" className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">🚀 Submit Order</button>
+      <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded shadow">
+        🚀 Submit Order
+      </button>
     </form>
-  )
+  </div>
+);
+
+
+
 }
