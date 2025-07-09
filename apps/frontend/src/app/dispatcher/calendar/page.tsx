@@ -13,6 +13,8 @@ import { HTML5Backend } from 'react-dnd-html5-backend'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import DashboardLayout from '@/components/DashboardLayout'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import DraggableOrder from '@/components/Dispatcher/DraggableOrder'
+
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -34,35 +36,13 @@ type Order = {
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
-  client_id: string
+  truck_type: string | null
+  tail_lift_required: boolean | null
+  client_name: string | null
   status: string
 }
 
-const DraggableOrder = ({ order }: { order: Order }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: 'ORDER',
-    item: order,
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }))
 
-  return (
-    <div
-      ref={drag}
-      className={`bg-orange-100 rounded-md p-3 shadow-sm border border-orange-300 cursor-move ${
-        isDragging ? 'opacity-50' : ''
-      }`}
-    >
-      <p className="text-sm font-medium">
-        Pickup: {order.pickup_date} @ {order.pickup_time}
-      </p>
-      <p className="text-xs text-gray-600">
-        {order.special_instructions || 'No special instructions'}
-      </p>
-    </div>
-  )
-}
 
 export default function DispatcherCalendarPage() {
   const [events, setEvents] = useState<DriverEvent[]>([])
@@ -82,14 +62,28 @@ export default function DispatcherCalendarPage() {
 
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .select(
-          'id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status'
-        )
+        .select(`
+          id,
+          pickup_date,
+          pickup_time,
+          delivery_window_start,
+          delivery_window_end,
+          special_instructions,
+          truck_type,
+          tail_lift_required,
+          status,
+          clients(name)
+        `)
 
+      
       if (availError || orderError) {
         console.error('❌ Supabase error:', availError || orderError)
         return
       }
+      const enrichedOrders = (orderData || []).map((o) => ({
+        ...o,
+        client_name: o.clients?.name || null,
+      }))
 
       const availEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
         title: e.title || 'Driver Available',
@@ -98,7 +92,7 @@ export default function DispatcherCalendarPage() {
         type: 'availability',
       }))
 
-      const orderEvents: DriverEvent[] = (orderData || []).map((o) => ({
+      const orderEvents: DriverEvent[] = enrichedOrders.map((o) => ({
         id: o.id,
         title: `Order #${o.id}`,
         start: new Date(`${o.pickup_date}T${o.pickup_time}`),
@@ -107,8 +101,9 @@ export default function DispatcherCalendarPage() {
         status: o.status === 'order_placed' ? 'unassigned' : 'assigned',
       }))
 
+
       setEvents([...availEvents, ...orderEvents])
-      setOrders(orderData?.filter((o) => o.status === 'order_placed') || [])
+      setOrders(enrichedOrders.filter((o) => o.status === 'order_placed'))
       setLoading(false)
     }
 
