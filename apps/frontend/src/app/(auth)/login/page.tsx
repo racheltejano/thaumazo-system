@@ -13,27 +13,25 @@ export default function LoginPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Only run on the client
-    if (typeof window !== 'undefined') {
-      const savedEmail = localStorage.getItem('remembered-email')
-      if (savedEmail) {
-        setEmail(savedEmail)
-        setRememberMe(true)
-      }
+  const savedEmail = localStorage.getItem('remembered-email')
+  if (savedEmail) {
+    setEmail(savedEmail)
+    setRememberMe(true)
+  }
+
+  const checkIfLoggedIn = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      router.push('/dashboard')
     }
+  }
 
-    const checkIfLoggedIn = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+  checkIfLoggedIn()
+}, [router]) // ✅ include router here
 
-      if (user) {
-        router.push('/dashboard')
-      }
-    }
-
-    checkIfLoggedIn()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault()
