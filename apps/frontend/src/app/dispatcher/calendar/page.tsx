@@ -5,6 +5,10 @@ import { Calendar, momentLocalizer, View } from 'react-big-calendar'
 import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+<<<<<<< Updated upstream
+=======
+import DashboardLayout from '@/components/DashboardLayout'
+>>>>>>> Stashed changes
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -81,6 +85,7 @@ export default function DispatcherCalendarPage() {
 
       if (!res.ok) throw new Error(data.error || 'Auto-assign failed')
 
+<<<<<<< Updated upstream
       alert(`✅ ${data.message}`)
       window.location.reload()
     } catch (err: any) {
@@ -89,54 +94,37 @@ export default function DispatcherCalendarPage() {
     } finally {
       setAssigning(false)
     }
+=======
+    alert(`✅ ${data.message}`)
+    window.location.reload()
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      console.error('Auto-assign failed:', err)
+      alert(`❌ Auto-assign failed: ${err.message}`)
+    } else {
+      console.error('Auto-assign failed:', err)
+      alert('❌ Auto-assign failed: An unknown error occurred.')
+    }
+  } finally {
+    setAssigning(false)
+>>>>>>> Stashed changes
   }
+
 
   if (loading) return <p className="p-6">Loading calendar...</p>
 
-  return (
-    <main className="h-screen flex bg-gray-50 text-gray-800">
-      {/* Sidebar */}
-      <aside className="w-1/5 border-r bg-white p-4 overflow-y-auto shadow-md">
-        <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
-        {orders.length === 0 ? (
-          <p className="text-sm text-gray-500">All orders are assigned!</p>
-        ) : (
-          <div className="space-y-3">
-            {orders.map(o => (
-              <div
-                key={o.id}
-                className="bg-gray-100 rounded-md p-3 shadow-sm border border-gray-200"
-              >
-                <p className="text-sm font-medium">
-                  Pickup: {o.pickup_date} @ {o.pickup_time}
-                </p>
-                <p className="text-xs text-gray-600">
-                  {o.special_instructions || 'No special instructions'}
-                </p>
-              </div>
-            ))}
-            <button
-              onClick={handleAutoAssign}
-              disabled={assigning}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
-            >
-              {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
-            </button>
-          </div>
-        )}
-      </aside>
-
-      {/* Main Calendar */}
-      <section className="w-4/5 p-6 space-y-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">🚛 Driver Availability Calendar</h1>
-
+return (
+    <DashboardLayout role="dispatcher" userName="Dispatcher">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        {/* Header + View Selector */}
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <h1 className="text-2xl font-bold text-black">🚛 Driver Availability Calendar</h1>
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">View:</label>
+            <label className="text-sm font-medium text-black">View:</label>
             <select
               value={currentView}
               onChange={(e) => setCurrentView(e.target.value as View)}
-              className="border rounded-md px-3 py-1 text-sm"
+              className="px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-400 bg-gray-50 text-black"
             >
               <option value="month">Month</option>
               <option value="week">Week</option>
@@ -145,18 +133,55 @@ export default function DispatcherCalendarPage() {
           </div>
         </div>
 
-        <div className="h-[85%] bg-white rounded-lg shadow border overflow-hidden">
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            view={currentView}
-            onView={(view) => setCurrentView(view)}
-            style={{ height: '100%' }}
-          />
+        {/* Content Container */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Unassigned Orders Sidebar */}
+          <div className="w-full lg:w-1/3 bg-white border rounded-2xl shadow p-4 space-y-4">
+            <h2 className="text-lg font-semibold text-black">📦 Unassigned Orders</h2>
+            {orders.length === 0 ? (
+              <p className="text-sm text-gray-500">All orders are assigned!</p>
+            ) : (
+              <>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                  {orders.map(o => (
+                    <div
+                      key={o.id}
+                      className="bg-gray-50 rounded-lg border border-gray-200 p-3"
+                    >
+                      <p className="text-sm font-medium text-black">
+                        Pickup: {o.pickup_date} @ {o.pickup_time}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {o.special_instructions || 'No special instructions'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleAutoAssign}
+                  disabled={assigning}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
+                >
+                  {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Calendar */}
+          <div className="w-full lg:w-2/3 h-[650px] bg-white rounded-2xl shadow border overflow-hidden">
+            <Calendar
+              localizer={localizer}
+              events={events}
+              startAccessor="start"
+              endAccessor="end"
+              view={currentView}
+              onView={(view) => setCurrentView(view)}
+              style={{ height: '100%' }}
+            />
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </DashboardLayout>
   )
 }
