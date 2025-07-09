@@ -77,18 +77,27 @@ export default function DashboardLayout({
   const menus = sidebarMenus[role] || [];
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const { data, error } = await supabase.from('profiles').select('profile_pic').single();
-      if (!error && data?.profile_pic) {
-        const optimized = data.profile_pic.replace(
-          '/upload/',
-          '/upload/w_80,h_80,c_fill,f_auto,q_auto/'
-        );
-        setProfilePicUrl(optimized);
-      }
-    };
-    fetchProfile();
-  }, []);
+  const fetchProfile = async () => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('profile_pic')
+      .eq('id', user.id) // ✅ filter to current user
+      .single();
+
+    if (!error && data?.profile_pic) {
+      const optimized = data.profile_pic.replace(
+        '/upload/',
+        '/upload/w_80,h_80,c_fill,f_auto,q_auto/'
+      );
+      setProfilePicUrl(optimized);
+    }
+  };
+  fetchProfile();
+}, []);
+
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

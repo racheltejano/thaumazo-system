@@ -28,28 +28,38 @@ export default function SetupProfilePage() {
   const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push("/login")
-        return
-      }
-      setUserId(user.id)
-      setEmail(user.email || '')
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-
-      if (profile?.role) {
-        setUserRole(profile.role)
-      }
+  const fetchUserData = async () => {
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push("/login")
+      return
     }
 
-    fetchUserData()
-  }, [router])
+    setUserId(user.id)
+    setEmail(user.email || '')
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, first_name, last_name, profile_pic")
+      .eq("id", user.id)
+      .single()
+
+    if (profile) {
+      setUserRole(profile.role || 'admin')
+      setFirstName(profile.first_name || '')
+      setLastName(profile.last_name || '')
+      if (profile.profile_pic) {
+        setPreviewUrl(profile.profile_pic)
+      }
+    }
+    setLoading(false)
+  }
+
+  fetchUserData()
+}, [router])
+
+
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
