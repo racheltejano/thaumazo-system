@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Image from "next/image";
 
 type SidebarMenuItem = {
   label: string;
@@ -169,23 +170,24 @@ export default function DashboardLayout({
             {/* Profile picture / menu */}
             <div className="relative" ref={profileMenuRef}>
               <button
-                className="w-10 h-10 rounded-full overflow-hidden bg-gray-800 hover:ring-2 ring-orange-400 transition-all"
-                onClick={() => setProfileMenuOpen((open) => !open)}
-                aria-label="Profile"
-              >
-                {profilePicUrl ? (
-                  <img
-                    src={profilePicUrl}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="w-full h-full flex items-center justify-center text-sm font-medium text-white bg-gray-600">
-                    {displayName.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </button>
+                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 hover:ring-2 ring-orange-400 transition-all"
+                  onClick={() => setProfileMenuOpen((open) => !open)}
+                  aria-label="Profile"
+                >
+                  {profilePicUrl ? (
+                    <Image
+                      src={profilePicUrl}
+                      alt="Profile"
+                      fill
+                      sizes="40px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span className="w-full h-full flex items-center justify-center text-sm font-medium text-white bg-gray-600">
+                      {displayName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </button>
               {profileMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-100 animate-fade-in">
                   <a
