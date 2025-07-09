@@ -52,8 +52,148 @@ const sidebarMenus: SidebarMenus = {
       href: '/admin/approvals',
     },
   ],
+  inventory: [
+    {
+      label: 'Dashboard',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+        </svg>
+      ),
+      href: '/inventory/dashboard',
+    },
+    {
+      label: 'Inventory Table',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <rect x="3" y="7" width="18" height="13" rx="2" />
+          <path d="M16 3v4M8 3v4" />
+        </svg>
+      ),
+      href: '/inventory/table',
+    },
+    {
+      label: 'Add Inventory',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      ),
+      href: '/inventory/add',
+    },
+  ],
+  driver: [
+    {
+      label: 'Dashboard',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+        </svg>
+      ),
+      href: '/driver',
+    },
+    {
+      label: 'Availability',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12,6 12,12 16,14" />
+        </svg>
+      ),
+      href: '/driver/availability',
+    },
+  ],
+  dispatcher: [
+    {
+      label: 'Dashboard',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+        </svg>
+      ),
+      href: '/dispatcher',
+    },
+    {
+      label: 'Calendar',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      ),
+      href: '/dispatcher/calendar',
+    },
+  ],
 }
 
+
+type RoleConfig = {
+  primaryColor: string;
+  hoverColor: string;
+  navbarBg: string;
+  accentColor: string;
+  showNotifications?: boolean;
+  profileMenuItems?: Array<{
+    label: string;
+    href?: string;
+    onClick?: () => void;
+  }>;
+};
+
+const roleConfigs: { [role: string]: RoleConfig } = {
+  admin: {
+    primaryColor: 'orange',
+    hoverColor: 'orange-50',
+    navbarBg: 'gray-900',
+    accentColor: 'orange-500',
+    showNotifications: true,
+    profileMenuItems: [
+      { label: 'Profile / Settings', href: '/admin/settings' },
+      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+    ],
+  },
+  inventory: {
+    primaryColor: 'orange',
+    hoverColor: 'orange-50',
+    navbarBg: 'gray-900',
+    accentColor: 'orange-500',
+    showNotifications: false,
+    profileMenuItems: [
+      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+    ],
+  },
+  driver: {
+    primaryColor: 'green',
+    hoverColor: 'green-50',
+    navbarBg: 'green-900',
+    accentColor: 'green-400',
+    showNotifications: true,
+    profileMenuItems: [
+      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+    ],
+  },
+  dispatcher: {
+    primaryColor: 'purple',
+    hoverColor: 'purple-50',
+    navbarBg: 'purple-900',
+    accentColor: 'purple-400',
+    showNotifications: true,
+    profileMenuItems: [
+      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+    ],
+  },
+};
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -76,6 +216,7 @@ export default function DashboardLayout({
 
   const displayName = userFirstName || userName || role.charAt(0).toUpperCase() + role.slice(1);
   const menus = sidebarMenus[role] || [];
+  const config = roleConfigs[role] || roleConfigs.admin;
 
   useEffect(() => {
   const fetchProfile = async () => {
@@ -130,7 +271,7 @@ export default function DashboardLayout({
             <a
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-700 hover:bg-orange-50 hover:text-orange-600 ${collapsed ? 'justify-center' : ''} text-xs md:text-sm`}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-700 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 ${collapsed ? 'justify-center' : ''} text-xs md:text-sm`}
             >
               <span className="text-xl">{item.icon}</span>
               {!collapsed && <span className="font-medium">{item.label}</span>}
@@ -138,7 +279,7 @@ export default function DashboardLayout({
           ))}
         </nav>
         <button
-          className="mb-4 mx-auto flex items-center justify-center w-8 h-8 rounded-full hover:bg-orange-100 transition-colors"
+          className={`mb-4 mx-auto flex items-center justify-center w-8 h-8 rounded-full hover:bg-${config.primaryColor}-100 transition-colors`}
           onClick={() => setCollapsed(!collapsed)}
           aria-label="Toggle sidebar"
         >
@@ -152,25 +293,27 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${collapsed ? 'ml-16' : 'ml-48'}`}>
-        <header className="flex items-center justify-between h-16 px-8 bg-gray-900 text-white shadow-sm">
+        <header className={`flex items-center justify-between h-16 px-8 bg-${config.navbarBg} text-white shadow-sm`}>
           <div className="text-2xl font-extrabold tracking-tight select-none">
             <span className="text-white">T</span>
-            <span className="text-orange-500">EX</span>
+            <span className={`text-${config.accentColor}`}>EX</span>
             <span className="text-white">TS</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden md:inline text-gray-200">Welcome, {displayName}!</span>
 
-            {/* Notification bell */}
-            <button className="relative p-2 rounded-full hover:bg-gray-800 transition-colors">
-              <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 2v1h16v-1l-2-2z"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full" />
-            </button>
+            {/* Notification bell - only show if enabled for role */}
+            {config.showNotifications && (
+              <button className="relative p-2 rounded-full hover:bg-gray-800 transition-colors">
+                <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 2v1h16v-1l-2-2z"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                <span className={`absolute top-1 right-1 w-2 h-2 bg-${config.accentColor} rounded-full`} />
+              </button>
+            )}
 
             {/* Profile picture / menu */}
             <div className="relative" ref={profileMenuRef}>
               <button
-                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 hover:ring-2 ring-orange-400 transition-all"
+                  className={`relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 hover:ring-2 ring-${config.primaryColor}-400 transition-all`}
                   onClick={() => setProfileMenuOpen((open) => !open)}
                   aria-label="Profile"
                 >
@@ -190,19 +333,33 @@ export default function DashboardLayout({
                 </button>
               {profileMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-100 animate-fade-in">
-                  <a
-                    href="/admin/settings"
-                    className="block px-4 py-2 text-gray-800 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                    onClick={() => setProfileMenuOpen(false)}
-                  >
-                    Profile / Settings
-                  </a>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-gray-800 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                  >
-                    Logout
-                  </button>
+                  {config.profileMenuItems?.map((item, index) => (
+                    <div key={index}>
+                      {item.href ? (
+                        <a
+                          href={item.href}
+                          className={`block px-4 py-2 text-gray-800 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 transition-colors`}
+                          onClick={() => setProfileMenuOpen(false)}
+                        >
+                          {item.label}
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (item.label === 'Log Out') {
+                              handleLogout();
+                            } else if (item.onClick) {
+                              item.onClick();
+                            }
+                            setProfileMenuOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-gray-800 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 transition-colors`}
+                        >
+                          {item.label}
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
