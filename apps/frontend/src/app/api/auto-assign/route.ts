@@ -1,18 +1,17 @@
-// apps/frontend/src/app/api/auto-assign/route.ts
-
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error('Missing Supabase URL or Service Role Key in env.')
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey)
-
 export async function POST() {
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('[ENV ERROR] Missing Supabase credentials.')
+    return NextResponse.json({ error: 'Server misconfiguration.' }, { status: 500 })
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
+
   try {
     const { data: orders, error: orderError } = await supabase
       .from('orders')
@@ -48,7 +47,7 @@ export async function POST() {
       const orderStart = new Date(`${pickupDate}T${pickupTime}`)
       const orderEnd = new Date(`${pickupDate}T${endTime}`)
 
-      const matchingDrivers = Object.entries(driverAvailabilityMap).filter(([_, slots]) =>
+      const matchingDrivers = Object.entries(driverAvailabilityMap).filter(([, slots]) =>
         slots.some(slot => orderStart >= slot.start && orderEnd <= slot.end)
       )
 
@@ -70,8 +69,8 @@ export async function POST() {
         .eq('id', update.id)
     }
 
-    return NextResponse.json({ message: `${updates.length} orders assigned.` })
-  } catch (err) {
+    return NextResponse.json({ message: `${updates.length} orders assigned.` }, { status: 200 })
+  } catch (err: unknown) {
     const error = err as Error
     console.error('[AUTO ASSIGN ERROR]', error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
