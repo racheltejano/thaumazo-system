@@ -565,7 +565,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
 
         {error && <p className="text-red-600 font-semibold">{error}</p>}
 
-        {debugInfo.length > 0 && (
+        {/*{debugInfo.length > 0 && (
           <div className="bg-gray-100 p-4 rounded text-sm">
             <h3 className="font-semibold mb-2 text-gray-800">Debug Info:</h3>
             <div className="font-mono max-h-40 overflow-y-auto space-y-1 text-gray-700">
@@ -574,7 +574,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
               ))}
             </div>
           </div>
-        )}
+        )}*/}
 
         {/* Client Info */}
         <fieldset className="space-y-4">
