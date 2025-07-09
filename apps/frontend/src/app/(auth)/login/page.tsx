@@ -36,32 +36,55 @@ export default function LoginPage() {
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
+  e.preventDefault()
+  setError('')
 
-    if (!email || !password) {
+  if (!email || !password) {
+    setError('Invalid email or password.')
+    return
+  }
+
+  try {
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (loginError || !data.user) {
       setError('Invalid email or password.')
       return
     }
 
-    try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+    // 🔐 Fetch the user's profile to check can_login
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('can_login')
+      .eq('id', data.user.id)
+      .single()
 
-      if (loginError) {
-        setError('Invalid email or password.')
-      } else {
-        if (rememberMe) {
-          localStorage.setItem('remembered-email', email)
-        } else {
-          localStorage.removeItem('remembered-email')
-        }
-
-        router.push('/dashboard')
-      }
-    } catch {
-      setError('Something went wrong. Please try again.')
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      setError('Unable to verify account access. Please try again later.')
+      return
     }
+
+    if (!profile?.can_login) {
+      await supabase.auth.signOut()
+      setError('Your account has been disabled. Please contact the administrator if you believe this is a mistake.')
+      return
+    }
+
+    // ✅ Remember email if needed
+    if (rememberMe) {
+      localStorage.setItem('remembered-email', email)
+    } else {
+      localStorage.removeItem('remembered-email')
+    }
+
+    router.push('/dashboard')
+  } catch (err) {
+    console.error('Login error:', err)
+    setError('Something went wrong. Please try again.')
   }
+}
+
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

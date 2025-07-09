@@ -22,24 +22,47 @@ export default function StaffManagementPage() {
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
-    const fetchStaffs = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, role, contact_number')
-        .order('created_at', { ascending: false });
+  const fetchStaffs = async () => {
+    setLoading(true);
 
-      if (error) {
-        console.error('Error fetching staff:', error);
-      } else {
-        setStaffs(data || []);
-      }
+    // 🔍 Get current Supabase user
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      setLoading(false);
-    };
+    console.log('[DEBUG] Logged-in user ID:', user?.id);
 
-    fetchStaffs();
-  }, []);
+    // 🔍 Try to fetch this user's profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .eq('id', user?.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.warn('[WARNING] No matching profile found for current user!');
+    } else {
+      console.log('[DEBUG] Current user role:', profile.role);
+    }
+
+    // 🔍 Fetch all staffs (admin only)
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, role, contact_number, can_login')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching staff:', error);
+    } else {
+      setStaffs(data || []);
+    }
+
+    setLoading(false);
+  };
+
+  fetchStaffs();
+}, []);
+
 
   const filtered = staffs.filter((s) =>
     `${s.first_name} ${s.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
@@ -109,6 +132,7 @@ export default function StaffManagementPage() {
                   <th className="px-4 py-2 text-left font-semibold">Position</th>
                   <th className="px-4 py-2 text-left font-semibold">Phone Number</th>
                   <th className="px-4 py-2 text-left font-semibold">Status</th>
+                  <th className="px-4 py-2 text-left font-semibold">Access</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,10 +155,41 @@ export default function StaffManagementPage() {
                       <td className="px-4 py-3 text-black capitalize">{staff.role.replace('_', ' ')}</td>
                       <td className="px-4 py-3 text-black">{staff.contact_number || 'N/A'}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700`}>
-                          Active
-                        </span>
-                      </td>
+  <span className={`px-3 py-1 rounded-full text-xs font-semibold 
+    ${staff.can_login ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+    {staff.can_login ? 'Active' : 'Disabled'}
+  </span>
+</td>
+
+<td className="px-4 py-3">
+  <label className="inline-flex items-center cursor-pointer">
+    <input
+      type="checkbox"
+      checked={staff.can_login}
+      onChange={async () => {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ can_login: !staff.can_login })
+          .eq('id', staff.id);
+
+        if (!error) {
+          setStaffs((prev) =>
+            prev.map((s) =>
+              s.id === staff.id ? { ...s, can_login: !staff.can_login } : s
+            )
+          );
+        } else {
+          console.error('Failed to update access', error);
+        }
+      }}
+      className="form-checkbox h-5 w-5 text-orange-500"
+    />
+    <span className="ml-2 text-sm">{staff.can_login ? 'Enabled' : 'Disabled'}</span>
+  </label>
+</td>
+
+                      
+                      
                     </tr>
                   ))
                 )}
