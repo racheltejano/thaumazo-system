@@ -1,7 +1,10 @@
 "use client"
+
 import { useState, useEffect, ChangeEvent } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import Image from "next/image"
+import DashboardLayout from "@/components/DashboardLayout"
 
 export default function SetupProfilePage() {
   const router = useRouter()
@@ -13,10 +16,8 @@ export default function SetupProfilePage() {
   const [loading, setLoading] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
 
-  // Replace these with your actual Cloudinary values
   const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!
   const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
-
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -44,18 +45,13 @@ export default function SetupProfilePage() {
     try {
       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
         method: "POST",
-        body: formData
+        body: formData,
       })
 
       const data = await res.json()
-      if (data.secure_url) {
-        return data.secure_url
-      } else {
-        console.error("Cloudinary upload failed:", data)
-        return null
-      }
+      return data.secure_url || null
     } catch (err) {
-      console.error("Cloudinary error:", err)
+      console.error("Cloudinary upload error:", err)
       return null
     }
   }
@@ -75,7 +71,7 @@ export default function SetupProfilePage() {
     }
 
     setLoading(true)
-    let uploadedImageUrl: string | null = null
+    let uploadedImageUrl: string | null = previewUrl
 
     if (profilePicFile) {
       uploadedImageUrl = await uploadToCloudinary(profilePicFile)
@@ -85,74 +81,85 @@ export default function SetupProfilePage() {
         return
       }
     }
-    // console.log({
-    //   id: userId,
-    //   first_name: firstName,
-    //   last_name: lastName,
-    //   profile_pic: uploadedImageUrl
-    // })
 
     const { error: dbError } = await supabase
-    .from("profiles")
-    .update({
-      first_name: firstName,
-      last_name: lastName,
-      profile_pic: uploadedImageUrl
-    })
-    .eq("id", userId)
-
+      .from("profiles")
+      .update({
+        first_name: firstName,
+        last_name: lastName,
+        profile_pic: uploadedImageUrl,
+      })
+      .eq("id", userId)
 
     setLoading(false)
     if (dbError) {
-      setError("Failed to save profile.")
+      setError("❌ Failed to save profile.")
     } else {
       router.push("/awaiting-approval")
     }
   }
 
   return (
-    <main className="flex flex-col items-center justify-center h-screen p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        <h2 className="text-2xl font-bold text-center mb-4">Set up your profile</h2>
-
-        <label htmlFor="firstName" className="block font-medium mb-1">First name</label>
-        <input
-          id="firstName"
-          className="w-full p-2 border rounded"
-          type="text"
-          value={firstName}
-          onChange={e => setFirstName(e.target.value)}
-        />
-
-        <label htmlFor="lastName" className="block font-medium mb-1">Last name</label>
-        <input
-          id="lastName"
-          className="w-full p-2 border rounded"
-          type="text"
-          value={lastName}
-          onChange={e => setLastName(e.target.value)}
-        />
-
-        <label htmlFor="profilePic" className="block font-medium mb-1">Profile picture (optional)</label>
-        <input
-          id="profilePic"
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-        />
-        {previewUrl && (
-          <img src={previewUrl} alt="Preview" className="w-24 h-24 rounded-full object-cover mt-2" />
-        )}
-
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-
-        <button
-          className="w-full p-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold disabled:opacity-50"
-          disabled={loading}
+    <DashboardLayout role="admin" userName="Admin">
+      <div className="max-w-xl mx-auto mt-8">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white p-8 rounded-2xl shadow-md space-y-6"
         >
-          {loading ? "Saving..." : "Save profile"}
-        </button>
-      </form>
-    </main>
+          <h2 className="text-2xl font-bold text-gray-900">📝 Complete Your Profile</h2>
+
+          {error && <p className="text-red-600">{error}</p>}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">First Name</label>
+            <input
+              className="mt-1 block w-full p-3 border border-gray-300 rounded-lg text-gray-900 bg-white"
+              type="text"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Last Name</label>
+            <input
+              className="mt-1 block w-full p-3 border border-gray-300 rounded-lg text-gray-900 bg-white"
+              type="text"
+              value={lastName}
+              onChange={e => setLastName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Profile Picture (optional)</label>
+            <input
+              className="mt-1"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+            />
+            {previewUrl && (
+              <div className="mt-4 w-24 h-24 rounded-full overflow-hidden border border-gray-300 shadow">
+                <Image
+                  src={previewUrl}
+                  alt="Profile Preview"
+                  width={96}
+                  height={96}
+                  className="object-cover w-full h-full"
+                />
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl shadow"
+          >
+            {loading ? "Saving..." : "Save Profile"}
+          </button>
+        </form>
+      </div>
+    </DashboardLayout>
   )
 }
