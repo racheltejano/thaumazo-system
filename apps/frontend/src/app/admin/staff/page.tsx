@@ -18,6 +18,7 @@ const pageSizeOptions = [5, 10, 20, 50];
 // Column configuration
 const columnConfig = {
   name: { label: 'Name', key: 'name', defaultVisible: true },
+  email: { label: 'Email', key: 'email', defaultVisible: true },
   position: { label: 'Position', key: 'position', defaultVisible: true },
   phone: { label: 'Phone Number', key: 'phone', defaultVisible: true },
   status: { label: 'Status', key: 'status', defaultVisible: true },
@@ -73,7 +74,25 @@ export default function StaffManagementPage() {
       if (error) {
         console.error('Error fetching staff:', error);
       } else {
-        setStaffs(data || []);
+        // Fetch emails for each staff member
+        const staffWithEmails = await Promise.all(
+          (data || []).map(async (staff) => {
+            try {
+              const { data: userData } = await supabase.auth.admin.getUserById(staff.id);
+              return {
+                ...staff,
+                email: userData?.user?.email || 'N/A',
+              };
+            } catch (emailError) {
+              console.warn(`Could not fetch email for staff ${staff.id}:`, emailError);
+              return {
+                ...staff,
+                email: 'N/A',
+              };
+            }
+          })
+        );
+        setStaffs(staffWithEmails);
       }
 
       setLoading(false);
@@ -85,7 +104,8 @@ export default function StaffManagementPage() {
   const filtered = staffs.filter((s) =>
     `${s.first_name || ''} ${s.last_name || ''}`.toLowerCase().includes(search.toLowerCase()) ||
     s.role.toLowerCase().includes(search.toLowerCase()) ||
-    (s.contact_number || '').toLowerCase().includes(search.toLowerCase())
+    (s.contact_number || '').toLowerCase().includes(search.toLowerCase()) ||
+    (s.email || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const sorted = [...filtered].sort((a, b) => {
@@ -192,6 +212,9 @@ export default function StaffManagementPage() {
                   {visibleColumns.name && (
                     <th className="px-4 py-2 text-left font-semibold">Name</th>
                   )}
+                  {visibleColumns.email && (
+                    <th className="px-4 py-2 text-left font-semibold">Email</th>
+                  )}
                   {visibleColumns.position && (
                     <th className="px-4 py-2 text-left font-semibold">Position</th>
                   )}
@@ -225,6 +248,11 @@ export default function StaffManagementPage() {
                       {visibleColumns.name && (
                         <td className="px-4 py-3 font-medium text-black">
                           {staff.first_name || 'N/A'} {staff.last_name || ''}
+                        </td>
+                      )}
+                      {visibleColumns.email && (
+                        <td className="px-4 py-3 text-black">
+                          {staff.email || 'N/A'}
                         </td>
                       )}
                       {visibleColumns.position && (

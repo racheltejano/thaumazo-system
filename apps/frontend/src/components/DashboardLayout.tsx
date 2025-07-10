@@ -293,7 +293,7 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${collapsed ? 'ml-16' : 'ml-48'}`}>
-        <header className={`flex items-center justify-between h-16 px-8 bg-${config.navbarBg} text-white shadow-sm`}>
+        <header className="flex items-center justify-between h-16 px-8 bg-[#101828] text-white shadow-sm">
           <div className="text-2xl font-extrabold tracking-tight select-none">
             <span className="text-white">T</span>
             <span className={`text-${config.accentColor}`}>EX</span>
