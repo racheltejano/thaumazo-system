@@ -350,12 +350,14 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     addDebugInfo(`Client saved with ID: ${client.id}`)
-
+    const defaultPickupTime = '09:00:00'
+    const pickupTime = defaultPickupTime
     // Step 2: Create order
     addDebugInfo('Creating order...')
     const orderData = {
       client_id: client.id,
       pickup_date: form.pickup_date,
+      pickup_time: pickupTime,
       vehicle_type: form.truck_type,
       tail_lift_required: form.tail_lift_required || false,
       special_instructions: form.special_instructions,
