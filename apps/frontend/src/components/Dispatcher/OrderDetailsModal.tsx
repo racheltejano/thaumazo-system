@@ -16,6 +16,8 @@ export type Order = {
   special_instructions: string
   client_id: string
   status: string
+  vehicle_type: string | null        
+  tail_lift_required: boolean | null
 }
 
 export type Client = {
@@ -133,37 +135,30 @@ export default function OrderDetailsModal({
           </div>
 
           <div>
-            <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-            <span>📅</span> Order Info
-            </h3>
-            <p>
-                <strong>Pickup Date:</strong> {order.pickup_date}
-            </p>
-            <p>
-                <strong>Pickup Time:</strong> {order.pickup_time || 'N/A'}
-            </p>
-            <p>
-                <strong>Delivery Window:</strong>{' '}
-                {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}
-            </p>
-            <p>
-                <strong>Instructions:</strong> {order.special_instructions || 'None'}
-            </p>
+  <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
+    <span>📅</span> Order Info
+  </h3>
 
-            {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (
-            <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
+  <p><strong>Pickup Date:</strong> {order.pickup_date}</p>
+  <p><strong>Pickup Time:</strong> {order.pickup_time || 'N/A'}</p>
+  <p><strong>Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
+  <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
 
+  <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>
+  <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✅ Yes' : '❌ No'}</p>
 
-                <Image
-                fill
-                alt={`Map of ${client.pickup_address}`}
-                className="rounded-md object-cover"
-                src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
-                />
-            </div>
-            )}
+  {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (
+    <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
+      <Image
+        fill
+        alt={`Map of ${client.pickup_address}`}
+        className="rounded-md object-cover"
+        src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/350x180?access_token=${MAPBOX_TOKEN}`}
+      />
+    </div>
+  )}
+</div>
 
-          </div>
         </div>
 
         {products.length > 0 && (
@@ -206,7 +201,7 @@ export default function OrderDetailsModal({
 
                     {/* ✅ Map outside <p> tag */}
                     {MAPBOX_TOKEN && d.latitude && d.longitude && (
-                        <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
+                        <div className="relative mt-2 aspect-[1/.5] w-full max-w-sm rounded-md border overflow-hidden">
                         <Image
                             fill
                             alt={`Map of ${d.dropoff_address}`}

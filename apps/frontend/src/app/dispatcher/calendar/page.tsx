@@ -19,7 +19,6 @@ import OrderDetailsModal from '@/components/Dispatcher/OrderDetailsModal'
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
 const DnDCalendar = withDragAndDrop<DriverEvent, object>(Calendar)
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
 
 type DriverEvent = {
@@ -40,20 +39,11 @@ type Order = {
   special_instructions: string
   client_id: string
   status: string
+  vehicle_type: string | null 
+  tail_lift_required: boolean | null
 }
 
-type Client = {
-  tracking_id: string
-  business_name: string
-  contact_person: string
-  contact_number: string
-  email: string | null
-  pickup_address: string
-  landmark: string | null
-  pickup_area: string | null
-  pickup_latitude: number | null
-  pickup_longitude: number | null
-}
+
 
 
 export default function DispatcherCalendarPage() {
@@ -75,9 +65,18 @@ export default function DispatcherCalendarPage() {
 
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .select(
-          'id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status'
-        )
+        .select(`
+          id,
+          pickup_date,
+          pickup_time,
+          delivery_window_start,
+          delivery_window_end,
+          special_instructions,
+          client_id,
+          status,
+          vehicle_type,
+          tail_lift_required
+        `)
 
       if (availError || orderError) {
         console.error('❌ Supabase error:', availError || orderError)
@@ -101,7 +100,7 @@ export default function DispatcherCalendarPage() {
       }))
 
       setEvents([...availEvents, ...orderEvents])
-      setOrders(orderData?.filter((o) => o.status === 'order_placed') || [])
+      setOrders(orderData || [])
       setLoading(false)
     }
 
@@ -144,12 +143,14 @@ export default function DispatcherCalendarPage() {
               <p className="text-sm text-gray-500">All orders are assigned!</p>
             ) : (
               <div className="space-y-3">
-                {orders.map((order) => (
-                  <DraggableOrder
-                    key={order.id}
-                    order={order}
-                    onClick={() => setSelectedOrder(order)}
-                  />
+                {orders
+                  .filter((o) => o.status === 'order_placed')
+                  .map((order) => (
+                    <DraggableOrder
+                      key={order.id}
+                      order={order}
+                      onClick={() => setSelectedOrder(order)}
+                    />
                 ))}
                 <button
                   onClick={handleAutoAssign}
