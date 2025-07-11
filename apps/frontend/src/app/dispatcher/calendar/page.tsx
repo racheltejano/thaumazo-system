@@ -62,6 +62,8 @@ const OrderDetailsModal = ({
   onClose: () => void
 }) => {
   const [client, setClient] = useState<Client | null>(null)
+  const [dropoffs, setDropoffs] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
 
   useEffect(() => {
     const fetchClient = async () => {
@@ -74,26 +76,44 @@ const OrderDetailsModal = ({
         .eq('id', order.client_id)
         .single()
 
-      if (error) {
-        console.error('❌ Failed to fetch client:', error)
-      } else {
-        setClient(data)
-      }
+      if (error) console.error('❌ Failed to fetch client:', error)
+      else setClient(data)
+    }
+
+    const fetchDropoffs = async () => {
+      const { data, error } = await supabase
+        .from('order_dropoffs')
+        .select('dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence')
+        .eq('order_id', order.id)
+        .order('sequence', { ascending: true })
+
+      if (error) console.error('❌ Failed to fetch dropoffs:', error)
+      else setDropoffs(data || [])
+    }
+
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from('order_products')
+        .select('quantity, products(name)')
+        .eq('order_id', order.id)
+
+      if (error) console.error('❌ Failed to fetch products:', error)
+      else setProducts(data || [])
     }
 
     fetchClient()
-  }, [order.client_id])
+    fetchDropoffs()
+    fetchProducts()
+  }, [order.id, order.client_id])
 
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/20 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-xl shadow-lg w-[90%] max-w-xl space-y-4">
+      <div className="bg-white p-6 rounded-xl shadow-lg w-[90%] max-w-xl space-y-4 overflow-y-auto max-h-[90vh]">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">
             📝 Order <span className="break-all">#{order.id}</span>
           </h2>
-          <button onClick={onClose} className="text-red-500 text-xl font-bold">
-            ✖
-          </button>
+          <button onClick={onClose} className="text-red-500 text-xl font-bold">✖</button>
         </div>
 
         <div className="space-y-2 text-sm text-gray-700">
@@ -103,6 +123,7 @@ const OrderDetailsModal = ({
           <p><strong>🗒️ Instructions:</strong> {order.special_instructions || 'None'}</p>
         </div>
 
+        {/* Client Details */}
         {client ? (
           <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
             <h3 className="text-md font-semibold">👤 Client Details</h3>
@@ -116,16 +137,47 @@ const OrderDetailsModal = ({
             <p><strong>Pickup Area:</strong> {client.pickup_area || 'N/A'}</p>
 
             {MAPBOX_TOKEN && client.pickup_latitude && client.pickup_longitude && (
-                <img
-                  className="rounded-md mt-2 border"
-                  alt={`Map of ${client.pickup_address}`}
-                  src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
-                />
-              )}
-
+              <img
+                className="rounded-md mt-2 border"
+                alt={`Map of ${client.pickup_address}`}
+                src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
+              />
+            )}
           </div>
         ) : (
           <p className="text-sm text-gray-500 italic">Loading client info...</p>
+        )}
+
+        {/* Products */}
+        {products.length > 0 && (
+          <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
+            <h3 className="text-md font-semibold">📋 Products</h3>
+            <ul className="list-disc list-inside">
+              {products.map((p, idx) => (
+                <li key={idx}>
+                  {p.products?.name || 'Unknown Product'} — Qty: {p.quantity}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Dropoffs */}
+        {dropoffs.length > 0 && (
+          <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
+            <h3 className="text-md font-semibold">📍 Drop-off Points</h3>
+            <ul className="space-y-1">
+              {dropoffs.map((d, idx) => (
+                <li key={idx} className="border p-2 rounded-md">
+                  <p><strong>🔢 Seq:</strong> {d.sequence}</p>
+                  <p><strong>👤 Name:</strong> {d.dropoff_name}</p>
+                  <p><strong>📍 Address:</strong> {d.dropoff_address}</p>
+                  <p><strong>📞 Contact:</strong> {d.dropoff_contact}</p>
+                  <p><strong>📱 Phone:</strong> {d.dropoff_phone}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <button
@@ -138,6 +190,7 @@ const OrderDetailsModal = ({
     </div>
   )
 }
+
 
 
 export default function DispatcherCalendarPage() {
