@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import { generateGoogleMapsRoute } from '@/lib/maps' 
+import dynamic from 'next/dynamic'
+const DriverAssignmentDrawer = dynamic(() => import('@/components/Dispatcher/DriverAssignmentDrawer'), { ssr: false })
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -51,10 +53,12 @@ export default function OrderDetailsModal({
   order: Order
   onClose: () => void
 }) {
+  
   const [client, setClient] = useState<Client | null>(null)
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
+  const [showAssignDrawer, setShowAssignDrawer] = useState(false)
 
   useEffect(() => {
   const fetchClient = async () => {
@@ -181,6 +185,13 @@ export default function OrderDetailsModal({
                 🧭 See Delivery Route
               </a>
             )}
+            <br/>
+            <button
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-center mt-2"
+              onClick={() => setShowAssignDrawer(true)}
+            >
+              🚚 Assign Driver Manually
+            </button>
           </div>
 
           <div>
@@ -265,14 +276,15 @@ export default function OrderDetailsModal({
             </ul>
           </div>
         )}
-
-        <button
-          onClick={onClose}
-          className="w-full bg-gray-700 hover:bg-gray-800 text-white py-2 rounded-md mt-4"
-        >
-          Close
-        </button>
       </div>
+      {showAssignDrawer && (
+        <DriverAssignmentDrawer
+          orderId={order.id}
+          estimatedDurationMins={parseInt(estimatedTime?.split(' ')[0] || '0')}
+          onClose={() => setShowAssignDrawer(false)}
+        />
+      )}
+
     </div>
   )
 }
