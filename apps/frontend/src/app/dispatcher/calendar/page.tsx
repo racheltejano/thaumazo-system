@@ -8,17 +8,18 @@ import {
 } from 'react-big-calendar'
 import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
-import { DndProvider, useDrag } from 'react-dnd'
+import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import DashboardLayout from '@/components/DashboardLayout'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import DraggableOrder from '@/components/Dispatcher/DraggableOrder'
 
-
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
 const DnDCalendar = withDragAndDrop<DriverEvent, object>(Calendar)
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+
 
 type DriverEvent = {
   id?: string
@@ -36,21 +37,117 @@ type Order = {
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
-  truck_type: string | null
-  tail_lift_required: boolean | null
-  client_name: string | null
+  client_id: string
   status: string
 }
 
+type Client = {
+  tracking_id: string
+  business_name: string
+  contact_person: string
+  contact_number: string
+  email: string | null
+  pickup_address: string
+  landmark: string | null
+  pickup_area: string | null
+  pickup_latitude: number | null
+  pickup_longitude: number | null
+}
+
+const OrderDetailsModal = ({
+  order,
+  onClose,
+}: {
+  order: Order
+  onClose: () => void
+}) => {
+  const [client, setClient] = useState<Client | null>(null)
+
+  useEffect(() => {
+    const fetchClient = async () => {
+      if (!order.client_id) return
+      const { data, error } = await supabase
+        .from('clients')
+        .select(
+          'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
+        )
+        .eq('id', order.client_id)
+        .single()
+
+      if (error) {
+        console.error('❌ Failed to fetch client:', error)
+      } else {
+        setClient(data)
+      }
+    }
+
+    fetchClient()
+  }, [order.client_id])
+
+  return (
+    <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/20 flex items-center justify-center">
+      <div className="bg-white p-6 rounded-xl shadow-lg w-[90%] max-w-xl space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">
+            📝 Order <span className="break-all">#{order.id}</span>
+          </h2>
+          <button onClick={onClose} className="text-red-500 text-xl font-bold">
+            ✖
+          </button>
+        </div>
+
+        <div className="space-y-2 text-sm text-gray-700">
+          <p><strong>📅 Pickup Date:</strong> {order.pickup_date}</p>
+          <p><strong>⏰ Pickup Time:</strong> {order.pickup_time || 'N/A'}</p>
+          <p><strong>📦 Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
+          <p><strong>🗒️ Instructions:</strong> {order.special_instructions || 'None'}</p>
+        </div>
+
+        {client ? (
+          <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
+            <h3 className="text-md font-semibold">👤 Client Details</h3>
+            <p><strong>Tracking ID:</strong> {client.tracking_id}</p>
+            <p><strong>Business Name:</strong> {client.business_name}</p>
+            <p><strong>Contact Person:</strong> {client.contact_person}</p>
+            <p><strong>Contact Number:</strong> {client.contact_number}</p>
+            <p><strong>Email:</strong> {client.email || 'N/A'}</p>
+            <p><strong>Pickup Address:</strong> {client.pickup_address}</p>
+            <p><strong>Landmark:</strong> {client.landmark || 'N/A'}</p>
+            <p><strong>Pickup Area:</strong> {client.pickup_area || 'N/A'}</p>
+
+            {MAPBOX_TOKEN && client.pickup_latitude && client.pickup_longitude && (
+                <img
+                  className="rounded-md mt-2 border"
+                  alt={`Map of ${client.pickup_address}`}
+                  src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
+                />
+              )}
+
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 italic">Loading client info...</p>
+        )}
+
+        <button
+          onClick={onClose}
+          className="w-full bg-gray-700 hover:bg-gray-800 text-white py-2 rounded-md mt-4"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  )
+}
 
 
 export default function DispatcherCalendarPage() {
   const [events, setEvents] = useState<DriverEvent[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [draggedOrder, setDraggedOrder] = useState<Order | null>(null)
-  const [currentView, setCurrentView] = useState<View>('week')
+  const [currentView, setCurrentView] = useState<View>('month')
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,28 +159,14 @@ export default function DispatcherCalendarPage() {
 
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .select(`
-          id,
-          pickup_date,
-          pickup_time,
-          delivery_window_start,
-          delivery_window_end,
-          special_instructions,
-          truck_type,
-          tail_lift_required,
-          status,
-          clients(name)
-        `)
+        .select(
+          'id, pickup_date, pickup_time, delivery_window_start, delivery_window_end, special_instructions, client_id, status'
+        )
 
-      
       if (availError || orderError) {
         console.error('❌ Supabase error:', availError || orderError)
         return
       }
-      const enrichedOrders = (orderData || []).map((o) => ({
-        ...o,
-        client_name: o.clients?.name || null,
-      }))
 
       const availEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
         title: e.title || 'Driver Available',
@@ -92,7 +175,7 @@ export default function DispatcherCalendarPage() {
         type: 'availability',
       }))
 
-      const orderEvents: DriverEvent[] = enrichedOrders.map((o) => ({
+      const orderEvents: DriverEvent[] = (orderData || []).map((o) => ({
         id: o.id,
         title: `Order #${o.id}`,
         start: new Date(`${o.pickup_date}T${o.pickup_time}`),
@@ -101,9 +184,8 @@ export default function DispatcherCalendarPage() {
         status: o.status === 'order_placed' ? 'unassigned' : 'assigned',
       }))
 
-
       setEvents([...availEvents, ...orderEvents])
-      setOrders(enrichedOrders.filter((o) => o.status === 'order_placed'))
+      setOrders(orderData?.filter((o) => o.status === 'order_placed') || [])
       setLoading(false)
     }
 
@@ -129,7 +211,7 @@ export default function DispatcherCalendarPage() {
 
   if (loading) {
     return (
-      <DashboardLayout role="admin" userName="Dispatcher">
+      <DashboardLayout role="dispatcher" userName="Dispatcher">
         <p className="p-6">Loading calendar...</p>
       </DashboardLayout>
     )
@@ -147,7 +229,11 @@ export default function DispatcherCalendarPage() {
             ) : (
               <div className="space-y-3">
                 {orders.map((order) => (
-                  <DraggableOrder key={order.id} order={order} />
+                  <DraggableOrder
+                    key={order.id}
+                    order={order}
+                    onClick={() => setSelectedOrder(order)}
+                  />
                 ))}
                 <button
                   onClick={handleAutoAssign}
@@ -209,7 +295,7 @@ export default function DispatcherCalendarPage() {
                 }}
                 draggableAccessor={(event: DriverEvent) => event.type === 'order'}
                 eventPropGetter={(event: DriverEvent) => {
-                  let backgroundColor = '#3182ce' // default: availability = blue
+                  let backgroundColor = '#3182ce'
                   if (event.type === 'order') {
                     backgroundColor = event.status === 'assigned' ? '#38a169' : '#ed8936'
                   }
@@ -219,6 +305,12 @@ export default function DispatcherCalendarPage() {
             </div>
           </section>
         </main>
+        {selectedOrder && (
+          <OrderDetailsModal
+            order={selectedOrder}
+            onClose={() => setSelectedOrder(null)}
+          />
+        )}
       </DndProvider>
     </DashboardLayout>
   )
