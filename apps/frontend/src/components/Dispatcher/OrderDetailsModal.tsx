@@ -44,7 +44,6 @@ type Dropoff = {
   longitude: number | null
 }
 
-
 export default function OrderDetailsModal({
   order,
   onClose,
@@ -54,48 +53,99 @@ export default function OrderDetailsModal({
 }) {
   const [client, setClient] = useState<Client | null>(null)
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchClient = async () => {
-      if (!order.client_id) return
-      const { data, error } = await supabase
-        .from('clients')
-        .select(
-          'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
-        )
-        .eq('id', order.client_id)
-        .single()
+  const fetchClient = async () => {
+    if (!order.client_id) return
+    const { data, error } = await supabase
+      .from('clients')
+      .select(
+        'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
+      )
+      .eq('id', order.client_id)
+      .single()
 
-      if (error) console.error('❌ Failed to fetch client:', error)
-      else setClient(data)
+    if (error) console.error('❌ Failed to fetch client:', error)
+    else setClient(data)
+  }
+
+  const fetchDropoffs = async () => {
+    const { data, error } = await supabase
+      .from('order_dropoffs')
+      .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude')
+      .eq('order_id', order.id)
+      .order('sequence', { ascending: true })
+
+    if (error) console.error('❌ Failed to fetch dropoffs:', error)
+    else setDropoffs(data || [])
+  }
+
+  const fetchProducts = async () => {
+    const { data, error } = await supabase
+      .from('order_products')
+      .select('quantity, products(name)')
+      .eq('order_id', order.id)
+
+    if (error) console.error('❌ Failed to fetch products:', error)
+    else setProducts(data || [])
+  }
+
+  fetchClient()
+  fetchDropoffs()
+  fetchProducts()
+}, [order.id, order.client_id])
+
+  useEffect(() => {
+  const fetchEstimatedTravelTime = async () => {
+    if (
+      !MAPBOX_TOKEN ||
+      !client?.pickup_latitude ||
+      !client?.pickup_longitude ||
+      dropoffs.length === 0
+    ) return
+
+    const filteredDropoffs = dropoffs.filter(d => d.latitude && d.longitude)
+    if (filteredDropoffs.length === 0) {
+      setEstimatedTime('Unavailable')
+      return
     }
 
-    const fetchDropoffs = async () => {
-      const { data, error } = await supabase
-  .from('order_dropoffs')
-  .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude') // <-- include these
-  .eq('order_id', order.id)
-  .order('sequence', { ascending: true })
+    const coordinates = [
+      `${client.pickup_longitude},${client.pickup_latitude}`,
+      ...filteredDropoffs.map(d => `${d.longitude},${d.latitude}`)
+    ]
 
-      if (error) console.error('❌ Failed to fetch dropoffs:', error)
-      else setDropoffs(data || [])
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates.join(';')}?access_token=${MAPBOX_TOKEN}&overview=false&geometries=geojson`
+
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+
+      if (data.routes && data.routes[0]?.duration) {
+        const durationInMinutes = Math.round(data.routes[0].duration / 60)
+        setEstimatedTime(`${durationInMinutes} mins`)
+      } else {
+        console.warn('No valid route returned:', data)
+        setEstimatedTime('Unavailable')
+      }
+    } catch (err) {
+      console.error('❌ Error fetching travel time:', err)
+      setEstimatedTime('Unavailable')
     }
+  }
 
-    const fetchProducts = async () => {
-      const { data, error } = await supabase
-        .from('order_products')
-        .select('quantity, products(name)')
-        .eq('order_id', order.id)
+  if (
+  client?.pickup_latitude &&
+  client?.pickup_longitude &&
+  dropoffs.length > 0 &&
+  dropoffs.every(d => d.latitude && d.longitude)
+) {
+  fetchEstimatedTravelTime()
+}
 
-      if (error) console.error('❌ Failed to fetch products:', error)
-      else setProducts(data || [])
-    }
-
-    fetchClient()
-    fetchDropoffs()
-    fetchProducts()
-  }, [order.id, order.client_id])
+}, [client, dropoffs])
 
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/20 flex items-center justify-center">
@@ -111,7 +161,7 @@ export default function OrderDetailsModal({
 
           <div>
             <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-            <span>👤</span> Client Details
+              <span>👤</span> Client Details
             </h3>
             <p><strong>Business Name:</strong> {client?.business_name}</p>
             <p><strong>Contact Person:</strong> {client?.contact_person}</p>
@@ -122,49 +172,47 @@ export default function OrderDetailsModal({
             <p><strong>Pickup Area:</strong> {client?.pickup_area || 'N/A'}</p>
 
             {client?.pickup_latitude && client?.pickup_longitude && dropoffs.length > 0 && (
-                <a
-                    href={generateGoogleMapsRoute(client.pickup_latitude, client.pickup_longitude, dropoffs)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-center mt-2"
-                >
-                    🧭 See Delivery Route
-                </a>
-                )}
-
+              <a
+                href={generateGoogleMapsRoute(client.pickup_latitude, client.pickup_longitude, dropoffs)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-center mt-2"
+              >
+                🧭 See Delivery Route
+              </a>
+            )}
           </div>
 
           <div>
-  <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-    <span>📅</span> Order Info
-  </h3>
+            <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
+              <span>📅</span> Order Info
+            </h3>
 
-  <p><strong>Pickup Date:</strong> {order.pickup_date}</p>
-  <p><strong>Pickup Time:</strong> {order.pickup_time || 'N/A'}</p>
-  <p><strong>Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
-  <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
+            <p><strong>Pickup Date:</strong> {order.pickup_date}</p>
+            <p><strong>Pickup Time:</strong> {order.pickup_time || 'N/A'}</p>
+            <p><strong>Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
+            <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
+            <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>
+            <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✅ Yes' : '❌ No'}</p>
+            <p><strong>Estimated Travel Time:</strong> {estimatedTime || 'Loading...'}</p>
 
-  <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>
-  <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✅ Yes' : '❌ No'}</p>
-
-  {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (
-    <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
-      <Image
-        fill
-        alt={`Map of ${client.pickup_address}`}
-        className="rounded-md object-cover"
-        src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/350x180?access_token=${MAPBOX_TOKEN}`}
-      />
-    </div>
-  )}
-</div>
-
+            {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (
+              <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
+                <Image
+                  fill
+                  alt={`Map of ${client.pickup_address}`}
+                  className="rounded-md object-cover"
+                  src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/350x180?access_token=${MAPBOX_TOKEN}`}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {products.length > 0 && (
           <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
             <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-            <span>📦</span> Products
+              <span>📦</span> Products
             </h3>
 
             <ul className="list-disc list-inside grid md:grid-cols-2 gap-x-4">
@@ -180,41 +228,40 @@ export default function OrderDetailsModal({
         {dropoffs.length > 0 && (
           <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
             <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-            <span>📍</span> Drop-off Points
+              <span>📍</span> Drop-off Points
             </h3>
             <ul className="grid md:grid-cols-2 gap-3">
-                {dropoffs.map((d, idx) => (
-                    <li key={idx} className="border p-3 rounded-md shadow-sm bg-gray-50">
-                    <p><strong>🔢 Seq:</strong> {d.sequence}</p>
-                    <p><strong>👤 Name:</strong> {d.dropoff_name}</p>
-                    <p>
-                        <strong>📍 Address:</strong>{' '}
-                        <a
-                        href={`/dropoff-images/${d.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                        >
-                        {d.dropoff_address}
-                        </a>
-                    </p>
+              {dropoffs.map((d, idx) => (
+                <li key={idx} className="border p-3 rounded-md shadow-sm bg-gray-50">
+                  <p><strong>🔢 Seq:</strong> {d.sequence}</p>
+                  <p><strong>👤 Name:</strong> {d.dropoff_name}</p>
+                  <p>
+                    <strong>📍 Address:</strong>{' '}
+                    <a
+                      href={`/dropoff-images/${d.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {d.dropoff_address}
+                    </a>
+                  </p>
 
-                    {/* ✅ Map outside <p> tag */}
-                    {MAPBOX_TOKEN && d.latitude && d.longitude && (
-                        <div className="relative mt-2 aspect-[1/.5] w-full max-w-sm rounded-md border overflow-hidden">
-                        <Image
-                            fill
-                            alt={`Map of ${d.dropoff_address}`}
-                            className="object-cover"
-                            src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${d.longitude},${d.latitude})/${d.longitude},${d.latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
-                        />
-                        </div>
-                    )}
+                  {MAPBOX_TOKEN && d.latitude && d.longitude && (
+                    <div className="relative mt-2 aspect-[1/.5] w-full max-w-sm rounded-md border overflow-hidden">
+                      <Image
+                        fill
+                        alt={`Map of ${d.dropoff_address}`}
+                        className="object-cover"
+                        src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${d.longitude},${d.latitude})/${d.longitude},${d.latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
+                      />
+                    </div>
+                  )}
 
-                    <p><strong>📞 Contact:</strong> {d.dropoff_contact}</p>
-                    <p><strong>📱 Phone:</strong> {d.dropoff_phone}</p>
-                    </li>
-                ))}
+                  <p><strong>📞 Contact:</strong> {d.dropoff_contact}</p>
+                  <p><strong>📱 Phone:</strong> {d.dropoff_phone}</p>
+                </li>
+              ))}
             </ul>
           </div>
         )}
