@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
+import { generateGoogleMapsRoute } from '@/lib/maps' 
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -117,6 +118,18 @@ export default function OrderDetailsModal({
             <p><strong>Pickup Address:</strong> {client?.pickup_address}</p>
             <p><strong>Landmark:</strong> {client?.landmark || 'N/A'}</p>
             <p><strong>Pickup Area:</strong> {client?.pickup_area || 'N/A'}</p>
+
+            {client?.pickup_latitude && client?.pickup_longitude && dropoffs.length > 0 && (
+                <a
+                    href={generateGoogleMapsRoute(client.pickup_latitude, client.pickup_longitude, dropoffs)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-center mt-2"
+                >
+                    🧭 See Delivery Route
+                </a>
+                )}
+
           </div>
 
           <div>
