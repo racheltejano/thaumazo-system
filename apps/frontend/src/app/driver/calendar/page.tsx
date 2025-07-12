@@ -37,23 +37,12 @@ type Order = {
   driver_id: string | null
 }
 
-// Define all possible order statuses from your database
-const ORDER_STATUSES = [
-  { value: 'order_placed', label: 'Order Placed', color: '#718096' },
-  { value: 'driver_assigned', label: 'Driver Assigned', color: '#3182ce' },
-  { value: 'truck_left_warehouse', label: 'Truck Left Warehouse', color: '#d69e2e' },
-  { value: 'arrived_at_pickup', label: 'Arrived at Pickup', color: '#ed8936' },
-  { value: 'delivered', label: 'Delivered', color: '#38a169' },
-  { value: 'cancelled', label: 'Cancelled', color: '#e53e3e' },
-]
-
 export default function DriverCalendarPage() {
   const [events, setEvents] = useState<DriverEvent[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [currentView, setCurrentView] = useState<View>('month')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [statusLoading, setStatusLoading] = useState(false)
 
   useEffect(() => {
     fetchDriverData()
@@ -62,25 +51,20 @@ export default function DriverCalendarPage() {
   const fetchDriverData = async () => {
     setLoading(true)
     setError('')
-    console.log('🔄 Fetching driver data...')
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (!user || userError) {
-        console.error('❌ User authentication failed:', userError)
         setError('You must be logged in to view your calendar.')
         setLoading(false)
         return
       }
-      console.log('✅ User authenticated:', user.id)
 
       // Fetch driver's availability
       const { data: availabilityData, error: availError } = await supabase
         .from('driver_availability')
         .select('id, title, start_time, end_time')
         .eq('driver_id', user.id)
-
-      console.log('📅 Availability data:', availabilityData)
 
       // Fetch orders assigned to this driver
       const { data: orderData, error: orderError } = await supabase
@@ -100,10 +84,8 @@ export default function DriverCalendarPage() {
         `)
         .eq('driver_id', user.id)
 
-      console.log('📦 Orders data:', orderData)
-
       if (availError || orderError) {
-        console.error('❌ Supabase query error:', availError || orderError)
+        console.error('❌ Supabase error:', availError || orderError)
         setError('Failed to load calendar data.')
         setLoading(false)
         return
@@ -140,10 +122,9 @@ export default function DriverCalendarPage() {
         }
       })
 
-      console.log('✅ Events created:', { availEvents: availEvents.length, orderEvents: orderEvents.length })
       setEvents([...availEvents, ...orderEvents])
     } catch (err) {
-      console.error('❌ Unexpected error fetching data:', err)
+      console.error('Error fetching driver data:', err)
       setError('An unexpected error occurred.')
     } finally {
       setLoading(false)
@@ -157,114 +138,34 @@ export default function DriverCalendarPage() {
   }
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    setStatusLoading(true)
-    console.log('🔄 Attempting to update order:', { orderId, newStatus })
-    
-    try {
-      // First, let's check if the user is authenticated
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (!user || userError) {
-        console.error('❌ User not authenticated:', userError)
-        alert('You must be logged in to update orders.')
-        return
-      }
-      console.log('✅ User authenticated:', user.id)
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId)
 
-      // Check if this order belongs to the current driver
-      const { data: orderCheck, error: checkError } = await supabase
-        .from('orders')
-        .select('id, driver_id, status')
-        .eq('id', orderId)
-        .single()
-
-      if (checkError) {
-        console.error('❌ Error checking order:', checkError)
-        alert('Failed to verify order: ' + checkError.message)
-        return
-      }
-
-      if (!orderCheck) {
-        console.error('❌ Order not found:', orderId)
-        alert('Order not found.')
-        return
-      }
-
-      if (orderCheck.driver_id !== user.id) {
-        console.error('❌ Order does not belong to current driver:', {
-          orderDriverId: orderCheck.driver_id,
-          currentUserId: user.id
-        })
-        alert('You can only update your own orders.')
-        return
-      }
-
-      console.log('✅ Order verification passed:', orderCheck)
-
-      // Now attempt the update
-      const { data, error } = await supabase
-        .from('orders')
-        .update({ 
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId)
-        .select()
-
-      if (error) {
-        console.error('❌ Supabase update error:', error)
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        })
-        alert('Failed to update order status: ' + error.message)
-      } else {
-        console.log('✅ Update successful:', data)
-        alert('Order status updated successfully!')
-        
-        // Update the selected order state immediately
-        if (selectedOrder) {
-          setSelectedOrder({
-            ...selectedOrder,
-            status: newStatus
-          })
-        }
-        
-        // Refresh the calendar data
-        await fetchDriverData()
-        setSelectedOrder(null)
-      }
-    } catch (err) {
-      console.error('❌ Unexpected error:', err)
-      alert('An unexpected error occurred while updating order status')
-    } finally {
-      setStatusLoading(false)
+    if (error) {
+      console.error('Error updating order status:', error)
+      alert('Failed to update order status')
+    } else {
+      alert('Order status updated successfully!')
+      fetchDriverData() // Refresh the data
+      setSelectedOrder(null)
     }
   }
 
   const getStatusColor = (status: string) => {
-    const statusObj = ORDER_STATUSES.find(s => s.value === status)
-    return statusObj ? statusObj.color : '#718096'
-  }
-
-  const getStatusLabel = (status: string) => {
-    const statusObj = ORDER_STATUSES.find(s => s.value === status)
-    return statusObj ? statusObj.label : status.replace('_', ' ').toUpperCase()
-  }
-
-  const getAvailableNextStatuses = (currentStatus: string) => {
-    // Define logical progression of statuses
-    const statusFlow = {
-      'order_placed': ['driver_assigned', 'cancelled'],
-      'driver_assigned': ['truck_left_warehouse', 'cancelled'],
-      'truck_left_warehouse': ['arrived_at_pickup', 'cancelled'],
-      'arrived_at_pickup': ['delivered', 'cancelled'],
-      'delivered': [], // Final state
-      'cancelled': [] // Final state
+    switch (status) {
+      case 'assigned':
+        return '#3182ce' // Blue
+      case 'in_progress':
+        return '#ed8936' // Orange
+      case 'completed':
+        return '#38a169' // Green
+      case 'cancelled':
+        return '#e53e3e' // Red
+      default:
+        return '#718096' // Gray
     }
-
-    return statusFlow[currentStatus as keyof typeof statusFlow] || []
   }
 
   const getTotalHours = () => {
@@ -326,9 +227,9 @@ export default function DriverCalendarPage() {
           <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">
-                {events.filter(e => e.type === 'order' && e.order?.status === 'delivered').length}
+                {events.filter(e => e.type === 'order' && e.order?.status === 'completed').length}
               </div>
-              <div className="text-sm text-gray-600">Orders Delivered</div>
+              <div className="text-sm text-gray-600">Orders Completed</div>
             </div>
           </div>
         </div>
@@ -397,12 +298,18 @@ export default function DriverCalendarPage() {
             <div className="w-4 h-4 bg-red-500 rounded"></div>
             <span>Unavailable</span>
           </div>
-          {ORDER_STATUSES.map((status) => (
-            <div key={status.value} className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: status.color }}></div>
-              <span>{status.label}</span>
-            </div>
-          ))}
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span>Assigned Order</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-orange-500 rounded"></div>
+            <span>In Progress</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-600 rounded"></div>
+            <span>Completed</span>
+          </div>
         </div>
       </div>
 
@@ -415,7 +322,6 @@ export default function DriverCalendarPage() {
               <button
                 onClick={() => setSelectedOrder(null)}
                 className="text-gray-400 hover:text-gray-600"
-                disabled={statusLoading}
               >
                 ✕
               </button>
@@ -444,52 +350,19 @@ export default function DriverCalendarPage() {
                   <span className="font-medium">Tail Lift:</span> Required
                 </div>
               )}
-              
-              {/* Current Status */}
               <div>
-                <span className="font-medium">Current Status:</span>{' '}
-                <span 
-                  className="px-2 py-1 rounded text-xs font-medium text-white"
-                  style={{ backgroundColor: getStatusColor(selectedOrder.status) }}
-                >
-                  {getStatusLabel(selectedOrder.status)}
+                <span className="font-medium">Status:</span>{' '}
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  selectedOrder.status === 'assigned' ? 'bg-blue-100 text-blue-800' :
+                  selectedOrder.status === 'in_progress' ? 'bg-orange-100 text-orange-800' :
+                  selectedOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {selectedOrder.status.replace('_', ' ').toUpperCase()}
                 </span>
               </div>
-
-              {/* Status Update Section */}
-              <div className="border-t pt-3">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Update Status:
-                </label>
-                <div className="space-y-2">
-                  {getAvailableNextStatuses(selectedOrder.status).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => updateOrderStatus(selectedOrder.id, status)}
-                      disabled={statusLoading}
-                      className={`w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        statusLoading 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'text-white hover:opacity-90'
-                      }`}
-                      style={{ 
-                        backgroundColor: statusLoading ? '#f3f4f6' : getStatusColor(status)
-                      }}
-                    >
-                      {statusLoading ? 'Updating...' : `Mark as ${getStatusLabel(status)}`}
-                    </button>
-                  ))}
-                </div>
-                
-                {getAvailableNextStatuses(selectedOrder.status).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">
-                    No status updates available for this order.
-                  </p>
-                )}
-              </div>
-
               {selectedOrder.special_instructions && (
-                <div className="border-t pt-3">
+                <div>
                   <span className="font-medium">Special Instructions:</span>
                   <p className="text-gray-600 mt-1">{selectedOrder.special_instructions}</p>
                 </div>
@@ -497,10 +370,25 @@ export default function DriverCalendarPage() {
             </div>
 
             <div className="mt-6 flex gap-2">
+              {selectedOrder.status === 'assigned' && (
+                <button
+                  onClick={() => updateOrderStatus(selectedOrder.id, 'in_progress')}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-md text-sm font-medium"
+                >
+                  Start Order
+                </button>
+              )}
+              {selectedOrder.status === 'in_progress' && (
+                <button
+                  onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md text-sm font-medium"
+                >
+                  Complete Order
+                </button>
+              )}
               <button
                 onClick={() => setSelectedOrder(null)}
-                disabled={statusLoading}
-                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-md text-sm font-medium disabled:opacity-50"
+                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-md text-sm font-medium"
               >
                 Close
               </button>
