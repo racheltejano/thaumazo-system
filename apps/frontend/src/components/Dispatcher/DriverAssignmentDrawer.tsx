@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { format, isSameDay } from 'date-fns'
-import { utcToZonedTime } from 'date-fns-tz'
+import { format} from 'date-fns'
+
+
 
 type Driver = {
   id: string
@@ -23,7 +24,6 @@ type Order = {
   end_time: string
 }
 
-const PH_TZ = 'Asia/Manila'
 
 export default function DriverAssignmentDrawer({
   orderId,
@@ -49,7 +49,7 @@ export default function DriverAssignmentDrawer({
         .single()
 
       if (!error && data?.pickup_date) {
-        setPickupDate(new Date(data.pickup_date + 'T00:00:00+08:00'))
+        setPickupDate(new Date(`${data.pickup_date}T08:00:00+08:00`))
       }
     }
 
@@ -67,80 +67,93 @@ export default function DriverAssignmentDrawer({
   }, [orderId])
 
   useEffect(() => {
-    const fetchAvailability = async () => {
-      if (!selectedDriverId || !pickupDate) return
+  const fetchAvailability = async () => {
+    if (!selectedDriverId || !pickupDate) return
 
-      const { data: availabilities, error } = await supabase
-        .from('driver_availability')
-        .select('id, start_time, end_time')
-        .eq('driver_id', selectedDriverId)
+    const { data: availabilities, error } = await supabase
+      .from('driver_availability')
+      .select('id, start_time, end_time')
+      .eq('driver_id', selectedDriverId)
 
-      if (error || !availabilities) return
+    if (error || !availabilities) return
 
-      const blocksForPickupDate = availabilities.filter((block) => {
-        const start = utcToZonedTime(new Date(block.start_time), PH_TZ)
-        return isSameDay(start, pickupDate)
-      })
+    // Define the full day range of the pickup date
+    const pickupStart = new Date(pickupDate)
+    pickupStart.setHours(0, 0, 0, 0)
 
-      // Fetch existing orders by this driver on pickupDate
-      const { data: existingOrders, error: ordersError } = await supabase
-        .from('orders')
-        .select('pickup_time, estimated_total_duration')
-        .eq('driver_id', selectedDriverId)
-        .eq('pickup_date', format(pickupDate, 'yyyy-MM-dd'))
+    const pickupEnd = new Date(pickupDate)
+    pickupEnd.setHours(23, 59, 59, 999)
 
-      const busyTimes: Order[] = (existingOrders || []).map((o) => {
-        const start = new Date(`${format(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`)
-        const end = new Date(start.getTime() + (o.estimated_total_duration || 0) * 60_000)
-        return { start_time: start.toISOString(), end_time: end.toISOString() }
-      })
+    // Filter only blocks that overlap with the pickup date
+    const blocksForPickupDate = availabilities.filter((block) => {
+      const start = new Date(block.start_time)
+      const end = new Date(block.end_time)
+      return start < pickupEnd && end > pickupStart
+    })
 
-      const freeBlocks = blocksForPickupDate.flatMap((block) => {
-        const start = new Date(block.start_time)
-        const end = new Date(block.end_time)
+    const { data: existingOrders } = await supabase
+      .from('orders')
+      .select('pickup_time, estimated_total_duration')
+      .eq('driver_id', selectedDriverId)
+      .eq('pickup_date', format(pickupDate, 'yyyy-MM-dd'))
 
-        let freeSlots: { start: Date; end: Date }[] = [{ start, end }]
+    const busyTimes: Order[] = (existingOrders || []).map((o) => {
+      const start = new Date(`${format(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`)
+      const end = new Date(start.getTime() + (o.estimated_total_duration || 0) * 60_000)
+      return { start_time: start.toISOString(), end_time: end.toISOString() }
+    })
 
-        busyTimes.forEach(({ start_time, end_time }) => {
-          const busyStart = new Date(start_time)
-          const busyEnd = new Date(end_time)
+    const freeBlocks = blocksForPickupDate.flatMap((block) => {
+      const rawStart = new Date(block.start_time)
+      const rawEnd = new Date(block.end_time)
 
-          freeSlots = freeSlots.flatMap((slot) => {
-            if (busyEnd <= slot.start || busyStart >= slot.end) {
-              return [slot]
-            } else if (busyStart <= slot.start && busyEnd >= slot.end) {
-              return []
-            } else if (busyStart <= slot.start) {
-              return [{ start: busyEnd, end: slot.end }]
-            } else if (busyEnd >= slot.end) {
-              return [{ start: slot.start, end: busyStart }]
-            } else {
-              return [
-                { start: slot.start, end: busyStart },
-                { start: busyEnd, end: slot.end },
-              ]
-            }
-          })
+      // Clip the block to just within the pickup date
+      const start = new Date(Math.max(rawStart.getTime(), pickupStart.getTime()))
+      const end = new Date(Math.min(rawEnd.getTime(), pickupEnd.getTime()))
+
+      let freeSlots: { start: Date; end: Date }[] = [{ start, end }]
+
+      busyTimes.forEach(({ start_time, end_time }) => {
+        const busyStart = new Date(start_time)
+        const busyEnd = new Date(end_time)
+
+        freeSlots = freeSlots.flatMap((slot) => {
+          if (busyEnd <= slot.start || busyStart >= slot.end) {
+            return [slot]
+          } else if (busyStart <= slot.start && busyEnd >= slot.end) {
+            return []
+          } else if (busyStart <= slot.start) {
+            return [{ start: busyEnd, end: slot.end }]
+          } else if (busyEnd >= slot.end) {
+            return [{ start: slot.start, end: busyStart }]
+          } else {
+            return [
+              { start: slot.start, end: busyStart },
+              { start: busyEnd, end: slot.end },
+            ]
+          }
         })
-
-        return freeSlots
-          .filter((slot) => (slot.end.getTime() - slot.start.getTime()) / 60000 >= estimatedDurationMins)
-          .map((slot) => ({
-            id: `${block.id}-${slot.start.toISOString()}`,
-            start_time: slot.start.toISOString(),
-            end_time: slot.end.toISOString(),
-          }))
       })
 
-      const sorted = freeBlocks.sort(
-        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      )
+      return freeSlots
+        .filter((slot) => (slot.end.getTime() - slot.start.getTime()) / 60000 >= estimatedDurationMins)
+        .map((slot) => ({
+          id: `${block.id}-${slot.start.toISOString()}`,
+          start_time: slot.start.toISOString(),
+          end_time: slot.end.toISOString(),
+        }))
+    })
 
-      setAvailableBlocks(sorted)
-    }
+    const sorted = freeBlocks.sort(
+      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    )
 
-    fetchAvailability()
-  }, [selectedDriverId, pickupDate, estimatedDurationMins])
+    setAvailableBlocks(sorted)
+  }
+
+  fetchAvailability()
+}, [selectedDriverId, pickupDate, estimatedDurationMins])
+
 
   const handleAssign = async () => {
     if (!selectedDriverId || !selectedBlockId) return
@@ -190,8 +203,9 @@ export default function DriverAssignmentDrawer({
             >
               <option value="">-- Choose Time Slot --</option>
               {availableBlocks.map((b) => {
-                const start = utcToZonedTime(new Date(b.start_time), PH_TZ)
-                const end = utcToZonedTime(new Date(b.end_time), PH_TZ)
+                const start = new Date(b.start_time)
+                const end = new Date(b.end_time)
+
                 return (
                   <option key={b.id} value={b.id}>
                     {format(start, 'hh:mm a')} – {format(end, 'hh:mm a')}
