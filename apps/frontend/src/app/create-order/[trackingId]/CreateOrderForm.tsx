@@ -5,6 +5,7 @@ import axios from 'axios'
 import Image from 'next/image'
 import dayjs from 'dayjs'
 import { createSupabaseWithTracking } from '@/lib/supabase'
+import SuccessPopup  from '@/components/Client/SuccessPopup'
 
 type Dropoff = {
   name: string
@@ -554,11 +555,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   }
 
   if (loading) return <p className="p-6">Loading...</p>
-  if (submitted) return (
-    <div className="p-6">
-      <p className="text-green-600 text-xl mb-4">✅ Order submitted successfully!</p>
-    </div>
-  )
+  if (submitted) return <SuccessPopup trackingId={trackingId} />
 
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
