@@ -166,16 +166,48 @@ export default function DriverAssignmentDrawer({
   }, [selectedDriverId, pickupDate, estimatedDurationMins])
 
   const handleAssign = async () => {
-    if (!selectedDriverId || !selectedBlockId) return
+  if (!selectedDriverId || !selectedBlockId) return
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ driver_id: selectedDriverId })
-      .eq('id', orderId)
+  const selectedBlock = availableBlocks.find(b => b.id === selectedBlockId)
+  if (!selectedBlock) return
 
-    if (error) console.error('❌ Failed to assign driver:', error)
-    else onClose()
+  const pickupTime = new Date(selectedBlock.start_time)
+  const endTime = new Date(selectedBlock.end_time)
+  const durationMins = (endTime.getTime() - pickupTime.getTime()) / 60000
+
+  const updates = {
+    driver_id: selectedDriverId,
+    pickup_time: pickupTime.toISOString().split('T')[1].slice(0, 5), // 'HH:mm'
+    estimated_total_duration: durationMins,
+    estimated_end_time: endTime.toISOString().split('T')[1].slice(0, 5),
+    status: 'driver_assigned',
+    updated_at: new Date().toISOString(),
   }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update(updates)
+    .eq('id', orderId)
+
+  if (updateError) {
+    console.error('❌ Failed to assign driver:', updateError)
+    return
+  }
+
+  // Add status log
+  const { error: logError } = await supabase.from('order_status_logs').insert({
+    order_id: orderId,
+    status: 'driver_assigned',
+    description: 'Driver assigned via dispatcher calendar',
+  })
+
+  if (logError) {
+    console.error('❌ Failed to log status change:', logError)
+  }
+
+  onClose()
+}
+
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex justify-end">
