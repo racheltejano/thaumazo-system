@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { format } from 'date-fns'
 
+
 type Driver = {
   id: string
   first_name: string
@@ -165,10 +166,10 @@ export default function DriverAssignmentDrawer({
     fetchAvailability()
   }, [selectedDriverId, pickupDate, estimatedDurationMins])
 
-  const handleAssign = async () => {
+ const handleAssign = async () => {
   if (!selectedDriverId || !selectedBlockId) return
 
-  const selectedBlock = availableBlocks.find(b => b.id === selectedBlockId)
+  const selectedBlock = availableBlocks.find((b) => b.id === selectedBlockId)
   if (!selectedBlock) return
 
   const pickupTime = new Date(selectedBlock.start_time)
@@ -177,35 +178,31 @@ export default function DriverAssignmentDrawer({
 
   const updates = {
     driver_id: selectedDriverId,
-    pickup_time: pickupTime.toISOString().split('T')[1].slice(0, 5), // 'HH:mm'
+    pickup_time: pickupTime.toISOString().split('T')[1].slice(0, 5),
     estimated_total_duration: durationMins,
     estimated_end_time: endTime.toISOString().split('T')[1].slice(0, 5),
     status: 'driver_assigned',
     updated_at: new Date().toISOString(),
   }
 
-  const { error: updateError } = await supabase
+  const { data: updateData, error: updateError } = await supabase
     .from('orders')
     .update(updates)
     .eq('id', orderId)
+    .select()
 
   if (updateError) {
-    console.error('❌ Failed to assign driver:', updateError)
+    console.error('❌ Failed to assign driver:', updateError.message, updateError.details, updateError.hint)
     return
   }
 
-  // Add status log
-  const { error: logError } = await supabase.from('order_status_logs').insert({
-    order_id: orderId,
-    status: 'driver_assigned',
-    description: 'Driver assigned via dispatcher calendar',
-  })
+  console.log('✅ Driver assigned update result:', updateData)
 
-  if (logError) {
-    console.error('❌ Failed to log status change:', logError)
+  try {
+    onClose()
+  } catch (e) {
+    console.error('❌ Error after assigning driver (onClose or UI):', e)
   }
-
-  onClose()
 }
 
 
@@ -247,10 +244,12 @@ export default function DriverAssignmentDrawer({
               {availableBlocks.map((b) => {
                 const start = new Date(b.start_time)
                 const end = new Date(b.end_time)
+                const localStart = new Date(start.getTime() + 8 * 60 * 60 * 1000)
+                const localEnd = new Date(end.getTime() + 8 * 60 * 60 * 1000)
 
                 return (
                   <option key={b.id} value={b.id}>
-                    {format(start, 'hh:mm a')} – {format(end, 'hh:mm a')}
+                    {format(localStart, 'hh:mm a')} – {format(localEnd, 'hh:mm a')}
                   </option>
                 )
               })}
