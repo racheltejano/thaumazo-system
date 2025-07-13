@@ -166,21 +166,43 @@ export default function DriverAssignmentDrawer({
     fetchAvailability()
   }, [selectedDriverId, pickupDate, estimatedDurationMins])
 
- const handleAssign = async () => {
-  if (!selectedDriverId || !selectedBlockId) return
+  const handleAssign = async () => {
+  if (!selectedDriverId || !selectedBlockId || !pickupDate) return
 
   const selectedBlock = availableBlocks.find((b) => b.id === selectedBlockId)
   if (!selectedBlock) return
 
-  const pickupTime = new Date(selectedBlock.start_time)
-  const endTime = new Date(selectedBlock.end_time)
-  const durationMins = (endTime.getTime() - pickupTime.getTime()) / 60000
+  const pickupTimeUTC = new Date(selectedBlock.start_time)
+  const endTimeUTC = new Date(selectedBlock.end_time)
+  const durationMins = (endTimeUTC.getTime() - pickupTimeUTC.getTime()) / 60000
+
+  // Format correctly in Asia/Manila using Intl.DateTimeFormat
+  const pickupTimeFormatter = new Intl.DateTimeFormat('en-PH', {
+    timeZone: 'Asia/Manila',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  // Shift the UTC time to Manila local time by adding 8 hours
+    const pickupTimeInManila = new Date(pickupTimeUTC.getTime() + 8 * 60 * 60 * 1000)
+    const endTimeInManila = new Date(endTimeUTC.getTime() + 8 * 60 * 60 * 1000)
+
+    // Format as HH:mm string for storage
+    const pickupTimeFormatted = pickupTimeInManila
+      .toTimeString()
+      .slice(0, 5) // 'HH:mm'
+
+    const endTimeFormatted = endTimeInManila
+      .toTimeString()
+      .slice(0, 5) // 'HH:mm'
+
 
   const updates = {
     driver_id: selectedDriverId,
-    pickup_time: pickupTime.toISOString().split('T')[1].slice(0, 5),
+    pickup_time: pickupTimeFormatted,
     estimated_total_duration: durationMins,
-    estimated_end_time: endTime.toISOString().split('T')[1].slice(0, 5),
+    estimated_end_time: endTimeFormatted,
     status: 'driver_assigned',
     updated_at: new Date().toISOString(),
   }
@@ -192,7 +214,7 @@ export default function DriverAssignmentDrawer({
     .select()
 
   if (updateError) {
-    console.error('❌ Failed to assign driver:', updateError.message, updateError.details, updateError.hint)
+    console.error('❌ Failed to assign driver:', updateError.message)
     return
   }
 
@@ -204,6 +226,8 @@ export default function DriverAssignmentDrawer({
     console.error('❌ Error after assigning driver (onClose or UI):', e)
   }
 }
+
+
 
 
   return (
