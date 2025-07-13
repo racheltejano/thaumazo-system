@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { format} from 'date-fns'
-
-
+import { format } from 'date-fns'
 
 type Driver = {
   id: string
@@ -23,7 +21,6 @@ type Order = {
   start_time: string
   end_time: string
 }
-
 
 export default function DriverAssignmentDrawer({
   orderId,
@@ -67,93 +64,106 @@ export default function DriverAssignmentDrawer({
   }, [orderId])
 
   useEffect(() => {
-  const fetchAvailability = async () => {
-    if (!selectedDriverId || !pickupDate) return
+    const fetchAvailability = async () => {
+      if (!selectedDriverId || !pickupDate) return
 
-    const { data: availabilities, error } = await supabase
-      .from('driver_availability')
-      .select('id, start_time, end_time')
-      .eq('driver_id', selectedDriverId)
+      const { data: availabilities, error } = await supabase
+        .from('driver_availability')
+        .select('id, start_time, end_time')
+        .eq('driver_id', selectedDriverId)
 
-    if (error || !availabilities) return
+      if (error || !availabilities) return
 
-    // Define the full day range of the pickup date
-    const pickupStart = new Date(pickupDate)
-    pickupStart.setHours(0, 0, 0, 0)
+      const pickupStart = new Date(pickupDate)
+      pickupStart.setHours(0, 0, 0, 0)
 
-    const pickupEnd = new Date(pickupDate)
-    pickupEnd.setHours(23, 59, 59, 999)
+      const pickupEnd = new Date(pickupDate)
+      pickupEnd.setHours(23, 59, 59, 999)
 
-    // Filter only blocks that overlap with the pickup date
-    const blocksForPickupDate = availabilities.filter((block) => {
-      const start = new Date(block.start_time)
-      const end = new Date(block.end_time)
-      return start < pickupEnd && end > pickupStart
-    })
+      const blocksForPickupDate = availabilities.filter((block) => {
+        const start = new Date(block.start_time)
+        const end = new Date(block.end_time)
+        return start < pickupEnd && end > pickupStart
+      })
 
-    const { data: existingOrders } = await supabase
-      .from('orders')
-      .select('pickup_time, estimated_total_duration')
-      .eq('driver_id', selectedDriverId)
-      .eq('pickup_date', format(pickupDate, 'yyyy-MM-dd'))
+      const { data: existingOrders } = await supabase
+        .from('orders')
+        .select('pickup_time, estimated_total_duration')
+        .eq('driver_id', selectedDriverId)
+        .eq('pickup_date', format(pickupDate, 'yyyy-MM-dd'))
 
-    const busyTimes: Order[] = (existingOrders || []).map((o) => {
-      const start = new Date(`${format(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`)
-      const end = new Date(start.getTime() + (o.estimated_total_duration || 0) * 60_000)
-      return { start_time: start.toISOString(), end_time: end.toISOString() }
-    })
+      const busyTimes: Order[] = (existingOrders || []).map((o) => {
+        const start = new Date(`${format(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`)
+        const end = new Date(start.getTime() + (o.estimated_total_duration || 0) * 60000)
+        return { start_time: start.toISOString(), end_time: end.toISOString() }
+      })
 
-    const freeBlocks = blocksForPickupDate.flatMap((block) => {
-      const rawStart = new Date(block.start_time)
-      const rawEnd = new Date(block.end_time)
+      const bufferMins = estimatedDurationMins <= 30 ? 20 : 30
+      const totalMinsNeeded = estimatedDurationMins + bufferMins
+      const stepMins = 15
 
-      // Clip the block to just within the pickup date
-      const start = new Date(Math.max(rawStart.getTime(), pickupStart.getTime()))
-      const end = new Date(Math.min(rawEnd.getTime(), pickupEnd.getTime()))
+      const freeBlocks = blocksForPickupDate.flatMap((block) => {
+        const rawStart = new Date(block.start_time)
+        const rawEnd = new Date(block.end_time)
 
-      let freeSlots: { start: Date; end: Date }[] = [{ start, end }]
+        const start = new Date(Math.max(rawStart.getTime(), pickupStart.getTime()))
+        const end = new Date(Math.min(rawEnd.getTime(), pickupEnd.getTime()))
 
-      busyTimes.forEach(({ start_time, end_time }) => {
-        const busyStart = new Date(start_time)
-        const busyEnd = new Date(end_time)
+        let freeSlots: { start: Date; end: Date }[] = [{ start, end }]
 
-        freeSlots = freeSlots.flatMap((slot) => {
-          if (busyEnd <= slot.start || busyStart >= slot.end) {
-            return [slot]
-          } else if (busyStart <= slot.start && busyEnd >= slot.end) {
-            return []
-          } else if (busyStart <= slot.start) {
-            return [{ start: busyEnd, end: slot.end }]
-          } else if (busyEnd >= slot.end) {
-            return [{ start: slot.start, end: busyStart }]
-          } else {
-            return [
-              { start: slot.start, end: busyStart },
-              { start: busyEnd, end: slot.end },
-            ]
+        busyTimes.forEach(({ start_time, end_time }) => {
+          const busyStart = new Date(start_time)
+          const busyEnd = new Date(end_time)
+
+          freeSlots = freeSlots.flatMap((slot) => {
+            if (busyEnd <= slot.start || busyStart >= slot.end) {
+              return [slot]
+            } else if (busyStart <= slot.start && busyEnd >= slot.end) {
+              return []
+            } else if (busyStart <= slot.start) {
+              return [{ start: busyEnd, end: slot.end }]
+            } else if (busyEnd >= slot.end) {
+              return [{ start: slot.start, end: busyStart }]
+            } else {
+              return [
+                { start: slot.start, end: busyStart },
+                { start: busyEnd, end: slot.end },
+              ]
+            }
+          })
+        })
+
+        return freeSlots.flatMap((slot) => {
+          const slotStart = slot.start
+          const slotEnd = slot.end
+          const results: AvailabilityBlock[] = []
+
+          for (
+            let s = new Date(slotStart);
+            s.getTime() + totalMinsNeeded * 60000 <= slotEnd.getTime();
+            s = new Date(s.getTime() + stepMins * 60000)
+          ) {
+            const e = new Date(s.getTime() + totalMinsNeeded * 60000)
+            results.push({
+              id: `${block.id}-${s.toISOString()}`,
+              start_time: s.toISOString(),
+              end_time: e.toISOString(),
+            })
           }
+
+          return results
         })
       })
 
-      return freeSlots
-        .filter((slot) => (slot.end.getTime() - slot.start.getTime()) / 60000 >= estimatedDurationMins)
-        .map((slot) => ({
-          id: `${block.id}-${slot.start.toISOString()}`,
-          start_time: slot.start.toISOString(),
-          end_time: slot.end.toISOString(),
-        }))
-    })
+      const sorted = freeBlocks.sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )
 
-    const sorted = freeBlocks.sort(
-      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-    )
+      setAvailableBlocks(sorted)
+    }
 
-    setAvailableBlocks(sorted)
-  }
-
-  fetchAvailability()
-}, [selectedDriverId, pickupDate, estimatedDurationMins])
-
+    fetchAvailability()
+  }, [selectedDriverId, pickupDate, estimatedDurationMins])
 
   const handleAssign = async () => {
     if (!selectedDriverId || !selectedBlockId) return

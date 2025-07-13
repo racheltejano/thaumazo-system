@@ -102,8 +102,9 @@ export default function DriverAvailabilityForm() {
         id: uuidv4(),
         driver_id: user.id,
         title: d.available ? shift?.label || '' : `Unavailable - ${d.unavailableReason?.toUpperCase()}`,
-        start_time: new Date(`${d.day}T${d.available ? shift?.start : '00:00'}`),
-        end_time: new Date(`${d.day}T${d.available ? shift?.end : '00:00'}`),
+        start_time: new Date(`${d.day}T${d.available ? shift?.start : '00:00'}:00+08:00`),
+        end_time: new Date(`${d.day}T${d.available ? shift?.end : '00:00'}:00+08:00`),
+
       }
     })
 
