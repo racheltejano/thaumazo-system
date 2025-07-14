@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<!DOCTYPE svg  PUBLIC '-//W3C//DTD SVG 1.1//EN'  'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg width="800px" height="800px" viewBox="0 0 32 32" enable-background="new 0 0 32 32" id="_x3C_Layer_x3E_" version="1.1" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="car_x2C__salesman_x2C__service_x2C__manager_x2C__person">
+<g id="XMLID_339_">
+<path d="    M12.5,27.5v2c0,0.553-0.447,1-1,1h-2" fill="none" id="XMLID_336_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<path d="    M29.5,27.5v2c0,0.553-0.447,1-1,1h-1c-0.553,0-1-0.447-1-1v-2" fill="none" id="XMLID_6229_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<line fill="none" id="XMLID_5901_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" x1="30.5" x2="11.5" y1="27.5" y2="27.5"/>
+<path d="    M11.496,20.926c1.715-0.323,4.285-0.426,8.004-0.426c8.5,0,11,0.583,11,3v1.188" fill="none" id="XMLID_5891_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<path d="    M26.5,25.5v-1c0-0.55,0.45-1,1-1h3v2H26.5z" fill="none" id="XMLID_351_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<path d="    M11,23.5h0.5c0.55,0,1,0.45,1,1v1h-3" fill="none" id="XMLID_337_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<path d="    M14.5,25.5L14.5,25.5c0-1.104,0.896-2,2-2h6c1.104,0,2,0.896,2,2l0,0" fill="none" id="XMLID_5872_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<path d="    M28.569,21.206L26.82,15.95c-0.181-0.53-0.761-1.02-1.311-1.09c-1.189-0.15-3.37-0.36-6.01-0.36s-4.82,0.21-6.01,0.36    c-0.55,0.07-1.13,0.56-1.311,1.09L11.331,18.5" fill="none" id="XMLID_341_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<path d="    M9.5,30.5v-16l0,0c0.739,0,1.385-0.401,1.731-0.998c0.171-0.295,0.269-0.637,0.269-1.002V11c0-1.375-1.125-2.5-2.5-2.5H4    c-1.381,0-2.5,1.119-2.5,2.5v1.5c0,1.104,0.896,2,2,2l0,0v5l-2,11" fill="none" id="XMLID_6327_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<circle cx="6.5" cy="4" fill="none" id="XMLID_6326_" r="2.5" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<g id="XMLID_6270_">
+<path d="     M9.5,13v-0.319c0-0.618-0.555-1.089-1.164-0.986l-3.672,0.611C4.055,12.407,3.5,11.938,3.5,11.319" fill="none" id="XMLID_6276_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<polyline fill="none" id="XMLID_6274_" points="     7.5,30.5 6.5,19 3.5,30.5    " stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>
+<line fill="none" id="XMLID_6271_" stroke="#263238" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" x1="5.5" x2="9.5" y1="14.5" y2="14.5"/>
+</g>
+</g>
+</g>
+</svg>
