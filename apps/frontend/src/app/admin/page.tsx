@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import DashboardLayout from '@/components/DashboardLayout'
 import AdminSummaryCard from '@/components/AdminSummaryCard/page'
-
+import RoleGuard from '@/components/auth/RoleGuard'
 
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -99,7 +99,8 @@ export default function AdminDashboard() {
     }
   }
 
-  return (
+   return (
+    <RoleGuard requiredRole="admin">    
     <DashboardLayout role="admin" userName="Admin">
     {/* 📊 Admin Summary Section */}
     <section className="mb-10 px-4">
@@ -165,7 +166,7 @@ export default function AdminDashboard() {
       </div>
     )}
   </section>
-</DashboardLayout>
-
+    </DashboardLayout>
+    </RoleGuard>
   )
 }
