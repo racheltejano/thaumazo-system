@@ -56,7 +56,7 @@ const [profile, setProfile] = useState<Profile | null>(null)
         router.push('/dispatcher')
         break
     case 'inventory_staff':
-        router.push('/inventory')
+        router.push('/inventory/dashboard')
         break
     default:
         router.push('/dashboard')
