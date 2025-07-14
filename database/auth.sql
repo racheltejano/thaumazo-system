@@ -1,5 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
+
 CREATE TABLE auth.audit_log_entries (
   instance_id uuid,
   id uuid NOT NULL,
@@ -8,7 +9,6 @@ CREATE TABLE auth.audit_log_entries (
   ip_address character varying NOT NULL DEFAULT ''::character varying,
   CONSTRAINT audit_log_entries_pkey PRIMARY KEY (id)
 );
-
 CREATE TABLE auth.flow_state (
   id uuid NOT NULL,
   user_id uuid,
@@ -24,7 +24,6 @@ CREATE TABLE auth.flow_state (
   auth_code_issued_at timestamp with time zone,
   CONSTRAINT flow_state_pkey PRIMARY KEY (id)
 );
-
 CREATE TABLE auth.identities (
   provider_id text NOT NULL,
   user_id uuid NOT NULL,
@@ -38,7 +37,6 @@ CREATE TABLE auth.identities (
   CONSTRAINT identities_pkey PRIMARY KEY (id),
   CONSTRAINT identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE auth.instances (
   id uuid NOT NULL,
   uuid uuid,
@@ -47,7 +45,6 @@ CREATE TABLE auth.instances (
   updated_at timestamp with time zone,
   CONSTRAINT instances_pkey PRIMARY KEY (id)
 );
-
 CREATE TABLE auth.mfa_amr_claims (
   session_id uuid NOT NULL,
   created_at timestamp with time zone NOT NULL,
@@ -57,7 +54,6 @@ CREATE TABLE auth.mfa_amr_claims (
   CONSTRAINT mfa_amr_claims_pkey PRIMARY KEY (id),
   CONSTRAINT mfa_amr_claims_session_id_fkey FOREIGN KEY (session_id) REFERENCES auth.sessions(id)
 );
-
 CREATE TABLE auth.mfa_challenges (
   id uuid NOT NULL,
   factor_id uuid NOT NULL,
@@ -69,7 +65,6 @@ CREATE TABLE auth.mfa_challenges (
   CONSTRAINT mfa_challenges_pkey PRIMARY KEY (id),
   CONSTRAINT mfa_challenges_auth_factor_id_fkey FOREIGN KEY (factor_id) REFERENCES auth.mfa_factors(id)
 );
-
 CREATE TABLE auth.mfa_factors (
   id uuid NOT NULL,
   user_id uuid NOT NULL,
@@ -86,7 +81,6 @@ CREATE TABLE auth.mfa_factors (
   CONSTRAINT mfa_factors_pkey PRIMARY KEY (id),
   CONSTRAINT mfa_factors_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE auth.one_time_tokens (
   id uuid NOT NULL,
   user_id uuid NOT NULL,
@@ -98,7 +92,6 @@ CREATE TABLE auth.one_time_tokens (
   CONSTRAINT one_time_tokens_pkey PRIMARY KEY (id),
   CONSTRAINT one_time_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE auth.refresh_tokens (
   instance_id uuid,
   id bigint NOT NULL DEFAULT nextval('auth.refresh_tokens_id_seq'::regclass),
@@ -112,7 +105,6 @@ CREATE TABLE auth.refresh_tokens (
   CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id),
   CONSTRAINT refresh_tokens_session_id_fkey FOREIGN KEY (session_id) REFERENCES auth.sessions(id)
 );
-
 CREATE TABLE auth.saml_providers (
   id uuid NOT NULL,
   sso_provider_id uuid NOT NULL,
@@ -126,7 +118,6 @@ CREATE TABLE auth.saml_providers (
   CONSTRAINT saml_providers_pkey PRIMARY KEY (id),
   CONSTRAINT saml_providers_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id)
 );
-
 CREATE TABLE auth.saml_relay_states (
   id uuid NOT NULL,
   sso_provider_id uuid NOT NULL,
@@ -140,12 +131,10 @@ CREATE TABLE auth.saml_relay_states (
   CONSTRAINT saml_relay_states_flow_state_id_fkey FOREIGN KEY (flow_state_id) REFERENCES auth.flow_state(id),
   CONSTRAINT saml_relay_states_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id)
 );
-
 CREATE TABLE auth.schema_migrations (
   version character varying NOT NULL,
   CONSTRAINT schema_migrations_pkey PRIMARY KEY (version)
 );
-
 CREATE TABLE auth.sessions (
   id uuid NOT NULL,
   user_id uuid NOT NULL,
@@ -161,7 +150,6 @@ CREATE TABLE auth.sessions (
   CONSTRAINT sessions_pkey PRIMARY KEY (id),
   CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE auth.sso_domains (
   id uuid NOT NULL,
   sso_provider_id uuid NOT NULL,
@@ -171,7 +159,6 @@ CREATE TABLE auth.sso_domains (
   CONSTRAINT sso_domains_pkey PRIMARY KEY (id),
   CONSTRAINT sso_domains_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id)
 );
-
 CREATE TABLE auth.sso_providers (
   id uuid NOT NULL,
   resource_id text CHECK (resource_id = NULL::text OR char_length(resource_id) > 0),
@@ -179,7 +166,6 @@ CREATE TABLE auth.sso_providers (
   updated_at timestamp with time zone,
   CONSTRAINT sso_providers_pkey PRIMARY KEY (id)
 );
-
 CREATE TABLE auth.users (
   instance_id uuid,
   id uuid NOT NULL,

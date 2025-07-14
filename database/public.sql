@@ -28,6 +28,16 @@ CREATE TABLE public.driver_availability (
   CONSTRAINT driver_availability_pkey PRIMARY KEY (id),
   CONSTRAINT driver_availability_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.inventory (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  product_id uuid NOT NULL,
+  quantity integer NOT NULL DEFAULT 0,
+  last_updated timestamp with time zone DEFAULT now(),
+  latitude double precision,
+  longitude double precision,
+  CONSTRAINT inventory_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
 CREATE TABLE public.order_dropoffs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   order_id uuid,
@@ -35,15 +45,37 @@ CREATE TABLE public.order_dropoffs (
   dropoff_address text,
   dropoff_contact text,
   dropoff_phone text,
+  latitude double precision,
+  longitude double precision,
+  sequence integer,
+  estimated_duration_mins integer,
   CONSTRAINT order_dropoffs_pkey PRIMARY KEY (id),
   CONSTRAINT order_dropoffs_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.order_files (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid,
+  file_url text NOT NULL,
+  type text CHECK (type = ANY (ARRAY['pickup'::text, 'dropoff'::text, 'pod'::text, 'other'::text])),
+  uploaded_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT order_files_pkey PRIMARY KEY (id),
+  CONSTRAINT order_files_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.order_pricing_components (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid,
+  label text NOT NULL,
+  amount numeric NOT NULL,
+  CONSTRAINT order_pricing_components_pkey PRIMARY KEY (id),
+  CONSTRAINT order_pricing_components_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.order_products (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   order_id uuid,
-  product_name text NOT NULL,
   quantity integer NOT NULL,
+  product_id uuid,
   CONSTRAINT order_products_pkey PRIMARY KEY (id),
+  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
   CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.order_status_logs (
@@ -68,9 +100,24 @@ CREATE TABLE public.orders (
   special_instructions text,
   estimated_cost numeric,
   driver_id uuid,
+  delivery_window_start time without time zone,
+  delivery_window_end time without time zone,
+  priority_level text CHECK (priority_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])),
+  tracking_id text UNIQUE,
+  estimated_total_duration integer,
+  estimated_end_time time without time zone,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
   CONSTRAINT orders_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
   CONSTRAINT orders_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.products (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  weight numeric,
+  volume numeric,
+  is_fragile boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT products_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -80,6 +127,7 @@ CREATE TABLE public.profiles (
   first_name text,
   last_name text,
   profile_pic text,
+  can_login boolean DEFAULT true,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
