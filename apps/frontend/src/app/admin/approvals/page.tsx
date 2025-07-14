@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import DashboardLayout from '@/components/DashboardLayout'
+import RoleGuard from '@/components/auth/RoleGuard'
 interface User {
   id: string
   email: string
@@ -78,6 +79,7 @@ export default function AdminApprovalsPage() {
   }
 
   return (
+    <RoleGuard requiredRole="admin">
     <DashboardLayout role="admin" userName="Admin">
       <div className="max-w-5xl mx-auto">
         <div className="bg-white rounded-2xl shadow p-6 mb-6">
@@ -145,5 +147,6 @@ export default function AdminApprovalsPage() {
         </div>
       </div>
     </DashboardLayout>
+    </RoleGuard>
   )
 }
