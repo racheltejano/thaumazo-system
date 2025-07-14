@@ -10,6 +10,7 @@ import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import DashboardLayout from '@/components/DashboardLayout'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import RoleGuard from '@/components/auth/RoleGuard'
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -56,8 +57,23 @@ export default function DriverCalendarPage() {
   const [statusLoading, setStatusLoading] = useState(false)
 
   useEffect(() => {
-    fetchDriverData()
-  }, [])
+  const fetchSessionThenData = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session) {
+      setError('You must be logged in to view your calendar.')
+      setLoading(false)
+      return
+    }
+
+    await fetchDriverData()
+  }
+
+  fetchSessionThenData()
+}, [])
+
 
   const fetchDriverData = async () => {
     setLoading(true)
@@ -282,6 +298,7 @@ export default function DriverCalendarPage() {
 
   if (loading) {
     return (
+      <RoleGuard requiredRole="driver">
       <DashboardLayout role="driver" userName="Driver">
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="text-center">
@@ -290,10 +307,12 @@ export default function DriverCalendarPage() {
           </div>
         </div>
       </DashboardLayout>
+      </RoleGuard>
     )
   }
 
   return (
+    <RoleGuard requiredRole="driver">
     <DashboardLayout role="driver" userName="Driver">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
@@ -509,5 +528,6 @@ export default function DriverCalendarPage() {
         </div>
       )}
     </DashboardLayout>
+    </RoleGuard>
   )
 }
