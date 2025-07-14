@@ -10,7 +10,6 @@ function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
   return `${prefix}_${random}`
 }
-
 export default function AdminDashboard() {
   const router = useRouter()
   const [loadingAuth, setLoadingAuth] = useState(true)

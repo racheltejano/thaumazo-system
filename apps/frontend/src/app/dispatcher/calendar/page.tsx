@@ -1,5 +1,5 @@
 'use client'
-
+import RoleGuard from '@/components/auth/RoleGuard'
 import { useEffect, useState } from 'react'
 import {
   Calendar,
@@ -15,6 +15,7 @@ import DashboardLayout from '@/components/DashboardLayout'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import DraggableOrder from '@/components/Dispatcher/DraggableOrder'
 import OrderDetailsModal from '@/components/Dispatcher/OrderDetailsModal'
+
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -42,8 +43,6 @@ type Order = {
   vehicle_type: string | null 
   tail_lift_required: boolean | null
 }
-
-
 
 
 export default function DispatcherCalendarPage() {
@@ -133,6 +132,7 @@ export default function DispatcherCalendarPage() {
   }
 
   return (
+    <RoleGuard requiredRole="dispatcher"> 
     <DashboardLayout role="dispatcher" userName="Dispatcher">
       <DndProvider backend={HTML5Backend}>
         <main className="flex bg-gray-50 text-gray-800 h-[calc(100vh-4rem)] px-4 py-4 gap-4 overflow-hidden">
@@ -230,5 +230,6 @@ export default function DispatcherCalendarPage() {
         )}
       </DndProvider>
     </DashboardLayout>
+    </RoleGuard>
   )
 }

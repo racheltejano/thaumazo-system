@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import DashboardLayout from '@/components/DashboardLayout'
 import RoleGuard from '@/components/auth/RoleGuard'
+
 interface User {
   id: string
   email: string
