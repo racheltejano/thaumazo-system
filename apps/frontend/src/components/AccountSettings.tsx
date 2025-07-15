@@ -21,7 +21,6 @@ export default function AccountSettings() {
   const user = auth?.user;
   const role = auth?.role;
   const [activeTab, setActiveTab] = useState('profile');
-
   // Profile state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -51,7 +50,7 @@ export default function AccountSettings() {
   const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
   const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
 
-  // Fetch profile from Supabase (like DashboardLayout)
+  // Fetch profile from Supabase when user changes
   useEffect(() => {
     // Reset all user-specific state on user change
     setFirstName('');
@@ -59,8 +58,6 @@ export default function AccountSettings() {
     setProfilePicFile(null);
     setPreviewUrl(null);
     setProfileLoading(false);
-    // Remove userId state
-    // setUserId(null);
     setEmail(user?.email || '');
     setNewEmail('');
     setCurrentPassword('');
@@ -74,7 +71,7 @@ export default function AccountSettings() {
     setCroppedAreaPixels(null);
     setCroppedImage(null);
     
-    // Now fetch the new profile as before
+    // Fetch the profile data
     const fetchProfile = async () => {
       if (!user?.id) return;
       const { data, error } = await supabase
@@ -87,7 +84,7 @@ export default function AccountSettings() {
         setLastName(data.last_name || '');
         setPreviewUrl(data.profile_pic || null);
       }
-      setEmail(user.email || '');
+      setEmail(user?.email || '');
     };
     fetchProfile();
   }, [user]);
@@ -250,6 +247,14 @@ export default function AccountSettings() {
   const lastNameDisplay = user?.user_metadata?.last_name || '';
   const profilePic = user?.user_metadata?.profile_pic || '';
   const initial = firstNameDisplay.charAt(0).toUpperCase();
+
+  if (auth?.loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <span className="text-lg text-gray-500">Loading...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
