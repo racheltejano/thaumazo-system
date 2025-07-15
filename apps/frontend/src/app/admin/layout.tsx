@@ -3,10 +3,10 @@ import RoleGuard from '@/components/auth/RoleGuard';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RoleGuard requiredRole="admin">
-      <DashboardLayout role="admin">
+    <DashboardLayout role="admin">
+      <RoleGuard requiredRole="admin">
         {children}
-      </DashboardLayout>
-    </RoleGuard>
+      </RoleGuard>
+    </DashboardLayout>
   );
 }

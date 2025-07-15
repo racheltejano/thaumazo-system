@@ -3,8 +3,10 @@ import RoleGuard from '@/components/auth/RoleGuard';
 
 export default function InventorySectionLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RoleGuard requiredRole="inventory_staff">
-      <DashboardLayout role="inventory">{children}</DashboardLayout>
-    </RoleGuard>
+    <DashboardLayout role="inventory">
+      <RoleGuard requiredRole="inventory_staff">
+        {children}
+      </RoleGuard>
+    </DashboardLayout>
   );
 } 

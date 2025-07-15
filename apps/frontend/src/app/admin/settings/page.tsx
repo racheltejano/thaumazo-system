@@ -1,7 +1,6 @@
-"use client"
-
-import AccountSettings from '@/components/AccountSettings'
+"use client";
+import AccountSettings from '@/components/AccountSettings';
 
 export default function AdminSettingsPage() {
-  return <AccountSettings role="admin" />
+  return <AccountSettings />;
 }

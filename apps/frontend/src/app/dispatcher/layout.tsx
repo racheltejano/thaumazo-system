@@ -3,10 +3,10 @@ import RoleGuard from '@/components/auth/RoleGuard';
 
 export default function DispatcherLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RoleGuard requiredRole="dispatcher">
-      <DashboardLayout role="dispatcher">
+    <DashboardLayout role="dispatcher">
+      <RoleGuard requiredRole="dispatcher">
         {children}
-      </DashboardLayout>
-    </RoleGuard>
+      </RoleGuard>
+    </DashboardLayout>
   );
 } 

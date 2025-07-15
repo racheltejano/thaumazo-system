@@ -3,10 +3,10 @@ import RoleGuard from '@/components/auth/RoleGuard';
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RoleGuard requiredRole="driver">
-      <DashboardLayout role="driver">
+    <DashboardLayout role="driver">
+      <RoleGuard requiredRole="driver">
         {children}
-      </DashboardLayout>
-    </RoleGuard>
+      </RoleGuard>
+    </DashboardLayout>
   );
 } 
