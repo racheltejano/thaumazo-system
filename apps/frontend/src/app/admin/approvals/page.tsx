@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import DashboardLayout from '@/components/DashboardLayout'
 import RoleGuard from '@/components/auth/RoleGuard'
 
 interface User {
@@ -81,7 +80,6 @@ export default function AdminApprovalsPage() {
 
   return (
     <RoleGuard requiredRole="admin">
-    <DashboardLayout role="admin" userName="Admin">
       <div className="max-w-5xl mx-auto">
         <div className="bg-white rounded-2xl shadow p-6 mb-6">
           <h2 className="text-xl font-bold text-black mb-4">🧾 Pending User Approvals</h2>
@@ -125,7 +123,7 @@ export default function AdminApprovalsPage() {
                           <option value="inventory_staff">Inventory Staff</option>
                         </select>
                       </td>
-                      <td className="px-4 py-3 space-x-2">
+                      <td className="px-4 py-3">
                         <button
                           onClick={() => handleApprove(user.id)}
                           className="px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
@@ -147,7 +145,6 @@ export default function AdminApprovalsPage() {
           )}
         </div>
       </div>
-    </DashboardLayout>
     </RoleGuard>
   )
 }

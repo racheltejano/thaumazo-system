@@ -1,12 +1,7 @@
 "use client"
 
-import DashboardLayout from '@/components/DashboardLayout'
 import AccountSettings from '@/components/AccountSettings'
 
 export default function AdminSettingsPage() {
-  return (
-    <DashboardLayout role="admin" userName="Admin">
-      <AccountSettings role="admin" />
-    </DashboardLayout>
-  )
+  return <AccountSettings role="admin" />
 }
