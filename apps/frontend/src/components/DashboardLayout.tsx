@@ -381,34 +381,76 @@ export default function DashboardLayout({
                   )}
                 </button>
               {profileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-100 animate-fade-in">
-                  {config.profileMenuItems?.map((item, index) => (
-                    <div key={index}>
-                      {item.href ? (
-                        <a
-                          href={item.href}
-                          className={`block px-4 py-2 text-gray-800 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 transition-colors`}
-                          onClick={() => setProfileMenuOpen(false)}
-                        >
-                          {item.label}
-                        </a>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            if (item.label === 'Log Out') {
-                              handleLogout();
-                            } else if (item.onClick) {
-                              item.onClick();
-                            }
-                            setProfileMenuOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-gray-800 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 transition-colors`}
-                        >
-                          {item.label}
-                        </button>
-                      )}
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl py-4 z-50 border border-gray-100 animate-fade-in flex flex-col gap-4">
+                  {/* Profile Card */}
+                  <div className="flex flex-col items-center px-2 py-2 bg-white rounded-xl shadow-md mx-4 mt-2 mb-2">
+                    <div className="flex items-center w-full gap-3">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow relative">
+                        {profilePicUrl ? (
+                          <Image
+                            src={profilePicUrl}
+                            alt="Profile"
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                            style={{ objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <span className="w-full h-full flex items-center justify-center text-base font-bold text-white bg-gray-600">
+                            {(firstName && firstName.length > 0)
+                              ? firstName.charAt(0).toUpperCase()
+                              : (role.charAt(0).toUpperCase())}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-col justify-center">
+                        <div className="text-base font-semibold text-gray-900">{firstName || lastName ? `${firstName ?? ''}${lastName ? ` ${lastName}` : ''}`.trim() : displayName}</div>
+                      </div>
                     </div>
-                  ))}
+                    <hr className="w-full my-2 border-gray-200" />
+                    <div className="text-xs text-gray-500 capitalize w-full text-center">{role}</div>
+                  </div>
+                  {/* Menu Items */}
+                  <div className="flex flex-col gap-1 px-2">
+                    {/* Settings & Privacy */}
+                    <a
+                      href={config.profileMenuItems?.[0]?.href || '#'}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-gray-800 font-medium text-base"
+                      onClick={() => setProfileMenuOpen(false)}
+                    >
+                      {/* Settings Icon in gray circle */}
+                      <span className="bg-gray-200 w-8 h-8 flex items-center justify-center rounded-full">
+                        <Image src="/settings-icon.svg" alt="Settings" width={20} height={20} />
+                      </span>
+                      <span>Settings & Privacy</span>
+                    </a>
+                    {/* Help & Support */}
+                    <a
+                      href="/help"
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-gray-800 font-medium text-base"
+                      onClick={() => setProfileMenuOpen(false)}
+                    >
+                      {/* Help Icon in gray circle */}
+                      <span className="bg-gray-200 w-8 h-8 flex items-center justify-center rounded-full">
+                        <Image src="/help-icon.svg" alt="Help" width={20} height={20} />
+                      </span>
+                      <span>Help & Support</span>
+                    </a>
+                    {/* Logout */}
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setProfileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-red-600 font-medium text-base w-full"
+                    >
+                      {/* Logout Icon in gray circle */}
+                      <span className="bg-gray-200 w-8 h-8 flex items-center justify-center rounded-full">
+                        <Image src="/log-out-icon.svg" alt="Logout" width={20} height={20} />
+                      </span>
+                      <span>Logout</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
