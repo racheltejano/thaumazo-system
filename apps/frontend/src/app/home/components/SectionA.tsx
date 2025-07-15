@@ -179,8 +179,7 @@ function SectionA({ inView }: SectionProps) {
             transition: "opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1)",
           }}
         >
-          We trust and give value to your business through our technology, this is why we are making ourselves different from those immersing businesses as we heavily invest with the real-time milestone tracking and GPS Integration. This is where we take bold steps in providing assurance to our client how time-critical delivery updates them until it reaches its final destination. Securing trust of clients through our state of the art process both agreed by our stakeholders and partners.<br /><br />
-          Our shared services partners are provided with a strategic methodology to provide a sustainable cost savings support making both client and partner feel the support of a stable Customer Support Process based on the most applicable technology regardless of any location.
+          We trust and give value to your business through our technology, this is why we are making ourselves different from those immersing businesses as we heavily invest with the real-time milestone tracking and GPS Integration. This is where we take bold steps in providing assurance to our client how time-critical delivery updates them until it reaches its final destination. Securing trust of clients through our state of the art process both agreed by our stakeholders and partners.
         </div>
         
         {/* Info boxes grid */}

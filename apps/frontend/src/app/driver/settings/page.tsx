@@ -1,12 +1,10 @@
-"use client"
-
 import DashboardLayout from '@/components/DashboardLayout'
 import AccountSettings from '@/components/AccountSettings'
 
-export default function AdminSettingsPage() {
+export default function DriverSettingsPage() {
   return (
-    <DashboardLayout role="admin" userName="Admin">
-      <AccountSettings role="admin" />
+    <DashboardLayout role="driver" userName="Driver">
+      <AccountSettings role="driver" />
     </DashboardLayout>
   )
-}
+} 

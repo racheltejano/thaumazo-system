@@ -183,8 +183,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'orange-500',
     showNotifications: true,
     profileMenuItems: [
-      { label: 'Profile / Settings', href: '/admin/settings' },
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/admin/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
   inventory: {
@@ -194,7 +194,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'orange-500',
     showNotifications: false,
     profileMenuItems: [
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/inventory/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
   driver: {
@@ -204,7 +205,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'green-400',
     showNotifications: true,
     profileMenuItems: [
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/driver/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
   dispatcher: {
@@ -214,7 +216,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'purple-400',
     showNotifications: true,
     profileMenuItems: [
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/dispatcher/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
 };
