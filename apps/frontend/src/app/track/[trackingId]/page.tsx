@@ -8,6 +8,7 @@ import { generateGoogleMapsRoute } from '@/lib/maps'
 import { exportHtmlToPdf } from '@/lib/exportHtmlToPdf'
 import TrackingHistory from '@/components/Client/TrackingHistory'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -90,8 +91,10 @@ const { data: clientData, error: clientError } = await supabase
 
 if (clientError || !clientData) {
   console.warn(`[TrackingPage] Invalid tracking ID "${trackingId}" — no client found.`);
-  // Optional: show toast or temporary error before redirect
-  router.replace('/track') // ✅ redirect user back to /track
+  toast.error('Tracking ID not found. Redirecting in 2 seconds...');
+  setTimeout(() => {
+    router.replace('/track');
+  }, 2000);
   return;
 }
 
