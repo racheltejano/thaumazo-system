@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { generateGoogleMapsRoute } from '@/lib/maps'
 import { exportHtmlToPdf } from '@/lib/exportHtmlToPdf'
 import TrackingHistory from '@/components/Client/TrackingHistory'
+import { useRouter } from 'next/navigation'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -69,6 +70,7 @@ type Order = {
 }
 
 export default function TrackingPage() {
+  const router = useRouter(); 
   const params = useParams()
   const trackingId = (params as { trackingId: string })?.trackingId
   const [order, setOrder] = useState<Order | null>(null)
@@ -87,9 +89,10 @@ const { data: clientData, error: clientError } = await supabase
   .single()
 
 if (clientError || !clientData) {
-  console.error('[TrackingPage] No client found for tracking ID:', trackingId, clientError)
-  setLoading(false)
-  return
+  console.warn(`[TrackingPage] Invalid tracking ID "${trackingId}" — no client found.`);
+  // Optional: show toast or temporary error before redirect
+  router.replace('/track') // ✅ redirect user back to /track
+  return;
 }
 
 // STEP 2: Get latest order by that client
