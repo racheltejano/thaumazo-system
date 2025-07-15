@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { startOfWeek, addDays, format, isToday, isPast } from 'date-fns'
 import DashboardLayout from '@/components/DashboardLayout'
-import RoleGuard from '@/components/auth/RoleGuard'
+// import RoleGuard from '@/components/auth/RoleGuard'
 
 type AvailabilityEntry = {
   id: string
@@ -135,7 +135,6 @@ export default function DriverAvailabilityView() {
 
   if (loading) {
     return (
-      <RoleGuard requiredRole="driver">
       <DashboardLayout role="driver" userName="Driver">
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="text-center">
@@ -144,12 +143,10 @@ export default function DriverAvailabilityView() {
           </div>
         </div>
       </DashboardLayout>
-      </RoleGuard>
     )
   }
 
   return (
-    <RoleGuard requiredRole="driver">
     <DashboardLayout role="driver" userName="Driver">
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
@@ -272,6 +269,5 @@ export default function DriverAvailabilityView() {
         </div> */}
       </div>
     </DashboardLayout>
-    </RoleGuard>
   )
 }

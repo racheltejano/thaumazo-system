@@ -1,12 +1,12 @@
 import DashboardLayout from '@/components/DashboardLayout';
 import RoleGuard from '@/components/auth/RoleGuard';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function DispatcherLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RoleGuard requiredRole="admin">
-      <DashboardLayout role="admin">
+    <RoleGuard requiredRole="dispatcher">
+      <DashboardLayout role="dispatcher">
         {children}
       </DashboardLayout>
     </RoleGuard>
   );
-}
+} 

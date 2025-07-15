@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/lib/AuthContext'
 
 type RoleGuardProps = {
   requiredRole: string
@@ -11,44 +11,38 @@ type RoleGuardProps = {
 }
 
 export default function RoleGuard({ requiredRole, children }: RoleGuardProps) {
+  const { user, role, loading, error, refresh } = useAuth();
   const [status, setStatus] = useState<'checking' | 'unauthorized' | 'redirecting' | 'authorized'>('checking')
   const router = useRouter()
 
   useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast.error('🔒 You must be logged in to access this page.')
-        setStatus('redirecting')
-        setTimeout(() => {
-          router.replace('/')
-        }, 2000)
-        return
-      }
-
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (error || !profile || profile.role !== requiredRole) {
-        toast.warning('⚠️ You do not have permission to view this page.')
-        setStatus('redirecting')
-        setTimeout(() => {
-          router.replace('/dashboard')
-        }, 2000)
-        return
-      }
-
-      setStatus('authorized')
+    if (loading) {
+      setStatus('checking')
+      return
     }
-
-    checkAccess()
-  }, [requiredRole, router])
+    if (error) {
+      toast.error('Error checking access: ' + error)
+      setStatus('unauthorized')
+      return
+    }
+    if (!user) {
+      toast.error('🔒 You must be logged in to access this page.')
+      setStatus('redirecting')
+      setTimeout(() => {
+        router.replace('/')
+      }, 2000)
+      return
+    }
+    if (role !== requiredRole) {
+      toast.warning('⚠️ You do not have permission to view this page.')
+      setStatus('redirecting')
+      setTimeout(() => {
+        router.replace('/dashboard')
+      }, 2000)
+      return
+    }
+    setStatus('authorized')
+  }, [user, role, loading, error, requiredRole, router])
 
   if (status === 'checking') {
     return (
