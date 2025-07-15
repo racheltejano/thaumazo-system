@@ -6,12 +6,12 @@ import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { generateGoogleMapsRoute } from '@/lib/maps'
 import { exportHtmlToPdf } from '@/lib/exportHtmlToPdf'
-
+import TrackingHistory from '@/components/Client/TrackingHistory'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
 type Order = {
-  id: number
+  id: string
   status: string
   driver: {
     first_name: string
@@ -154,18 +154,20 @@ export default function TrackingPage() {
   if (loading) return <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>
   if (!order) return <p className="text-center py-10 text-red-500">Tracking information not found.</p>
 
-  return (
+ return (
+  <div className="min-h-screen bg-gray-50 py-10">
     <div
       id="report-page"
-      className="p-8 text-black bg-white"
-      style={{ all: 'unset', backgroundColor: '#ffffff', color: '#000000' }}
+      className="p-8 text-black bg-white mt-8 max-w-7xl mx-auto shadow rounded-2xl"
     >
-
-
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl mx-auto">
-        {/* Info */}
+        {/* Left Column: Tracking, Client, Tracking History */}
         <div className="space-y-6">
-          <div style={{ backgroundColor: '#fff7ed', borderLeft: '4px solid #f97316' }} className="p-5 rounded-lg">
+          {/* Tracking Status */}
+          <div
+            style={{ backgroundColor: '#fff7ed', borderLeft: '4px solid #f97316' }}
+            className="p-5 rounded-lg"
+          >
             <h1 className="text-xl font-bold">Tracking ID: {trackingId}</h1>
             <p className="text-green-700 font-semibold">📦 Status: {order.status}</p>
           </div>
@@ -184,47 +186,38 @@ export default function TrackingPage() {
             </ul>
           </div>
 
-          {/* Order Info */}
-          <div className="bg-white p-5 rounded-lg shadow">
-            <h2 className="font-semibold text-lg mb-3">Order Details</h2>
-            <ul className="text-sm space-y-1">
-              <li><b>Vehicle Type:</b> {order.vehicle_type}</li>
-              <li><b>Pickup Date:</b> {order.pickup_date}</li>
-              <li><b>Pickup Time:</b> {order.pickup_time}</li>
-              <li><b>Priority:</b> {order.priority_level}</li>
-              <li><b>Instructions:</b> {order.special_instructions}</li>
-            </ul>
-          </div>
+          {/* Tracking History */}
+          <TrackingHistory
+              timeline={order.timeline}
+              onViewRoute={handleViewRoute}
+              onDownloadReport={() => exportHtmlToPdf('report-page')}
+            />
 
-          {/* Driver Info */}
-          <div className="bg-white p-5 rounded-lg shadow">
-            <h2 className="font-semibold text-lg mb-3">Assigned Driver</h2>
-            {order.driver ? (
-              <ul className="text-sm space-y-1">
-                <li><b>Name:</b> {order.driver.first_name} {order.driver.last_name}</li>
-                <li><b>Contact:</b> {order.driver.contact_number}</li>
-                <li><b>Plate Number:</b> {order.driver.plate_number}</li>
-              </ul>
-            ) : (
-              <p className="italic text-gray-500">Driver not yet assigned.</p>
-            )}
-          </div>
         </div>
 
-        {/* Map, Dropoffs, Timeline */}
+        {/* Right Column: Map, Dropoffs, Order + Driver Info */}
         <div className="space-y-6">
+          {/* Pickup Map */}
           {order.mapUrl && (
             <div className="rounded-lg overflow-hidden border aspect-[2/1] relative w-full">
-              <Image fill alt="Pickup Map" src={order.mapUrl} className="object-cover" />
+              <Image
+                src={order.mapUrl}
+                alt="Pickup Map"
+                fill
+                className="object-cover"
+              />
             </div>
           )}
 
+          {/* Dropoff Locations */}
           <div className="bg-white p-5 rounded-lg shadow">
             <h2 className="font-semibold text-lg mb-3">Dropoff Locations</h2>
             {order.dropoffs.length > 0 ? (
               <ul className="text-sm space-y-2">
                 {order.dropoffs.map((d, i) => (
-                  <li key={i}><b>{d.sequence}.</b> {d.dropoff_name} - {d.dropoff_address} ({d.dropoff_phone})</li>
+                  <li key={i}>
+                    <b>{d.sequence}.</b> {d.dropoff_name} - {d.dropoff_address} ({d.dropoff_phone})
+                  </li>
                 ))}
               </ul>
             ) : (
@@ -232,44 +225,40 @@ export default function TrackingPage() {
             )}
           </div>
 
-          <div className="bg-white p-5 rounded-lg shadow">
-            <h2 className="font-semibold text-lg mb-3">Tracking History</h2>
-            {order.timeline.length > 0 ? (
-              <div className="space-y-3">
-                {order.timeline.map((entry, index) => (
-                  <div key={index} className="flex items-start gap-4">
-                    <div className="w-32 text-xs text-gray-500">
-                      <p>{entry.date}</p>
-                      <p>{entry.time}</p>
-                    </div>
-                    <div className="w-2 h-2 mt-2 bg-orange-500 rounded-full" />
-                    <div className="text-sm font-medium text-gray-800">{entry.label}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="italic text-gray-500">No tracking updates available.</p>
-            )}
+           {/* Side-by-side Order + Driver Info */}
+  <div className="flex flex-col lg:flex-row gap-6">
+    {/* Order Info */}
+    <div className="bg-white p-5 rounded-lg shadow w-full lg:w-1/2">
+      <h2 className="font-semibold text-lg mb-3">Order Details</h2>
+      <ul className="text-sm space-y-1">
+        <li><b>Vehicle Type:</b> {order.vehicle_type}</li>
+        <li><b>Pickup Date:</b> {order.pickup_date}</li>
+        <li><b>Pickup Time:</b> {order.pickup_time}</li>
+        <li><b>Priority:</b> {order.priority_level}</li>
+        <li><b>Instructions:</b> {order.special_instructions}</li>
+      </ul>
+    </div>
 
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={handleViewRoute}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-              >
-                📍 View Route
-              </button>
-
-             <button
-  onClick={() => exportHtmlToPdf('report-page')}
-  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
->
-  📄 Download Report
-</button>
-
-            </div>
-          </div>
+    {/* Driver Info */}
+    <div className="bg-white p-5 rounded-lg shadow w-full lg:w-1/2">
+      <h2 className="font-semibold text-lg mb-3">Assigned Driver</h2>
+      {order.driver ? (
+        <ul className="text-sm space-y-1">
+          <li><b>Name:</b> {order.driver.first_name} {order.driver.last_name}</li>
+          <li><b>Contact:</b> {order.driver.contact_number}</li>
+          <li><b>Plate Number:</b> {order.driver.plate_number}</li>
+        </ul>
+      ) : (
+        <p className="italic text-gray-500">Driver not yet assigned.</p>
+      )}
+    </div>
+  </div>
         </div>
       </div>
     </div>
-  )
+  </div>
+)
+
+
+
 }
