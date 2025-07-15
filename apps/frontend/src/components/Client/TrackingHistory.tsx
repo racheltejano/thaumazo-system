@@ -17,6 +17,42 @@ type TrackingHistoryProps = {
   onDownloadReport: () => void
 }
 
+function getFriendlyDescription(log: Log): string {
+  if (log.description && !log.description.includes('automatically by trigger')) {
+    return log.description
+  }
+
+  switch (log.status) {
+    case 'order_placed':
+      return 'Client filled out the order form'
+    case 'driver_assigned':
+      return 'A driver has been successfully assigned to your order'
+    case 'driver_on_the_way':
+      return 'The driver is on the way to pick up your package'
+    case 'driver_arrived':
+      return 'The driver has arrived at the pickup location'
+    case 'picked_up':
+      return 'The package has been picked up'
+    case 'in_transit':
+      return 'The package is currently in transit'
+    case 'arrived_at_dropoff':
+      return 'The driver has arrived at the drop-off location'
+    case 'delivered':
+      return 'The package has been successfully delivered'
+    case 'failed_delivery':
+      return 'Delivery attempt failed. Please contact support.'
+    case 'cancelled':
+      return 'This order was cancelled'
+    case 'rescheduled':
+      return 'The delivery has been rescheduled'
+    case 'returned_to_sender':
+      return 'The package was returned to the sender'
+    default:
+      return log.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) // fallback: e.g. “In Transit”
+  }
+}
+
+
 export default function TrackingHistory({
   logs,
   onViewRoute,
@@ -53,7 +89,7 @@ export default function TrackingHistory({
                 <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium uppercase">
                   {log.status.replace(/_/g, ' ')}
                 </span>
-                <span className="font-medium">{log.description}</span>
+                <span className="font-medium">{getFriendlyDescription(log)}</span>
               </div>
             </div>
           ))}
