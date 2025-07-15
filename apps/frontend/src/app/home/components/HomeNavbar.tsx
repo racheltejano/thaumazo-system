@@ -4,7 +4,7 @@ import Link from "next/link";
 
 const ORANGE = "#FF3C02";
 
-function HomeNavbar() {
+function HomeNavbar({ hideAuthButtons = false }: { hideAuthButtons?: boolean }) {
   return (
     <nav
       style={{
@@ -20,54 +20,58 @@ function HomeNavbar() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center" }}>
-        <Image
-          src="/thaumazo-text-logo.png"
-          alt="Thaumazo Text Logo"
-          width={140}
-          height={32}
-          style={{ objectFit: "contain" }}
-        />
-      </div>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <Link href="/login" style={{ textDecoration: "none" }}>
-          <button
-            className="home-navbar-btn home-navbar-login"
-            style={{
-              background: "#fff",
-              color: "#000",
-              borderRadius: 10,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              padding: "0.38rem 1rem",
-              fontWeight: 500,
-              border: "none",
-              cursor: "pointer",
-              transition: "background 0.15s, color 0.15s",
-              fontSize: 20,
-            }}
-          >
-            Login
-          </button>
-        </Link>
-        <Link href="/register" style={{ textDecoration: "none" }}>
-          <button
-            className="home-navbar-btn home-navbar-signup"
-            style={{
-              background: ORANGE,
-              color: "#fff",
-              borderRadius: 10,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              padding: "0.38rem 1rem",
-              fontWeight: 500,
-              border: "none",
-              cursor: "pointer",
-              transition: "background 0.15s, color 0.15s",
-              fontSize: 20,
-            }}
-          >
-            Sign Up
-          </button>
+        <Link href="/home">
+          <Image
+            src="/thaumazo-text-logo.png"
+            alt="Thaumazo Text Logo"
+            width={140}
+            height={32}
+            style={{ objectFit: "contain", cursor: "pointer" }}
+          />
         </Link>
       </div>
+      {!hideAuthButtons && (
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <Link href="/login" style={{ textDecoration: "none" }}>
+            <button
+              className="home-navbar-btn home-navbar-login"
+              style={{
+                background: "#fff",
+                color: "#000",
+                borderRadius: 10,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                padding: "0.38rem 1rem",
+                fontWeight: 500,
+                border: "none",
+                cursor: "pointer",
+                transition: "background 0.15s, color 0.15s",
+                fontSize: 20,
+              }}
+            >
+              Login
+            </button>
+          </Link>
+          <Link href="/register" style={{ textDecoration: "none" }}>
+            <button
+              className="home-navbar-btn home-navbar-signup"
+              style={{
+                background: ORANGE,
+                color: "#fff",
+                borderRadius: 10,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                padding: "0.38rem 1rem",
+                fontWeight: 500,
+                border: "none",
+                cursor: "pointer",
+                transition: "background 0.15s, color 0.15s",
+                fontSize: 20,
+              }}
+            >
+              Sign Up
+            </button>
+          </Link>
+        </div>
+      )}
       <style>{`
         .home-navbar-btn:hover {
           filter: brightness(0.92);

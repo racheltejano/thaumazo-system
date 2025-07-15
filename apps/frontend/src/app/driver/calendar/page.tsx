@@ -8,9 +8,7 @@ import {
 } from 'react-big-calendar'
 import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
-import DashboardLayout from '@/components/DashboardLayout'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
-import RoleGuard from '@/components/auth/RoleGuard'
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -184,136 +182,128 @@ export default function DriverCalendarPage() {
 
   if (loading) {
     return (
-      <RoleGuard requiredRole="driver">
-      <DashboardLayout role="driver" userName="Driver">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading your calendar...</p>
-          </div>
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your calendar...</p>
         </div>
-      </DashboardLayout>
-      </RoleGuard>
+      </div>
     )
   }
 
   return (
-    <RoleGuard requiredRole="driver">
-    <DashboardLayout role="driver" userName="Driver">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-black">📅 My Schedule</h1>
-          <p className="text-sm text-gray-500">
-            View your availability and assigned orders
-          </p>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="text-center mb-8">
+        <h1 className="text-2xl font-bold text-black">📅 My Schedule</h1>
+        <p className="text-sm text-gray-500">
+          View your availability and assigned orders
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-6 text-center text-sm font-medium text-red-600 bg-red-50 py-3 px-4 rounded-lg">
+          {error}
         </div>
+      )}
 
-        {error && (
-          <div className="mb-6 text-center text-sm font-medium text-red-600 bg-red-50 py-3 px-4 rounded-lg">
-            {error}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-orange-600">{getTotalHours().toFixed(1)}</div>
+            <div className="text-sm text-gray-600">Hours Scheduled</div>
           </div>
-        )}
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">{getTotalHours().toFixed(1)}</div>
-              <div className="text-sm text-gray-600">Hours Scheduled</div>
+        </div>
+        <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">{getOrderCount()}</div>
+            <div className="text-sm text-gray-600">Orders Assigned</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">
+              {events.filter(e => e.type === 'order' && e.order?.status === 'completed').length}
             </div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{getOrderCount()}</div>
-              <div className="text-sm text-gray-600">Orders Assigned</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {events.filter(e => e.type === 'order' && e.order?.status === 'completed').length}
-              </div>
-              <div className="text-sm text-gray-600">Orders Completed</div>
-            </div>
+            <div className="text-sm text-gray-600">Orders Completed</div>
           </div>
         </div>
+      </div>
 
-        {/* Calendar Controls */}
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-700">Schedule Overview</h2>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">View:</label>
-            <select
-              value={currentView}
-              onChange={(e) => setCurrentView(e.target.value as View)}
-              className="border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-            >
-              <option value="month">Month</option>
-              <option value="week">Week</option>
-              <option value="day">Day</option>
-            </select>
-          </div>
+      {/* Calendar Controls */}
+      <div className="flex items-center gap-2 mb-4">
+        <label className="text-sm font-medium">View:</label>
+        <select
+          value={currentView}
+          onChange={(e) => setCurrentView(e.target.value as View)}
+          className="border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+        >
+          <option value="month">Month</option>
+          <option value="week">Week</option>
+          <option value="day">Day</option>
+        </select>
+      </div>
+
+      {/* Calendar */}
+      <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          view={currentView}
+          onView={(view) => setCurrentView(view)}
+          onSelectEvent={handleEventClick}
+          style={{ height: '600px' }}
+          eventPropGetter={(event: DriverEvent) => {
+            let backgroundColor = '#3182ce'
+            let textColor = '#fff'
+            
+            if (event.type === 'availability') {
+              backgroundColor = event.title.includes('Unavailable') ? '#e53e3e' : '#38a169'
+            } else if (event.type === 'order' && event.order) {
+              backgroundColor = getStatusColor(event.order.status)
+            }
+            
+            return { 
+              style: { 
+                backgroundColor, 
+                color: textColor,
+                border: 'none',
+                borderRadius: '4px'
+              } 
+            }
+          }}
+          dayPropGetter={(date) => {
+            const isToday = moment(date).isSame(moment(), 'day')
+            return isToday ? { style: { backgroundColor: '#fef3e2' } } : {}
+          }}
+        />
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 mt-6">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-500 rounded"></div>
+          <span>Available</span>
         </div>
-
-        {/* Calendar */}
-        <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            view={currentView}
-            onView={(view) => setCurrentView(view)}
-            onSelectEvent={handleEventClick}
-            style={{ height: '600px' }}
-            eventPropGetter={(event: DriverEvent) => {
-              let backgroundColor = '#3182ce'
-              let textColor = '#fff'
-              
-              if (event.type === 'availability') {
-                backgroundColor = event.title.includes('Unavailable') ? '#e53e3e' : '#38a169'
-              } else if (event.type === 'order' && event.order) {
-                backgroundColor = getStatusColor(event.order.status)
-              }
-              
-              return { 
-                style: { 
-                  backgroundColor, 
-                  color: textColor,
-                  border: 'none',
-                  borderRadius: '4px'
-                } 
-              }
-            }}
-            dayPropGetter={(date) => {
-              const isToday = moment(date).isSame(moment(), 'day')
-              return isToday ? { style: { backgroundColor: '#fef3e2' } } : {}
-            }}
-          />
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-500 rounded"></div>
+          <span>Unavailable</span>
         </div>
-
-        {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-500 rounded"></div>
-            <span>Available</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-500 rounded"></div>
-            <span>Unavailable</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-blue-500 rounded"></div>
-            <span>Assigned Order</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-orange-500 rounded"></div>
-            <span>In Progress</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-600 rounded"></div>
-            <span>Completed</span>
-          </div>
+        {/* Assuming ORDER_STATUSES is defined elsewhere or needs to be defined */}
+        {/* For now, I'll just list the statuses directly */}
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-blue-500 rounded"></div>
+          <span>Assigned Order</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-orange-500 rounded"></div>
+          <span>In Progress</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-600 rounded"></div>
+          <span>Completed</span>
         </div>
       </div>
 
@@ -400,7 +390,6 @@ export default function DriverCalendarPage() {
           </div>
         </div>
       )}
-    </DashboardLayout>
-    </RoleGuard>
+    </div>
   )
 }

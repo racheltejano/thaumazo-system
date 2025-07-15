@@ -28,7 +28,8 @@ export default function AccountSettings() {
   const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  // Remove userId state
+  // const [userId, setUserId] = useState<string | null>(null);
 
   // Account state
   const [email, setEmail] = useState(user?.email || '');
@@ -52,9 +53,30 @@ export default function AccountSettings() {
 
   // Fetch profile from Supabase (like DashboardLayout)
   useEffect(() => {
+    // Reset all user-specific state on user change
+    setFirstName('');
+    setLastName('');
+    setProfilePicFile(null);
+    setPreviewUrl(null);
+    setProfileLoading(false);
+    // Remove userId state
+    // setUserId(null);
+    setEmail(user?.email || '');
+    setNewEmail('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setAccountLoading(false);
+    setShowPhotoMenu(false);
+    setShowCropModal(false);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setCroppedImage(null);
+    
+    // Now fetch the new profile as before
     const fetchProfile = async () => {
-      if (!user) return;
-      setUserId(user.id);
+      if (!user?.id) return;
       const { data, error } = await supabase
         .from('profiles')
         .select('profile_pic, first_name, last_name, role')
@@ -115,7 +137,7 @@ export default function AccountSettings() {
       toast.error('Please fill in all fields.');
       return;
     }
-    if (!userId) {
+    if (!user?.id) {
       toast.error('User not authenticated.');
       return;
     }
@@ -140,7 +162,7 @@ export default function AccountSettings() {
         last_name: lastName,
         profile_pic: uploadedImageUrl,
       })
-      .eq('id', userId);
+      .eq('id', user.id);
     setProfileLoading(false);
     if (dbError) {
       toast.error('❌ Failed to save profile.');
@@ -159,13 +181,19 @@ export default function AccountSettings() {
     setShowPhotoMenu(false);
     fileInputRef.current?.click();
   };
+
   const handleRemovePhoto = async () => {
     setShowPhotoMenu(false);
     setProfileLoading(true);
+    if (!user?.id) {
+      toast.error('User not authenticated.');
+      setProfileLoading(false);
+      return;
+    }
     const { error } = await supabase
       .from('profiles')
       .update({ profile_pic: null })
-      .eq('id', userId);
+      .eq('id', user.id);
     setProfileLoading(false);
     if (!error) setPreviewUrl(null);
   };

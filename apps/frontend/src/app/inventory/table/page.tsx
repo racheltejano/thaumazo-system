@@ -7,6 +7,9 @@ import { InventoryTable } from '../components/InventoryTable';
 import { EditQuantityModal } from '../components/EditQuantityModal';
 import { ProductDetailsModal } from '../components/ProductDetailsModal';
 import { EditQtyItem, InventoryItem } from '../types/inventory.types';
+import { useAuth } from '@/lib/AuthContext';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function InventoryTablePage() {
   const {
@@ -18,8 +21,18 @@ export default function InventoryTablePage() {
 
   const [editQtyItem, setEditQtyItem] = useState<EditQtyItem | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const auth = useAuth();
+  const router = useRouter();
 
   if (loading) return <p>Loading...</p>;
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    if (auth && typeof auth.refresh === 'function') {
+      auth.refresh();
+    }
+    router.push('/login');
+  }
 
   return (
     <div className="p-6">

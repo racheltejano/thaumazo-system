@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AdminSummaryCard from '@/components/AdminSummaryCard/page'
 import RoleGuard from '@/components/auth/RoleGuard'
+import { useAuth } from '@/lib/AuthContext';
 
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -18,6 +19,7 @@ export default function AdminDashboard() {
   const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState('')
   const [emailStatus, setEmailStatus] = useState('')
+  const auth = useAuth();
     useEffect(() => {
     const checkAccess = async () => {
       const {
@@ -95,6 +97,14 @@ export default function AdminDashboard() {
       console.error(e)
       setEmailStatus('❌ An error occurred while sending.')
     }
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    if (auth && typeof auth.refresh === 'function') {
+      auth.refresh();
+    }
+    router.push('/login');
   }
 
    return (

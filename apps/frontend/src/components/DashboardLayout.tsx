@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from "next/image";
+import Link from 'next/link';
 
 type SidebarMenuItem = {
   label: string;
@@ -334,13 +335,15 @@ export default function DashboardLayout({
           style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.18)", position: "relative", zIndex: 10 }}
         >
           <div className="flex items-center select-none">
-            <Image
-              src={DASHBOARD_LOGO_PATH}
-              alt="Thaumazo Text Logo"
-              width={140}
-              height={32}
-              style={{ objectFit: "contain" }}
-            />
+            <Link href="/home">
+              <Image
+                src={DASHBOARD_LOGO_PATH}
+                alt="Thaumazo Text Logo"
+                width={140}
+                height={32}
+                style={{ objectFit: "contain", cursor: "pointer" }}
+              />
+            </Link>
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden md:inline text-black">

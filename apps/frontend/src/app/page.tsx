@@ -1,6 +1,11 @@
-// app/page.tsx
-import { redirect } from 'next/navigation';
+"use client";
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function Home() {
-  redirect('/login');
+export default function RootPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/home');
+  }, [router]);
+  return null;
 }

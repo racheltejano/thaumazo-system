@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function DashboardPage() {
   const router = useRouter()
+  const auth = useAuth();
   const [loading, setLoading] = useState(true)
   type Profile = {
     id: string
@@ -19,6 +21,12 @@ const [user, setUser] = useState<User | null>(null)
 const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
+    if (!auth || auth.loading) {
+      setLoading(true)
+      return
+    }
+    setLoading(false)
+
     const loadUser = async () => {
       const {
         data: { user },
@@ -65,7 +73,7 @@ const [profile, setProfile] = useState<Profile | null>(null)
     }
 
     loadUser()
-  }, [router])
+  }, [router, auth])
 
   if (loading) return <p>Loading...</p>
 

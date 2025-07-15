@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function LoginPage() {
   const router = useRouter()
+  const auth = useAuth();
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -75,7 +77,10 @@ export default function LoginPage() {
     } else {
       localStorage.removeItem('remembered-email')
     }
-
+    // --- FIX: Refresh AuthContext before redirect ---
+    if (auth && auth.refresh) {
+      await auth.refresh();
+    }
     router.push('/dashboard')
   } catch (err) {
     console.error('Login error:', err)
