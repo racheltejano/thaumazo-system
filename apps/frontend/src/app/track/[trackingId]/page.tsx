@@ -84,21 +84,32 @@ export default function TrackingPage() {
             .order('sequence', { ascending: true }),
         ])
 
-        const timeline = (logs.data || []).map(log => {
-          const ts = new Date(log.timestamp)
-          return {
-            date: ts.toLocaleDateString('en-US', {
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-            }),
-            time: ts.toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-            }),
-            label: log.description || log.status.replace(/_/g, ' ').toUpperCase(),
-          }
-        })
+        const rawLogs = logs.data || []
+
+const groupedTimeline = rawLogs.reduce((acc: Record<string, { time: string; label: string }[]>, log) => {
+  const ts = new Date(log.timestamp)
+  const date = ts.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  const time = ts.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  const label = log.description || log.status.replace(/_/g, ' ').toUpperCase()
+
+  if (!acc[date]) acc[date] = []
+  acc[date].push({ time, label })
+
+  return acc
+}, {})
+
+const timeline = Object.entries(groupedTimeline).map(([date, entries]) => ({
+  date,
+  entries,
+}))
+
 
         const pickupLat = clientData.data?.pickup_latitude
         const pickupLng = clientData.data?.pickup_longitude
