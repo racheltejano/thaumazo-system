@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { format } from 'date-fns'
+import { format as formatDate } from 'date-fns'
+import { zonedTimeToUtc, utcToZonedTime, format as tzFormat } from 'date-fns-tz'
+
 
 
 type Driver = {
@@ -23,6 +25,8 @@ type Order = {
   end_time: string
 }
 
+const TIMEZONE = 'Asia/Manila'
+
 export default function DriverAssignmentDrawer({
   orderId,
   estimatedDurationMins,
@@ -39,196 +43,144 @@ export default function DriverAssignmentDrawer({
   const [pickupDate, setPickupDate] = useState<Date | null>(null)
 
   useEffect(() => {
-    const fetchOrder = async () => {
-      const { data, error } = await supabase
+    const fetchOrderAndDrivers = async () => {
+      const { data: orderData } = await supabase
         .from('orders')
         .select('pickup_date')
         .eq('id', orderId)
         .single()
 
-      if (!error && data?.pickup_date) {
-        setPickupDate(new Date(`${data.pickup_date}T08:00:00+08:00`))
+      if (orderData?.pickup_date) {
+        const manilaMidnight = zonedTimeToUtc(`${orderData.pickup_date}T00:00:00`, TIMEZONE)
+        setPickupDate(manilaMidnight)
       }
-    }
 
-    const fetchDrivers = async () => {
-      const { data, error } = await supabase
+      const { data: driversData } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, profile_pic')
         .eq('role', 'driver')
 
-      if (!error) setDrivers(data || [])
+      if (driversData) setDrivers(driversData)
     }
 
-    fetchOrder()
-    fetchDrivers()
+    fetchOrderAndDrivers()
   }, [orderId])
 
   useEffect(() => {
     const fetchAvailability = async () => {
       if (!selectedDriverId || !pickupDate) return
 
-      const { data: availabilities, error } = await supabase
+      const { data: availabilities } = await supabase
         .from('driver_availability')
         .select('id, start_time, end_time')
         .eq('driver_id', selectedDriverId)
 
-      if (error || !availabilities) return
-
-      const pickupStart = new Date(pickupDate)
-      pickupStart.setHours(0, 0, 0, 0)
-
-      const pickupEnd = new Date(pickupDate)
-      pickupEnd.setHours(23, 59, 59, 999)
-
-      const blocksForPickupDate = availabilities.filter((block) => {
-        const start = new Date(block.start_time)
-        const end = new Date(block.end_time)
-        return start < pickupEnd && end > pickupStart
-      })
-
-      const { data: existingOrders } = await supabase
+      const { data: orders } = await supabase
         .from('orders')
         .select('pickup_time, estimated_total_duration')
         .eq('driver_id', selectedDriverId)
-        .eq('pickup_date', format(pickupDate, 'yyyy-MM-dd'))
+        .eq('pickup_date', formatDate(pickupDate, 'yyyy-MM-dd'))
 
-      const busyTimes: Order[] = (existingOrders || []).map((o) => {
-        const start = new Date(`${format(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`)
+      const busyTimes: Order[] = (orders || []).map((o) => {
+        const start = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`, TIMEZONE)
         const end = new Date(start.getTime() + (o.estimated_total_duration || 0) * 60000)
         return { start_time: start.toISOString(), end_time: end.toISOString() }
       })
+
+      const dayStart = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T00:00:00`, TIMEZONE)
+      const dayEnd = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T23:59:59`, TIMEZONE)
 
       const bufferMins = estimatedDurationMins <= 30 ? 20 : 30
       const totalMinsNeeded = estimatedDurationMins + bufferMins
       const stepMins = 15
 
-      const freeBlocks = blocksForPickupDate.flatMap((block) => {
-        const rawStart = new Date(block.start_time)
-        const rawEnd = new Date(block.end_time)
+      const blocks = (availabilities || [])
+        .filter((b) => {
+          const start = new Date(b.start_time)
+          const end = new Date(b.end_time)
+          return start < dayEnd && end > dayStart
+        })
+        .flatMap((block) => {
+          const rawStart = new Date(block.start_time)
+          const rawEnd = new Date(block.end_time)
+          const start = new Date(Math.max(rawStart.getTime(), dayStart.getTime()))
+          const end = new Date(Math.min(rawEnd.getTime(), dayEnd.getTime()))
+          let freeSlots = [{ start, end }]
 
-        const start = new Date(Math.max(rawStart.getTime(), pickupStart.getTime()))
-        const end = new Date(Math.min(rawEnd.getTime(), pickupEnd.getTime()))
+          busyTimes.forEach(({ start_time, end_time }) => {
+            const busyStart = new Date(start_time)
+            const busyEnd = new Date(end_time)
 
-        let freeSlots: { start: Date; end: Date }[] = [{ start, end }]
-
-        busyTimes.forEach(({ start_time, end_time }) => {
-          const busyStart = new Date(start_time)
-          const busyEnd = new Date(end_time)
-
-          freeSlots = freeSlots.flatMap((slot) => {
-            if (busyEnd <= slot.start || busyStart >= slot.end) {
-              return [slot]
-            } else if (busyStart <= slot.start && busyEnd >= slot.end) {
-              return []
-            } else if (busyStart <= slot.start) {
-              return [{ start: busyEnd, end: slot.end }]
-            } else if (busyEnd >= slot.end) {
-              return [{ start: slot.start, end: busyStart }]
-            } else {
+            freeSlots = freeSlots.flatMap((slot) => {
+              if (busyEnd <= slot.start || busyStart >= slot.end) return [slot]
+              if (busyStart <= slot.start && busyEnd >= slot.end) return []
+              if (busyStart <= slot.start) return [{ start: busyEnd, end: slot.end }]
+              if (busyEnd >= slot.end) return [{ start: slot.start, end: busyStart }]
               return [
                 { start: slot.start, end: busyStart },
                 { start: busyEnd, end: slot.end },
               ]
+            })
+          })
+
+          return freeSlots.flatMap((slot) => {
+            const results: AvailabilityBlock[] = []
+            for (
+              let s = new Date(slot.start);
+              s.getTime() + totalMinsNeeded * 60000 <= slot.end.getTime();
+              s = new Date(s.getTime() + stepMins * 60000)
+            ) {
+              const e = new Date(s.getTime() + totalMinsNeeded * 60000)
+              results.push({
+                id: `${block.id}-${s.toISOString()}`,
+                start_time: s.toISOString(),
+                end_time: e.toISOString(),
+              })
             }
+            return results
           })
         })
 
-        return freeSlots.flatMap((slot) => {
-          const slotStart = slot.start
-          const slotEnd = slot.end
-          const results: AvailabilityBlock[] = []
-
-          for (
-            let s = new Date(slotStart);
-            s.getTime() + totalMinsNeeded * 60000 <= slotEnd.getTime();
-            s = new Date(s.getTime() + stepMins * 60000)
-          ) {
-            const e = new Date(s.getTime() + totalMinsNeeded * 60000)
-            results.push({
-              id: `${block.id}-${s.toISOString()}`,
-              start_time: s.toISOString(),
-              end_time: e.toISOString(),
-            })
-          }
-
-          return results
-        })
-      })
-
-      const sorted = freeBlocks.sort(
-        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      )
-
-      setAvailableBlocks(sorted)
+      setAvailableBlocks(blocks.sort((a, b) =>
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      ))
     }
 
     fetchAvailability()
   }, [selectedDriverId, pickupDate, estimatedDurationMins])
 
   const handleAssign = async () => {
-  if (!selectedDriverId || !selectedBlockId || !pickupDate) return
+    if (!selectedDriverId || !selectedBlockId || !pickupDate) return
+    const selected = availableBlocks.find((b) => b.id === selectedBlockId)
+    if (!selected) return
 
-  const selectedBlock = availableBlocks.find((b) => b.id === selectedBlockId)
-  if (!selectedBlock) return
+    const pickupUTC = new Date(selected.start_time)
+    const endUTC = new Date(selected.end_time)
+    const durationMins = (endUTC.getTime() - pickupUTC.getTime()) / 60000
 
-  const pickupTimeUTC = new Date(selectedBlock.start_time)
-  const endTimeUTC = new Date(selectedBlock.end_time)
-  const durationMins = (endTimeUTC.getTime() - pickupTimeUTC.getTime()) / 60000
+    const pickupTimeFormatted = tzFormat(utcToZonedTime(pickupUTC, TIMEZONE), 'HH:mm', { timeZone: TIMEZONE })
+    const endTimeFormatted = tzFormat(utcToZonedTime(endUTC, TIMEZONE), 'HH:mm', { timeZone: TIMEZONE })
 
-  // Format correctly in Asia/Manila using Intl.DateTimeFormat
-  const pickupTimeFormatter = new Intl.DateTimeFormat('en-PH', {
-    timeZone: 'Asia/Manila',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+    const updates = {
+      driver_id: selectedDriverId,
+      pickup_time: pickupTimeFormatted,
+      estimated_total_duration: durationMins,
+      estimated_end_time: endTimeFormatted,
+      status: 'driver_assigned',
+      updated_at: new Date().toISOString(),
+    }
 
-  // Shift the UTC time to Manila local time by adding 8 hours
-    const pickupTimeInManila = new Date(pickupTimeUTC.getTime() + 8 * 60 * 60 * 1000)
-    const endTimeInManila = new Date(endTimeUTC.getTime() + 8 * 60 * 60 * 1000)
+    const { error } = await supabase
+      .from('orders')
+      .update(updates)
+      .eq('id', orderId)
 
-    // Format as HH:mm string for storage
-    const pickupTimeFormatted = pickupTimeInManila
-      .toTimeString()
-      .slice(0, 5) // 'HH:mm'
-
-    const endTimeFormatted = endTimeInManila
-      .toTimeString()
-      .slice(0, 5) // 'HH:mm'
-
-
-  const updates = {
-    driver_id: selectedDriverId,
-    pickup_time: pickupTimeFormatted,
-    estimated_total_duration: durationMins,
-    estimated_end_time: endTimeFormatted,
-    status: 'driver_assigned',
-    updated_at: new Date().toISOString(),
+    if (error) {
+      console.error('❌ Failed to assign driver:', error.message)
+    } else {
+      onClose()
+    }
   }
-
-  const { data: updateData, error: updateError } = await supabase
-    .from('orders')
-    .update(updates)
-    .eq('id', orderId)
-    .select()
-
-  if (updateError) {
-    console.error('❌ Failed to assign driver:', updateError.message)
-    return
-  }
-
-  console.log('✅ Driver assigned update result:', updateData)
-
-  try {
-    onClose()
-  } catch (e) {
-    console.error('❌ Error after assigning driver (onClose or UI):', e)
-  }
-}
-
-
-
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex justify-end">
@@ -250,9 +202,7 @@ export default function DriverAssignmentDrawer({
         >
           <option value="">-- Choose Driver --</option>
           {drivers.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.first_name} {d.last_name}
-            </option>
+            <option key={d.id} value={d.id}>{d.first_name} {d.last_name}</option>
           ))}
         </select>
 
@@ -266,14 +216,11 @@ export default function DriverAssignmentDrawer({
             >
               <option value="">-- Choose Time Slot --</option>
               {availableBlocks.map((b) => {
-                const start = new Date(b.start_time)
-                const end = new Date(b.end_time)
-                const localStart = new Date(start.getTime() + 8 * 60 * 60 * 1000)
-                const localEnd = new Date(end.getTime() + 8 * 60 * 60 * 1000)
-
+                const startLocal = utcToZonedTime(new Date(b.start_time), TIMEZONE)
+                const endLocal = utcToZonedTime(new Date(b.end_time), TIMEZONE)
                 return (
                   <option key={b.id} value={b.id}>
-                    {format(localStart, 'hh:mm a')} – {format(localEnd, 'hh:mm a')}
+                    {tzFormat(startLocal, 'hh:mm a', { timeZone: TIMEZONE })} – {tzFormat(endLocal, 'hh:mm a', { timeZone: TIMEZONE })}
                   </option>
                 )
               })}
