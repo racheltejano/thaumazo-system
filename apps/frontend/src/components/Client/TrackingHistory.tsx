@@ -9,7 +9,10 @@ type TimelineEntry = {
 }
 
 type TrackingHistoryProps = {
-  timeline: TimelineEntry[]
+  timeline: {
+    date: string
+    entries: { time: string; label: string }[]
+  }[]
   onViewRoute: () => void
   onDownloadReport: () => void
 }
@@ -19,7 +22,6 @@ export default function TrackingHistory({
   onViewRoute,
   onDownloadReport,
 }: TrackingHistoryProps) {
-  // Debug: log the timeline prop when component mounts
   useEffect(() => {
     console.log('[TrackingHistory.tsx] Received timeline:', timeline)
   }, [timeline])
@@ -37,15 +39,17 @@ export default function TrackingHistory({
       </div>
 
       {timeline.length > 0 ? (
-        <div className="space-y-3">
-          {timeline.map((entry, index) => (
-            <div key={index} className="flex items-start gap-4">
-              <div className="w-32 text-xs text-gray-500">
-                <p>{entry.date}</p>
-                <p>{entry.time}</p>
-              </div>
-              <div className="w-2 h-2 mt-2 bg-orange-500 rounded-full" />
-              <div className="text-sm font-medium text-gray-800">{entry.label}</div>
+        <div className="space-y-4">
+          {timeline.map((group, index) => (
+            <div key={index} className="space-y-2">
+              <p className="text-sm font-semibold text-gray-600">{group.date}</p>
+              {group.entries.map((entry, idx) => (
+                <div key={idx} className="flex items-start gap-4 ml-4">
+                  <div className="w-24 text-xs text-gray-500">{entry.time}</div>
+                  <div className="w-2 h-2 mt-2 bg-orange-500 rounded-full" />
+                  <div className="text-sm text-gray-800">{entry.label}</div>
+                </div>
+              ))}
             </div>
           ))}
         </div>
