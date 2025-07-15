@@ -10,6 +10,28 @@ import TrackingHistory from '@/components/Client/TrackingHistory'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
+type OrderDropoff = {
+  id: string
+  order_id: string
+  dropoff_name: string
+  dropoff_address: string
+  dropoff_contact: string
+  dropoff_phone: string
+  latitude: number | null
+  longitude: number | null
+  sequence: number | null
+  estimated_duration_mins: number | null
+}
+
+type OrderStatusLog = {
+  id: string
+  order_id: string
+  status: string
+  description: string | null
+  timestamp: string // ISO timestamp
+}
+
+
 type Order = {
   id: string
   status: string
@@ -19,18 +41,30 @@ type Order = {
     contact_number: string
     plate_number: string
   } | null
-  client: any
+  client: {
+  business_name: string
+  contact_person: string
+  contact_number: string
+  email?: string
+  pickup_address: string
+  pickup_latitude?: number
+  pickup_longitude?: number
+  landmark?: string
+  pickup_area?: string
+} | null
+
   vehicle_type: string
   pickup_date: string
   pickup_time: string
   priority_level: string
   special_instructions: string
-  timeline: {
+    timeline: {
     date: string
-    time: string
-    label: string
+    entries: { time: string; label: string }[]
   }[]
-  dropoffs: any[]
+
+  dropoffs: OrderDropoff[]
+  order_status_logs: OrderStatusLog[]
   mapUrl?: string
 }
 
@@ -44,102 +78,134 @@ export default function TrackingPage() {
     if (!trackingId) return
 
     const fetchData = async () => {
-      try {
-        const { data: rawOrder, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('tracking_id', trackingId)
-          .single()
+  try {
+    // STEP 1: Get client by tracking_id
+const { data: clientData, error: clientError } = await supabase
+  .from('clients')
+  .select('id')
+  .eq('tracking_id', trackingId)
+  .single()
 
-        if (error || !rawOrder) {
-          console.error('Order fetch failed:', error)
-          setLoading(false)
-          return
-        }
+if (clientError || !clientData) {
+  console.error('[TrackingPage] No client found for tracking ID:', trackingId, clientError)
+  setLoading(false)
+  return
+}
 
-        const [driverData, clientData, logs, dropoffs] = await Promise.all([
-          rawOrder.driver_id
-            ? supabase
-                .from('profiles')
-                .select('first_name, last_name, contact_number')
-                .eq('id', rawOrder.driver_id)
-                .single()
-            : Promise.resolve({ data: null }),
-          rawOrder.client_id
-            ? supabase
-                .from('clients')
-                .select('*')
-                .eq('id', rawOrder.client_id)
-                .single()
-            : Promise.resolve({ data: null }),
-          supabase
-            .from('order_status_logs')
-            .select('status, description, timestamp')
-            .eq('order_id', rawOrder.id)
-            .order('timestamp', { ascending: true }),
-          supabase
-            .from('order_dropoffs')
-            .select('*')
-            .eq('order_id', rawOrder.id)
-            .order('sequence', { ascending: true }),
-        ])
+// STEP 2: Get latest order by that client
+const { data: rawOrder, error: orderError } = await supabase
+  .from('orders')
+  .select('*')
+  .eq('client_id', clientData.id)
+  .order('created_at', { ascending: false }) // fallback if multiple orders per client
+  .limit(1)
+  .single()
 
-        const rawLogs = logs.data || []
-
-const groupedTimeline = rawLogs.reduce((acc: Record<string, { time: string; label: string }[]>, log) => {
-  const ts = new Date(log.timestamp)
-  const date = ts.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
-  const time = ts.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-  const label = log.description || log.status.replace(/_/g, ' ').toUpperCase()
-
-  if (!acc[date]) acc[date] = []
-  acc[date].push({ time, label })
-
-  return acc
-}, {})
-
-const timeline = Object.entries(groupedTimeline).map(([date, entries]) => ({
-  date,
-  entries,
-}))
+if (orderError || !rawOrder) {
+  console.error('[TrackingPage] No order found for client:', orderError)
+  setLoading(false)
+  return
+}
 
 
-        const pickupLat = clientData.data?.pickup_latitude
-        const pickupLng = clientData.data?.pickup_longitude
-        const mapUrl =
-          pickupLat && pickupLng
-            ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${pickupLng},${pickupLat})/${pickupLng},${pickupLat},15/700x300?access_token=${MAPBOX_TOKEN}`
-            : undefined
+   
+const [driverData, fullClientData, dropoffs] = await Promise.all([
+  rawOrder.driver_id
+    ? supabase
+        .from('profiles')
+        .select('first_name, last_name, contact_number')
+        .eq('id', rawOrder.driver_id)
+        .single()
+    : Promise.resolve({ data: null }),
 
-        setOrder({
-          id: rawOrder.id,
-          status: rawOrder.status.replace(/_/g, ' ').toUpperCase(),
-          driver: driverData.data
-            ? { ...driverData.data, plate_number: 'To Be Added' }
-            : null,
-          client: clientData.data || null,
-          vehicle_type: rawOrder.vehicle_type,
-          pickup_date: rawOrder.pickup_date,
-          pickup_time: rawOrder.pickup_time,
-          priority_level: rawOrder.priority_level,
-          special_instructions: rawOrder.special_instructions,
-          timeline,
-          dropoffs: dropoffs.data || [],
-          mapUrl,
-        })
-      } catch (err) {
-        console.error('Error loading tracking page:', err)
-      } finally {
-        setLoading(false)
-      }
+  rawOrder.client_id
+    ? supabase
+        .from('clients')
+        .select('*')
+        .eq('id', rawOrder.client_id)
+        .single()
+    : Promise.resolve({ data: null }),
+
+  supabase
+    .from('order_dropoffs')
+    .select('*')
+    .eq('order_id', rawOrder.id)
+    .order('sequence', { ascending: true }),
+])
+
+    // Separate logs fetch (with logging)
+    const logsResponse = await supabase
+      .from('order_status_logs')
+       .select('id, order_id, status, description, timestamp')
+      .eq('order_id', rawOrder.id)
+      .order('timestamp', { ascending: true })
+
+    const rawLogs = logsResponse.data || []
+
+    if (logsResponse.error) {
+      console.error('[TrackingPage] Error fetching logs:', logsResponse.error)
+    } else {
+      console.log('[TrackingPage] Logs fetched successfully:', rawLogs)
     }
+
+    // Build timeline
+    const groupedTimeline = rawLogs.reduce((acc, log) => {
+      const ts = new Date(log.timestamp)
+      const date = ts.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+      const time = ts.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+      const label = log.description || log.status.replace(/_/g, ' ').toUpperCase()
+
+      if (!acc[date]) acc[date] = []
+      acc[date].push({ time, label })
+
+      return acc
+    }, {} as Record<string, { time: string; label: string }[]>)
+
+    const timeline = Object.entries(groupedTimeline).map(([date, items]) => ({
+      date,
+      entries: items.map(({ time, label }) => ({ time, label }))
+    }))
+
+
+    const pickupLat = fullClientData.data?.pickup_latitude
+    const pickupLng = fullClientData.data?.pickup_longitude
+    const mapUrl =
+      pickupLat && pickupLng
+        ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${pickupLng},${pickupLat})/${pickupLng},${pickupLat},15/700x300?access_token=${MAPBOX_TOKEN}`
+        : undefined
+
+    setOrder({
+  id: rawOrder.id,
+  status: rawOrder.status.replace(/_/g, ' ').toUpperCase(),
+  driver: driverData.data
+    ? { ...driverData.data, plate_number: 'To Be Added' }
+    : null,
+  client: fullClientData.data || null,
+  vehicle_type: rawOrder.vehicle_type,
+  pickup_date: rawOrder.pickup_date,
+  pickup_time: rawOrder.pickup_time,
+  priority_level: rawOrder.priority_level,
+  special_instructions: rawOrder.special_instructions,
+  timeline,
+  dropoffs: dropoffs.data || [],
+  order_status_logs: rawLogs, 
+  mapUrl,
+})
+
+  } catch (err) {
+    console.error('Error loading tracking page:', err)
+  } finally {
+    setLoading(false)
+  }
+}
+
 
     fetchData()
   }, [trackingId])
@@ -157,8 +223,12 @@ const timeline = Object.entries(groupedTimeline).map(([date, entries]) => ({
     const routeUrl = generateGoogleMapsRoute(
       order.client.pickup_latitude,
       order.client.pickup_longitude,
-      order.dropoffs
+      order.dropoffs.filter(d => d.latitude !== null && d.longitude !== null) as {
+        latitude: number
+        longitude: number
+      }[]
     )
+
     window.open(routeUrl, '_blank')
   }
 
@@ -199,7 +269,7 @@ const timeline = Object.entries(groupedTimeline).map(([date, entries]) => ({
 
             {/* Tracking History */}
             <TrackingHistory
-                timeline={order.timeline}
+                logs={order.order_status_logs}
                 onViewRoute={handleViewRoute}
                 onDownloadReport={() => exportHtmlToPdf('report-page')}
               />

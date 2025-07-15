@@ -2,60 +2,81 @@
 
 import { useEffect } from 'react'
 
-type TimelineEntry = {
-  date: string
-  time: string
-  label: string
+type Log = {
+  id: string
+  order_id: string
+  status: string
+  description: string | null
+  timestamp: string
 }
 
 type TrackingHistoryProps = {
-  timeline: {
-    date: string
-    entries: { time: string; label: string }[]
-  }[]
   onViewRoute: () => void
   onDownloadReport: () => void
 }
 
 export default function TrackingHistory({
-  timeline,
   onViewRoute,
   onDownloadReport,
 }: TrackingHistoryProps) {
+  const hardcodedLogs: Log[] = [
+    {
+      id: '1',
+      order_id: 'ORDER123',
+      status: 'order_received',
+      description: 'Order has been received',
+      timestamp: '2025-07-13T08:00:00Z',
+    },
+    {
+      id: '2',
+      order_id: 'ORDER123',
+      status: 'driver_assigned',
+      description: 'Driver John D. has been assigned',
+      timestamp: '2025-07-13T09:00:00Z',
+    },
+    {
+      id: '3',
+      order_id: 'ORDER123',
+      status: 'picked_up',
+      description: 'Package picked up at warehouse',
+      timestamp: '2025-07-13T10:30:00Z',
+    },
+    {
+      id: '4',
+      order_id: 'ORDER123',
+      status: 'in_transit',
+      description: 'En route to dropoff location',
+      timestamp: '2025-07-13T11:00:00Z',
+    },
+    {
+      id: '5',
+      order_id: 'ORDER123',
+      status: 'delivered',
+      description: 'Package successfully delivered',
+      timestamp: '2025-07-13T11:45:00Z',
+    },
+  ]
+
   useEffect(() => {
-    console.log('[TrackingHistory.tsx] Received timeline:', timeline)
-  }, [timeline])
+    console.log('[TrackingHistory.tsx] Using hardcoded logs:', hardcodedLogs)
+  }, [])
 
   return (
     <div className="bg-white p-5 rounded-lg shadow">
       <h2 className="font-semibold text-lg mb-3">Tracking History</h2>
 
-      {/* 👀 Debug Preview - remove in production */}
-      <div className="mb-4">
-        <h3 className="text-xs text-gray-400 mb-1">[DEBUG] Timeline Raw Output:</h3>
-        <pre className="bg-gray-100 text-xs p-2 rounded overflow-x-auto">
-          {JSON.stringify(timeline, null, 2)}
-        </pre>
+      <div className="space-y-4">
+        {hardcodedLogs.map((log) => (
+          <div key={log.id} className="flex flex-col gap-1 border-b pb-2">
+            <p className="text-sm text-gray-600">
+              📅 <strong>{new Date(log.timestamp).toLocaleString('en-US')}</strong>
+            </p>
+            <p className="text-sm text-gray-800">
+              📝 {log.description || log.status.replace(/_/g, ' ').toUpperCase()}
+            </p>
+          </div>
+        ))}
       </div>
-
-      {timeline.length > 0 ? (
-        <div className="space-y-4">
-          {timeline.map((group, index) => (
-            <div key={index} className="space-y-2">
-              <p className="text-sm font-semibold text-gray-600">{group.date}</p>
-              {group.entries.map((entry, idx) => (
-                <div key={idx} className="flex items-start gap-4 ml-4">
-                  <div className="w-24 text-xs text-gray-500">{entry.time}</div>
-                  <div className="w-2 h-2 mt-2 bg-orange-500 rounded-full" />
-                  <div className="text-sm text-gray-800">{entry.label}</div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="italic text-gray-500">No tracking updates available.</p>
-      )}
 
       {/* Action Buttons */}
       <div className="mt-6 flex gap-3">
