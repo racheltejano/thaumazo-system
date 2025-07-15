@@ -1,6 +1,5 @@
 'use client';
 
-import DashboardLayout from '@/components/DashboardLayout';
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -120,14 +119,12 @@ export default function StaffManagementPage() {
   });
   const totalPages = Math.ceil(sorted.length / pageSize);
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
-
   const getVisibleColumnCount = () => {
     return Object.values(visibleColumns).filter(Boolean).length;
   };
 
   return (
       <RoleGuard requiredRole="admin"> 
-      <DashboardLayout role="admin" userName="Admin">
         <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-2xl shadow p-6 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
@@ -168,7 +165,6 @@ export default function StaffManagementPage() {
                     </option>
                   ))}
                 </select>
-                
                 {/* Column Settings Button */}
                 <Dialog>
                   <DialogTrigger asChild>
@@ -177,7 +173,7 @@ export default function StaffManagementPage() {
                       Columns ({getVisibleColumnCount()})
                     </button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
+                  <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Table Column Settings</DialogTitle>
                     </DialogHeader>
@@ -203,7 +199,6 @@ export default function StaffManagementPage() {
                 </Dialog>
               </div>
             </div>
-
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm text-black">
                 <thead>
@@ -308,7 +303,6 @@ export default function StaffManagementPage() {
                 </tbody>
               </table>
             </div>
-
             {/* Pagination */}
             <div className="flex justify-end items-center gap-2 mt-4">
               <button
@@ -340,7 +334,6 @@ export default function StaffManagementPage() {
             </div>
           </div>
         </div>
-      </DashboardLayout>
       </RoleGuard>
   );
 }

@@ -183,8 +183,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'orange-500',
     showNotifications: true,
     profileMenuItems: [
-      { label: 'Profile / Settings', href: '/admin/settings' },
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/admin/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
   inventory: {
@@ -194,7 +194,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'orange-500',
     showNotifications: false,
     profileMenuItems: [
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/inventory/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
   driver: {
@@ -204,7 +205,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'green-400',
     showNotifications: true,
     profileMenuItems: [
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/driver/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
   dispatcher: {
@@ -214,7 +216,8 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     accentColor: 'purple-400',
     showNotifications: true,
     profileMenuItems: [
-      { label: 'Log Out', onClick: () => {} }, // Will be handled in component
+      { label: 'Settings', href: '/dispatcher/settings' },
+      { label: 'Log Out', onClick: () => {} },
     ],
   },
 };
@@ -235,34 +238,40 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [lastName, setLastName] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const displayName = userFirstName || userName || role.charAt(0).toUpperCase() + role.slice(1);
+  const displayName = firstName || userFirstName || userName || role.charAt(0).toUpperCase() + role.slice(1);
   const menus = sidebarMenus[role] || [];
   const config = roleConfigs[role] || roleConfigs.admin;
 
   useEffect(() => {
-  const fetchProfile = async () => {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) return;
+    const fetchProfile = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('profile_pic')
-      .eq('id', user.id) // ✅ filter to current user
-      .single();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('profile_pic, first_name, last_name')
+        .eq('id', user.id)
+        .single();
 
-    if (!error && data?.profile_pic) {
-      const optimized = data.profile_pic.replace(
-        '/upload/',
-        '/upload/w_80,h_80,c_fill,f_auto,q_auto/'
-      );
-      setProfilePicUrl(optimized);
-    }
-  };
-  fetchProfile();
-}, []);
+      if (!error && data) {
+        if (data.profile_pic) {
+          const optimized = data.profile_pic.replace(
+            '/upload/',
+            '/upload/w_80,h_80,c_fill,f_auto,q_auto/'
+          );
+          setProfilePicUrl(optimized);
+        }
+        setFirstName(data.first_name || null);
+        setLastName(data.last_name || null);
+      }
+    };
+    fetchProfile();
+  }, []);
 
 
   useEffect(() => {
@@ -285,6 +294,9 @@ export default function DashboardLayout({
     await supabase.auth.signOut();
     router.push('/login');
   };
+
+  // Logo path variable for dashboard navbar
+  const DASHBOARD_LOGO_PATH = "/thaumazo-text-logo.png";
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -317,14 +329,25 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${collapsed ? 'ml-16' : 'ml-48'}`}>
-        <header className="flex items-center justify-between h-16 px-8 bg-[#101828] text-white shadow-sm">
-          <div className="text-2xl font-extrabold tracking-tight select-none">
-            <span className="text-white">T</span>
-            <span className={`text-${config.accentColor}`}>EX</span>
-            <span className="text-white">TS</span>
+        <header
+          className="flex items-center justify-between h-16 px-8 bg-[#F0F5FF] text-black"
+          style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.18)", position: "relative", zIndex: 10 }}
+        >
+          <div className="flex items-center select-none">
+            <Image
+              src={DASHBOARD_LOGO_PATH}
+              alt="Thaumazo Text Logo"
+              width={140}
+              height={32}
+              style={{ objectFit: "contain" }}
+            />
           </div>
           <div className="flex items-center gap-4">
-            <span className="hidden md:inline text-gray-200">Welcome, {displayName}!</span>
+            <span className="hidden md:inline text-black">
+              {firstName || lastName
+                ? `Welcome, ${firstName ?? ''}${lastName ? ` ${lastName}` : ''}`.trim()
+                : `Welcome, ${role.charAt(0).toUpperCase() + role.slice(1)}`}
+            </span>
 
             {/* Notification bell - only show if enabled for role */}
             {config.showNotifications && (
@@ -351,7 +374,9 @@ export default function DashboardLayout({
                     />
                   ) : (
                     <span className="w-full h-full flex items-center justify-center text-sm font-medium text-white bg-gray-600">
-                      {displayName.charAt(0).toUpperCase()}
+                      {(firstName && firstName.length > 0)
+                        ? firstName.charAt(0).toUpperCase()
+                        : (role.charAt(0).toUpperCase())}
                     </span>
                   )}
                 </button>

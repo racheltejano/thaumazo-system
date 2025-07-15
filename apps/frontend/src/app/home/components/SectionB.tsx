@@ -1,7 +1,7 @@
 "use client";
 import { ReactNode } from "react";
 
-const ORANGE = "#FF3C02";
+const BACKGROUND = "#FF3C02";
 
 interface AnimatedSectionProps {
   children: ReactNode;
@@ -30,7 +30,7 @@ function SectionB({ inView }: SectionProps) {
   return (
     <section
       style={{
-        background: ORANGE,
+        background: BACKGROUND,
         minHeight: 1000,
         display: "flex",
         alignItems: "center",
