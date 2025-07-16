@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { format as formatDate } from 'date-fns'
 import { zonedTimeToUtc, utcToZonedTime, format as tzFormat } from 'date-fns-tz'
-
-
+import { useRouter } from 'next/navigation'
 
 type Driver = {
   id: string
@@ -20,9 +19,12 @@ type AvailabilityBlock = {
   end_time: string
 }
 
-type Order = {
+type ExistingTimeSlot = {
+  id: string
   start_time: string
   end_time: string
+  status: string
+  order_id: string | null
 }
 
 const TIMEZONE = 'Asia/Manila'
@@ -36,11 +38,19 @@ export default function DriverAssignmentDrawer({
   estimatedDurationMins: number
   onClose: () => void
 }) {
+  const router = useRouter()
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   const [availableBlocks, setAvailableBlocks] = useState<AvailabilityBlock[]>([])
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [existingTimeSlots, setExistingTimeSlots] = useState<ExistingTimeSlot[]>([])
   const [pickupDate, setPickupDate] = useState<Date | null>(null)
+  const [startTime, setStartTime] = useState<string>('')
+  const [endTime, setEndTime] = useState<string>('')
+  const [error, setError] = useState<string>('')
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false)
+  const [showErrorPopup, setShowErrorPopup] = useState(false)
+  const [popupMessage, setPopupMessage] = useState('')
+  const [isAssigning, setIsAssigning] = useState(false)
 
   useEffect(() => {
     const fetchOrderAndDrivers = async () => {
@@ -67,179 +77,375 @@ export default function DriverAssignmentDrawer({
   }, [orderId])
 
   useEffect(() => {
-    const fetchAvailability = async () => {
+    const fetchAvailabilityAndTimeSlots = async () => {
       if (!selectedDriverId || !pickupDate) return
 
-      const { data: availabilities } = await supabase
+      const pickupDateStr = formatDate(pickupDate, 'yyyy-MM-dd')
+      const dayStart = zonedTimeToUtc(`${pickupDateStr}T00:00:00`, TIMEZONE)
+      const dayEnd = zonedTimeToUtc(`${pickupDateStr}T23:59:59`, TIMEZONE)
+
+      // Fetch driver availability blocks that intersect with the pickup date
+      // We need to find availability blocks where:
+      // 1. The block starts before or on the pickup date end (start_time <= dayEnd)
+      // 2. The block ends after or on the pickup date start (end_time >= dayStart)
+      const { data: availabilities, error } = await supabase
         .from('driver_availability')
         .select('id, start_time, end_time')
         .eq('driver_id', selectedDriverId)
+        .lte('start_time', dayEnd.toISOString())
+        .gte('end_time', dayStart.toISOString())
 
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('pickup_time, estimated_total_duration')
+      if (error) {
+        console.error('Error fetching availability:', error)
+        setAvailableBlocks([])
+        return
+      }
+
+      // Fetch existing time slots for this driver on this date
+      const { data: timeSlots } = await supabase
+        .from('driver_time_slots')
+        .select('id, start_time, end_time, status, order_id')
         .eq('driver_id', selectedDriverId)
-        .eq('pickup_date', formatDate(pickupDate, 'yyyy-MM-dd'))
+        .gte('start_time', dayStart.toISOString())
+        .lt('start_time', dayEnd.toISOString())
+        .neq('status', 'cancelled')
 
-      const busyTimes: Order[] = (orders || []).map((o) => {
-        const start = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T${o.pickup_time}`, TIMEZONE)
-        const end = new Date(start.getTime() + (o.estimated_total_duration || 0) * 60000)
-        return { start_time: start.toISOString(), end_time: end.toISOString() }
-      })
+      if (timeSlots) {
+        setExistingTimeSlots(timeSlots)
+      }
 
-      const dayStart = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T00:00:00`, TIMEZONE)
-      const dayEnd = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T23:59:59`, TIMEZONE)
-
-      const bufferMins = estimatedDurationMins <= 30 ? 20 : 30
-      const totalMinsNeeded = estimatedDurationMins + bufferMins
-      const stepMins = 15
-
+      // Process availability blocks to get the portions that fall on the pickup date
       const blocks = (availabilities || [])
-        .filter((b) => {
-          const start = new Date(b.start_time)
-          const end = new Date(b.end_time)
-          return start < dayEnd && end > dayStart
-        })
-        .flatMap((block) => {
-          const rawStart = new Date(block.start_time)
-          const rawEnd = new Date(block.end_time)
-          const start = new Date(Math.max(rawStart.getTime(), dayStart.getTime()))
-          const end = new Date(Math.min(rawEnd.getTime(), dayEnd.getTime()))
-          let freeSlots = [{ start, end }]
-
-          busyTimes.forEach(({ start_time, end_time }) => {
-            const busyStart = new Date(start_time)
-            const busyEnd = new Date(end_time)
-
-            freeSlots = freeSlots.flatMap((slot) => {
-              if (busyEnd <= slot.start || busyStart >= slot.end) return [slot]
-              if (busyStart <= slot.start && busyEnd >= slot.end) return []
-              if (busyStart <= slot.start) return [{ start: busyEnd, end: slot.end }]
-              if (busyEnd >= slot.end) return [{ start: slot.start, end: busyStart }]
-              return [
-                { start: slot.start, end: busyStart },
-                { start: busyEnd, end: slot.end },
-              ]
-            })
-          })
-
-          return freeSlots.flatMap((slot) => {
-            const results: AvailabilityBlock[] = []
-            for (
-              let s = new Date(slot.start);
-              s.getTime() + totalMinsNeeded * 60000 <= slot.end.getTime();
-              s = new Date(s.getTime() + stepMins * 60000)
-            ) {
-              const e = new Date(s.getTime() + totalMinsNeeded * 60000)
-              results.push({
-                id: `${block.id}-${s.toISOString()}`,
-                start_time: s.toISOString(),
-                end_time: e.toISOString(),
-              })
+        .map((block) => {
+          const blockStart = new Date(block.start_time)
+          const blockEnd = new Date(block.end_time)
+          
+          // Get the intersection of the block with the pickup date
+          const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))
+          const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEnd.getTime()))
+          
+          // Only include if there's actually an intersection
+          if (effectiveStart < effectiveEnd) {
+            return {
+              id: block.id,
+              start_time: effectiveStart.toISOString(),
+              end_time: effectiveEnd.toISOString(),
             }
-            return results
-          })
+          }
+          return null
         })
+        .filter(Boolean) as AvailabilityBlock[]
 
-      setAvailableBlocks(blocks.sort((a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      ))
+      setAvailableBlocks(blocks)
     }
 
-    fetchAvailability()
-  }, [selectedDriverId, pickupDate, estimatedDurationMins])
+    fetchAvailabilityAndTimeSlots()
+  }, [selectedDriverId, pickupDate])
 
-  const handleAssign = async () => {
-    if (!selectedDriverId || !selectedBlockId || !pickupDate) return
-    const selected = availableBlocks.find((b) => b.id === selectedBlockId)
-    if (!selected) return
+  const checkTimeSlotIntersection = (start: Date, end: Date): string | null => {
+    for (const slot of existingTimeSlots) {
+      const slotStart = new Date(slot.start_time)
+      const slotEnd = new Date(slot.end_time)
+      
+      // Check if times intersect
+      if (start < slotEnd && end > slotStart) {
+        return `Time slot intersects with existing ${slot.order_id ? 'order' : 'slot'} from ${tzFormat(utcToZonedTime(slotStart, TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })} to ${tzFormat(utcToZonedTime(slotEnd, TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })}`
+      }
+    }
+    return null
+  }
 
-    const pickupUTC = new Date(selected.start_time)
-    const endUTC = new Date(selected.end_time)
-    const durationMins = (endUTC.getTime() - pickupUTC.getTime()) / 60000
+  const checkTimeWithinAvailability = (start: Date, end: Date): boolean => {
+    return availableBlocks.some(block => {
+      const blockStart = new Date(block.start_time)
+      const blockEnd = new Date(block.end_time)
+      return start >= blockStart && end <= blockEnd
+    })
+  }
 
-    const pickupTimeFormatted = tzFormat(utcToZonedTime(pickupUTC, TIMEZONE), 'HH:mm', { timeZone: TIMEZONE })
-    const endTimeFormatted = tzFormat(utcToZonedTime(endUTC, TIMEZONE), 'HH:mm', { timeZone: TIMEZONE })
-
-    const updates = {
-      driver_id: selectedDriverId,
-      pickup_time: pickupTimeFormatted,
-      estimated_total_duration: durationMins,
-      estimated_end_time: endTimeFormatted,
-      status: 'driver_assigned',
-      updated_at: new Date().toISOString(),
+  const validateTimeSlot = (): string | null => {
+    if (!startTime || !endTime) {
+      return 'Please select both start and end times'
     }
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updates)
-      .eq('id', orderId)
+    if (!pickupDate) {
+      return 'Pickup date not available'
+    }
 
-    if (error) {
-      console.error('❌ Failed to assign driver:', error.message)
-    } else {
-      onClose()
+    const startDateTime = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T${startTime}`, TIMEZONE)
+    const endDateTime = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T${endTime}`, TIMEZONE)
+
+    if (startDateTime >= endDateTime) {
+      return 'End time must be after start time'
+    }
+
+    const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
+    if (durationMins < estimatedDurationMins) {
+      return `Time slot too short. Minimum ${estimatedDurationMins} minutes required`
+    }
+
+    if (!checkTimeWithinAvailability(startDateTime, endDateTime)) {
+      return 'Selected time is outside driver availability hours'
+    }
+
+    const intersectionError = checkTimeSlotIntersection(startDateTime, endDateTime)
+    if (intersectionError) {
+      return intersectionError
+    }
+
+    return null
+  }
+
+  const handleTimeChange = () => {
+    setError('')
+    if (startTime && endTime) {
+      const validationError = validateTimeSlot()
+      if (validationError) {
+        setError(validationError)
+      }
     }
   }
 
+  useEffect(() => {
+    handleTimeChange()
+  }, [startTime, endTime, existingTimeSlots, availableBlocks])
+
+  const handleAssign = async () => {
+    if (!selectedDriverId || !startTime || !endTime || !pickupDate) return
+    
+    const validationError = validateTimeSlot()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setIsAssigning(true)
+
+    const startDateTime = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T${startTime}`, TIMEZONE)
+    const endDateTime = zonedTimeToUtc(`${formatDate(pickupDate, 'yyyy-MM-dd')}T${endTime}`, TIMEZONE)
+    const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
+
+    // Find the availability block this time slot falls within
+    const availabilityBlock = availableBlocks.find(block => {
+      const blockStart = new Date(block.start_time)
+      const blockEnd = new Date(block.end_time)
+      return startDateTime >= blockStart && endDateTime <= blockEnd
+    })
+
+    if (!availabilityBlock) {
+      setError('Selected time is not within any availability block')
+      setIsAssigning(false)
+      return
+    }
+
+    try {
+      // Start a transaction
+      const { data: orderUpdate, error: orderError } = await supabase
+        .from('orders')
+        .update({
+          driver_id: selectedDriverId,
+          pickup_time: startTime,
+          estimated_total_duration: durationMins,
+          estimated_end_time: endTime,
+          status: 'driver_assigned',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+
+      if (orderError) {
+        throw orderError
+      }
+
+      // Create time slot entry
+      const { error: timeSlotError } = await supabase
+        .from('driver_time_slots')
+        .insert({
+          driver_id: selectedDriverId,
+          driver_availability_id: availabilityBlock.id,
+          order_id: orderId,
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
+          status: 'scheduled',
+        })
+
+      if (timeSlotError) {
+        throw timeSlotError
+      }
+
+      // Success - show success popup
+      const selectedDriver = drivers.find(d => d.id === selectedDriverId)
+      setPopupMessage(`Driver ${selectedDriver?.first_name} ${selectedDriver?.last_name} has been successfully assigned to the order!`)
+      setShowSuccessPopup(true)
+      setIsAssigning(false)
+    } catch (err: any) {
+      setPopupMessage(`Failed to assign driver: ${err.message}`)
+      setShowErrorPopup(true)
+      setIsAssigning(false)
+    }
+  }
+
+  const handleSuccessPopupClose = () => {
+    setShowSuccessPopup(false)
+    onClose()
+    // Navigate to calendar or reload the page
+    //router.push('/dispatcher/calendar')
+    // Alternative: reload the current page
+    window.location.reload()
+  }
+
+  const handleErrorPopupClose = () => {
+    setShowErrorPopup(false)
+  }
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex justify-end">
-      <div className="bg-white p-6 w-full max-w-md h-full overflow-y-auto shadow-lg rounded-l-xl">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">🧑‍✈️ Assign Driver</h2>
-          <button onClick={onClose} className="text-lg font-bold text-gray-600 hover:text-red-600">✖</button>
+    <>
+      <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex justify-end">
+        <div className="bg-white p-6 w-full max-w-md h-full overflow-y-auto shadow-lg rounded-l-xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">🧑‍✈️ Assign Driver</h2>
+            <button onClick={onClose} className="text-lg font-bold text-gray-600 hover:text-red-600">✖</button>
+          </div>
+
+          <label className="block mb-2 font-medium">Select Driver</label>
+          <select
+            className="w-full border p-2 rounded mb-4"
+            value={selectedDriverId || ''}
+            onChange={(e) => {
+              setSelectedDriverId(e.target.value)
+              setStartTime('')
+              setEndTime('')
+              setError('')
+            }}
+            disabled={isAssigning}
+          >
+            <option value="">-- Choose Driver --</option>
+            {drivers.map((d) => (
+              <option key={d.id} value={d.id}>{d.first_name} {d.last_name}</option>
+            ))}
+          </select>
+
+          {selectedDriverId && availableBlocks.length > 0 && (
+            <>
+              <div className="mb-4">
+                <label className="block mb-2 font-medium">Available Hours</label>
+                <div className="text-sm text-gray-600 mb-2">
+                  {availableBlocks.map((block, index) => (
+                    <div key={block.id}>
+                      {tzFormat(utcToZonedTime(new Date(block.start_time), TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })} – 
+                      {tzFormat(utcToZonedTime(new Date(block.end_time), TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })}
+                      {index < availableBlocks.length - 1 && ', '}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block mb-2 font-medium">Start Time</label>
+                  <input
+                    type="time"
+                    className="w-full border p-2 rounded"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    disabled={isAssigning}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-2 font-medium">End Time</label>
+                  <input
+                    type="time"
+                    className="w-full border p-2 rounded"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    disabled={isAssigning}
+                  />
+                </div>
+              </div>
+
+              {existingTimeSlots.length > 0 && (
+                <div className="mb-4">
+                  <label className="block mb-2 font-medium text-orange-600">Existing Time Slots</label>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    {existingTimeSlots.map((slot) => (
+                      <div key={slot.id} className="flex justify-between">
+                        <span>
+                          {tzFormat(utcToZonedTime(new Date(slot.start_time), TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })} – 
+                          {tzFormat(utcToZonedTime(new Date(slot.end_time), TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {slot.order_id ? 'Order' : 'Slot'} ({slot.status})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
+            </>
+          )}
+
+          {selectedDriverId && availableBlocks.length === 0 && (
+            <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+              No availability blocks found for this driver on the selected date.
+            </div>
+          )}
+
+          <button
+            onClick={handleAssign}
+            className={`w-full py-2 rounded text-white ${
+              selectedDriverId && startTime && endTime && !error && !isAssigning
+                ? 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-gray-400 cursor-not-allowed'
+            }`}
+            disabled={!selectedDriverId || !startTime || !endTime || !!error || isAssigning}
+          >
+            {isAssigning ? '🔄 Assigning...' : '🚚 Assign Driver'}
+          </button>
         </div>
-
-        <label className="block mb-2 font-medium">Select Driver</label>
-        <select
-          className="w-full border p-2 rounded mb-4"
-          value={selectedDriverId || ''}
-          onChange={(e) => {
-            setSelectedDriverId(e.target.value)
-            setAvailableBlocks([])
-            setSelectedBlockId(null)
-          }}
-        >
-          <option value="">-- Choose Driver --</option>
-          {drivers.map((d) => (
-            <option key={d.id} value={d.id}>{d.first_name} {d.last_name}</option>
-          ))}
-        </select>
-
-        {availableBlocks.length > 0 && (
-          <>
-            <label className="block mb-2 font-medium">Available Time Blocks</label>
-            <select
-              className="w-full border p-2 rounded mb-4"
-              value={selectedBlockId || ''}
-              onChange={(e) => setSelectedBlockId(e.target.value)}
-            >
-              <option value="">-- Choose Time Slot --</option>
-              {availableBlocks.map((b) => {
-                const startLocal = utcToZonedTime(new Date(b.start_time), TIMEZONE)
-                const endLocal = utcToZonedTime(new Date(b.end_time), TIMEZONE)
-                return (
-                  <option key={b.id} value={b.id}>
-                    {tzFormat(startLocal, 'hh:mm a', { timeZone: TIMEZONE })} – {tzFormat(endLocal, 'hh:mm a', { timeZone: TIMEZONE })}
-                  </option>
-                )
-              })}
-            </select>
-          </>
-        )}
-
-        <button
-          onClick={handleAssign}
-          className={`w-full py-2 rounded text-white ${
-            selectedDriverId && selectedBlockId
-              ? 'bg-blue-600 hover:bg-blue-700'
-              : 'bg-gray-400 cursor-not-allowed'
-          }`}
-          disabled={!selectedDriverId || !selectedBlockId}
-        >
-          🚚 Assign Driver
-        </button>
       </div>
-    </div>
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">✅</div>
+              <h3 className="text-xl font-semibold mb-4 text-green-600">Success!</h3>
+              <p className="text-gray-700 mb-6">{popupMessage}</p>
+              <button
+                onClick={handleSuccessPopupClose}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Popup */}
+      {showErrorPopup && (
+        <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">❌</div>
+              <h3 className="text-xl font-semibold mb-4 text-red-600">Error</h3>
+              <p className="text-gray-700 mb-6">{popupMessage}</p>
+              <button
+                onClick={handleErrorPopupClose}
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
