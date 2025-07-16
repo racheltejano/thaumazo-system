@@ -1,6 +1,7 @@
 'use client'
-
-import { Clock, MapPin, Download } from 'lucide-react'
+import { useState } from 'react'
+import { Download, MapPin, MoreHorizontal } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import { useEffect } from 'react'
 
 type Log = {
@@ -58,6 +59,8 @@ export default function TrackingHistory({
   onViewRoute,
   onDownloadReport,
 }: TrackingHistoryProps) {
+  const [showDropdown, setShowDropdown] = useState(false);
+
   useEffect(() => {
     console.log('[TrackingHistory.tsx] Received logs from parent:', logs)
   }, [logs])
@@ -97,22 +100,63 @@ export default function TrackingHistory({
       )}
 
       {/* Buttons */}
-      <div className="mt-8 flex justify-end gap-3">
+      {/* Action Buttons */}
+    {/* Action Buttons */}
+<div className="mt-8 flex justify-end gap-3 relative">
+  {/* Primary Buttons */}
+  <button
+    onClick={onViewRoute}
+    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+  >
+    <MapPin className="w-4 h-4" />
+    View Route
+  </button>
+
+  <button
+    onClick={onDownloadReport}
+    className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+  >
+    <Download className="w-4 h-4" />
+    Download Report
+  </button>
+
+  {/* Dropdown Toggle */}
+  <div className="relative">
+    <button
+      onClick={() => setShowDropdown(prev => !prev)}
+      className="flex items-center gap-2 bg-neutral-200 hover:bg-neutral-300 text-gray-800 px-4 py-2 rounded"
+    >
+      <MoreHorizontal className="w-4 h-4" />
+      More Actions
+    </button>
+
+    {/* Dropdown Menu */}
+    {showDropdown && (
+      <div className="absolute right-0 mt-2 bg-white border rounded shadow-lg z-50 w-56">
         <button
-          onClick={onViewRoute}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          onClick={() => {
+            setShowDropdown(false)
+            alert('QR code generation coming soon!')
+          }}
+          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
         >
-          <MapPin className="w-4 h-4" />
-          View Route
+          📲 Confirm Pickup via QR Code
         </button>
         <button
-          onClick={onDownloadReport}
-          className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+          onClick={() => {
+            setShowDropdown(false)
+            alert('Reschedule request form coming soon!')
+          }}
+          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
         >
-          <Download className="w-4 h-4" />
-          Download Report
+          🗓️ Request Reschedule
         </button>
       </div>
+    )}
+  </div>
+</div>
+
+      {/* End of Buttons */}
     </div>
   )
 }
