@@ -38,7 +38,7 @@ type Order = {
   driver_id: string | null
 }
 
-// Define all possible order statuses from your database
+
 const ORDER_STATUSES = [
   { value: 'order_placed', label: 'Order Placed', color: '#718096' },
   { value: 'driver_assigned', label: 'Driver Assigned', color: '#3182ce' },
