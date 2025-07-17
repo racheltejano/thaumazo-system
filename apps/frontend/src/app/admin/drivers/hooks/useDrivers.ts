@@ -41,32 +41,15 @@ export const useDrivers = () => {
       // Fetch drivers from profiles table
       const { data: driversData, error: driversError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, contact_number, can_login, last_login, profile_pic')
+        .select('id, first_name, last_name, contact_number, can_login, last_login, profile_pic, email')
         .eq('role', 'driver');
 
       if (driversError) throw driversError;
 
-      // Fetch emails for each driver from auth.users
-      const driversWithEmails = await Promise.all(
-        driversData.map(async (driver) => {
-          let email = 'N/A';
-          try {
-            const { data: authUser } = await supabase.auth.admin.getUserById(driver.id);
-            if (authUser?.user?.email) {
-              email = authUser.user.email;
-            }
-          } catch (authError) {
-            console.warn(`Could not fetch email for driver ${driver.id}:`, authError);
-          }
-          return { ...driver, email };
-        })
-      );
-
-      if (driversError) throw driversError;
-
+      // No need to fetch emails from auth.users anymore
       // Fetch order statistics for each driver
       const driversWithStats = await Promise.all(
-        driversWithEmails.map(async (driver) => {
+        driversData.map(async (driver) => {
           // Get completed orders count
           const { count: totalOrders } = await supabase
             .from('orders')
@@ -84,7 +67,7 @@ export const useDrivers = () => {
           // Get last login from profiles table
           const lastLogin = driver.last_login;
 
-                                const driverData = {
+          const driverData = {
             id: driver.id,
             name: `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Unknown Driver',
             email: driver.email || 'N/A',
@@ -96,7 +79,6 @@ export const useDrivers = () => {
             profile_pic: driver.profile_pic,
           };
           
-          console.log('Driver data:', driverData);
           return driverData;
         })
       );

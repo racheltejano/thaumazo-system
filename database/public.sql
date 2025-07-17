@@ -142,6 +142,8 @@ CREATE TABLE public.profiles (
   role text NOT NULL CHECK (role = ANY (ARRAY['admin'::text, 'driver'::text, 'inventory_staff'::text, 'dispatcher'::text])),
   contact_number text,
   created_at timestamp without time zone DEFAULT now(),
+  last_login timestamp with time zone,
+  email text,
   can_login boolean DEFAULT true,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)

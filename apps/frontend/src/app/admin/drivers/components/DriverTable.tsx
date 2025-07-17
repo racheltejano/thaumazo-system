@@ -213,14 +213,9 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
                             src={driver.profile_pic.replace('/upload/', '/upload/w_40,h_40,c_fill,f_auto,q_auto/')}
                             alt={driver.name}
                             onError={(e) => {
-                              console.log('Image failed to load:', driver.profile_pic);
-                              // Fallback to initials if image fails to load
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
                               target.nextElementSibling?.classList.remove('hidden');
-                            }}
-                            onLoad={() => {
-                              console.log('Image loaded successfully:', driver.profile_pic);
                             }}
                           />
                         ) : null}
@@ -232,7 +227,6 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
                       </div>
                       <div className="ml-3">
                         <div className="text-sm font-medium text-gray-900">{driver.name}</div>
-                        <div className="text-sm text-gray-500">{driver.email}</div>
                       </div>
                     </div>
                   </td>
