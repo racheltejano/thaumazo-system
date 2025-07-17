@@ -182,7 +182,7 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     hoverColor: 'orange-50',
     navbarBg: 'gray-900',
     accentColor: 'orange-500',
-    showNotifications: true,
+    showNotifications: false,
     profileMenuItems: [
       { label: 'Settings', href: '/admin/settings' },
       { label: 'Log Out', onClick: () => {} },
@@ -204,7 +204,7 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     hoverColor: 'green-50',
     navbarBg: 'green-900',
     accentColor: 'green-400',
-    showNotifications: true,
+    showNotifications: false,
     profileMenuItems: [
       { label: 'Settings', href: '/driver/settings' },
       { label: 'Log Out', onClick: () => {} },
@@ -215,7 +215,7 @@ const roleConfigs: { [role: string]: RoleConfig } = {
     hoverColor: 'purple-50',
     navbarBg: 'purple-900',
     accentColor: 'purple-400',
-    showNotifications: true,
+    showNotifications: false,
     profileMenuItems: [
       { label: 'Settings', href: '/dispatcher/settings' },
       { label: 'Log Out', onClick: () => {} },
