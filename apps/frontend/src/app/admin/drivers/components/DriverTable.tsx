@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Settings, Truck } from 'lucide-react';
 import { Driver } from '../hooks/useDrivers';
+import Link from 'next/link';
 
 interface DriverTableProps {
   drivers: Driver[];
@@ -226,7 +227,12 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
                         </div>
                       </div>
                       <div className="ml-3">
-                        <div className="text-sm font-medium text-gray-900">{driver.name}</div>
+                        <Link 
+                          href={`/admin/drivers/${driver.id}`}
+                          className="text-sm font-medium text-gray-900 hover:text-orange-600 transition-colors cursor-pointer"
+                        >
+                          {driver.name}
+                        </Link>
                       </div>
                     </div>
                   </td>
