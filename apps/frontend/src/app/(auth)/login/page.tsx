@@ -71,6 +71,12 @@ export default function LoginPage() {
       return
     }
 
+    // Update last_login timestamp
+    await supabase
+      .from('profiles')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', data.user.id)
+
     // ✅ Remember email if needed
     if (rememberMe) {
       localStorage.setItem('remembered-email', email)

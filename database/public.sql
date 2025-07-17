@@ -28,6 +28,21 @@ CREATE TABLE public.driver_availability (
   CONSTRAINT driver_availability_pkey PRIMARY KEY (id),
   CONSTRAINT driver_availability_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.driver_time_slots (
+  driver_id uuid NOT NULL,
+  driver_availability_id uuid NOT NULL,
+  order_id uuid,
+  start_time timestamp without time zone NOT NULL,
+  end_time timestamp without time zone NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  status text NOT NULL DEFAULT 'scheduled'::text CHECK (status = ANY (ARRAY['scheduled'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'break'::text])),
+  created_at timestamp without time zone DEFAULT now(),
+  updated_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT driver_time_slots_pkey PRIMARY KEY (id),
+  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id),
+  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.inventory (
   latitude double precision,
   longitude double precision,
@@ -75,8 +90,8 @@ CREATE TABLE public.order_products (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   product_id uuid,
   CONSTRAINT order_products_pkey PRIMARY KEY (id),
-  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
-  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
 );
 CREATE TABLE public.order_status_logs (
   order_id uuid,
