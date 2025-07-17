@@ -17,9 +17,8 @@ const pageSizeOptions = [5, 10, 20, 50];
 
 // Column configuration
 const columnConfig = {
-  name: { label: 'Name', key: 'name', defaultVisible: true },
+  name: { label: 'Staff Name', key: 'name', defaultVisible: true },
   email: { label: 'Email', key: 'email', defaultVisible: true },
-  position: { label: 'Position', key: 'position', defaultVisible: true },
   phone: { label: 'Phone Number', key: 'phone', defaultVisible: true },
   status: { label: 'Status', key: 'status', defaultVisible: true },
   access: { label: 'Access', key: 'access', defaultVisible: true },
@@ -67,31 +66,14 @@ export default function StaffManagementPage() {
       // �� Fetch all staffs (admin only)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role, contact_number, can_login, created_at')
+        .select('id, first_name, last_name, role, contact_number, can_login, created_at, profile_pic, email')
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching staff:', error);
       } else {
-        // Fetch emails for each staff member
-        const staffWithEmails = await Promise.all(
-          (data || []).map(async (staff) => {
-            try {
-              const { data: userData } = await supabase.auth.admin.getUserById(staff.id);
-              return {
-                ...staff,
-                email: userData?.user?.email || 'N/A',
-              };
-            } catch (emailError) {
-              console.warn(`Could not fetch email for staff ${staff.id}:`, emailError);
-              return {
-                ...staff,
-                email: 'N/A',
-              };
-            }
-          })
-        );
-        setStaffs(staffWithEmails);
+        // Email is now included directly from profiles table
+        setStaffs(data || []);
       }
 
       setLoading(false);
@@ -123,12 +105,33 @@ export default function StaffManagementPage() {
     return Object.values(visibleColumns).filter(Boolean).length;
   };
 
+  if (loading) {
+    return (
+      <RoleGuard requiredRole="admin">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-12 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </RoleGuard>
+    );
+  }
+
   return (
       <RoleGuard requiredRole="admin"> 
         <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-2xl shadow p-6 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-              <h2 className="text-xl font-bold text-black">All Staffs</h2>
+              <h2 className="text-xl font-bold text-black">👥 Staff Management</h2>
               <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full md:w-auto">
                 <input
                   type="text"
@@ -200,37 +203,28 @@ export default function StaffManagementPage() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-black">
+              <table className="min-w-full text-sm text-black table-fixed">
                 <thead>
                   <tr className="bg-gray-100 text-black">
                     {visibleColumns.name && (
-                      <th className="px-4 py-2 text-left font-semibold">Name</th>
+                      <th className="px-4 py-2 text-left font-semibold w-1/4">Staff Name</th>
                     )}
                     {visibleColumns.email && (
-                      <th className="px-4 py-2 text-left font-semibold">Email</th>
-                    )}
-                    {visibleColumns.position && (
-                      <th className="px-4 py-2 text-left font-semibold">Position</th>
+                      <th className="px-4 py-2 text-left font-semibold w-1/4">Email</th>
                     )}
                     {visibleColumns.phone && (
-                      <th className="px-4 py-2 text-left font-semibold">Phone Number</th>
+                      <th className="px-4 py-2 text-left font-semibold w-1/6">Phone</th>
                     )}
                     {visibleColumns.status && (
-                      <th className="px-4 py-2 text-left font-semibold">Status</th>
+                      <th className="px-4 py-2 text-left font-semibold w-1/6">Status</th>
                     )}
                     {visibleColumns.access && (
-                      <th className="px-4 py-2 text-left font-semibold">Access</th>
+                      <th className="px-4 py-2 text-left font-semibold w-1/6">Access</th>
                     )}
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={getVisibleColumnCount()} className="text-center py-8 text-gray-400">
-                        Loading staff...
-                      </td>
-                    </tr>
-                  ) : paginated.length === 0 ? (
+                  {paginated.length === 0 ? (
                     <tr>
                       <td colSpan={getVisibleColumnCount()} className="text-center py-8 text-gray-400">
                         No staff found.
@@ -240,8 +234,36 @@ export default function StaffManagementPage() {
                     paginated.map((staff) => (
                       <tr key={staff.id} className="border-b last:border-b-0 hover:bg-orange-50 transition-colors text-black">
                         {visibleColumns.name && (
-                          <td className="px-4 py-3 font-medium text-black">
-                            {staff.first_name || 'N/A'} {staff.last_name || ''}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                {staff.profile_pic ? (
+                                  <img
+                                    className="h-10 w-10 rounded-full object-cover"
+                                    src={staff.profile_pic.replace('/upload/', '/upload/w_40,h_40,c_fill,f_auto,q_auto/')}
+                                    alt={`${staff.first_name} ${staff.last_name}`}
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                      target.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                ) : null}
+                                <div className={`h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center ${staff.profile_pic ? 'hidden' : ''}`}>
+                                  <span className="text-white font-medium text-sm">
+                                    {`${staff.first_name || ''} ${staff.last_name || ''}`.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-3">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {staff.first_name || 'N/A'} {staff.last_name || ''}
+                                </div>
+                                <div className="text-xs text-gray-500 capitalize">
+                                  {staff.role.replace('_', ' ')}
+                                </div>
+                              </div>
+                            </div>
                           </td>
                         )}
                         {visibleColumns.email && (
@@ -249,11 +271,7 @@ export default function StaffManagementPage() {
                             {staff.email || 'N/A'}
                           </td>
                         )}
-                        {visibleColumns.position && (
-                          <td className="px-4 py-3 text-black capitalize">
-                            {staff.role.replace('_', ' ')}
-                          </td>
-                        )}
+
                         {visibleColumns.phone && (
                           <td className="px-4 py-3 text-black">
                             {staff.contact_number || 'N/A'}
@@ -304,34 +322,32 @@ export default function StaffManagementPage() {
               </table>
             </div>
             {/* Pagination */}
-            <div className="flex justify-end items-center gap-2 mt-4">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 hover:bg-orange-100 disabled:opacity-50"
-              >
-                Prev
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setPage(i + 1)}
-                  className={`px-3 py-1 rounded-lg border text-sm font-semibold
-                    ${page === i + 1
-                      ? 'bg-orange-500 text-white border-orange-500'
-                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-orange-100'}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 hover:bg-orange-100 disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-500">
+                  Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, sorted.length)} of {sorted.length} staff members
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(Math.max(1, page - 1))}
+                    disabled={page === 1}
+                    className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 rounded-lg bg-orange-500 text-white">
+                    {page} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage(Math.min(totalPages, page + 1))}
+                    disabled={page === totalPages}
+                    className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </RoleGuard>
