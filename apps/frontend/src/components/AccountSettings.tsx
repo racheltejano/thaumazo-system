@@ -33,10 +33,21 @@ export default function AccountSettings() {
   // Account state
   const [email, setEmail] = useState(user?.email || '');
   const [newEmail, setNewEmail] = useState('');
+  const [showManageEmail, setShowManageEmail] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [newPhoneNumber, setNewPhoneNumber] = useState('');
+  const [showManagePhone, setShowManagePhone] = useState(false);
+  const [phoneLoading, setPhoneLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [accountLoading, setAccountLoading] = useState(false);
+  const [showManagePassword, setShowManagePassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +98,22 @@ export default function AccountSettings() {
       setEmail(user?.email || '');
     };
     fetchProfile();
+  }, [user]);
+
+  // Fetch phone number from profile
+  useEffect(() => {
+    const fetchPhone = async () => {
+      if (!user?.id) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('contact_number')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) {
+        setPhoneNumber(data.contact_number || '');
+      }
+    };
+    fetchPhone();
   }, [user]);
 
   // Profile logic
@@ -198,9 +225,9 @@ export default function AccountSettings() {
   // Account logic
   const handleEmailChange = async () => {
     if (!newEmail || newEmail === email) return;
-    setAccountLoading(true);
+    setEmailLoading(true);
     const { error: emailError } = await supabase.auth.updateUser({ email: newEmail });
-    setAccountLoading(false);
+    setEmailLoading(false);
     if (emailError) {
       toast.error(`⚠️ Failed to update email: ${emailError.message}`);
     } else {
@@ -239,6 +266,21 @@ export default function AccountSettings() {
         supabase.auth.signOut();
         window.location.href = '/login';
       }, 3000);
+    }
+  };
+
+  const handlePhoneChange = async () => {
+    if (!newPhoneNumber || newPhoneNumber === phoneNumber) return;
+    setPhoneLoading(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ contact_number: newPhoneNumber })
+      .eq('id', user.id);
+    setPhoneLoading(false);
+    if (!error) {
+      setPhoneNumber(newPhoneNumber);
+      setNewPhoneNumber('');
+      setShowManagePhone(false);
     }
   };
 
@@ -290,7 +332,7 @@ export default function AccountSettings() {
       {/* Main Content */}
       <main className="flex-1 p-8">
         {activeTab === 'profile' && (
-          <div className="flex max-w-4xl mx-auto gap-4">
+          <div className="flex max-w-4xl gap-4">
             {/* Left column: 60% */}
             <div className="flex-[3] min-w-0">
               <h1 className="text-2xl font-bold text-zinc-800 mb-1">Profile</h1>
@@ -353,23 +395,170 @@ export default function AccountSettings() {
           </div>
         )}
         {activeTab === 'account' && (
-          <div className="max-w-xl mx-auto space-y-4">
-            <h1 className="text-2xl font-bold text-zinc-800 mb-4">Account Settings</h1>
+          <div className="max-w-2xl space-y-4">
+            <h1 className="text-2xl font-bold text-zinc-800 mb-1">Account Settings</h1>
+            <div className="h-1 w-16 bg-orange-500 mb-6" />
             <div className="bg-white shadow-md rounded-2xl p-6 space-y-8">
-          {/* Change Email */}
+              {/* Email */}
               <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-zinc-700">Change Email</h2>
-                <input className="w-full p-3 border rounded-xl bg-gray-100 text-gray-700" disabled value={email} />
-                <input className="w-full p-3 border rounded-xl" placeholder="New email" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
-                <Button onClick={handleEmailChange} className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={accountLoading}>Update Email</Button>
+                <h2 className="text-lg font-semibold text-zinc-700">Email</h2>
+                <div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <div className="p-3 border rounded-xl bg-gray-100 text-gray-700 select-all">{email}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      className="bg-orange-500 hover:bg-orange-600 text-white whitespace-nowrap self-center"
+                      onClick={() => setShowManageEmail(v => !v)}
+                    >
+                      {showManageEmail ? 'Hide' : 'Manage'}
+                    </Button>
+                  </div>
+                </div>
+                {showManageEmail && (
+                  <div className="mt-4 space-y-2">
+                    <input
+                      className="w-full p-3 border rounded-xl"
+                      placeholder="New email"
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                    />
+                    <Button
+                      onClick={handleEmailChange}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                      disabled={true}
+                    >
+                      Update Email
+                    </Button>
+                  </div>
+                )}
               </div>
-          {/* Change Password */}
+              {/* Password */}
               <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-zinc-700">Change Password</h2>
-                <input className="w-full p-3 border rounded-xl" type="password" placeholder="Current password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
-                <input className="w-full p-3 border rounded-xl" type="password" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-                <input className="w-full p-3 border rounded-xl" type="password" placeholder="Confirm new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
-                <Button onClick={handlePasswordChange} className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={accountLoading}>Update Password</Button>
+                <h2 className="text-lg font-semibold text-zinc-700">Password</h2>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    {!showManagePassword ? (
+                      <input
+                        className="w-full p-3 border rounded-xl bg-gray-100 text-gray-700 select-all"
+                        type="password"
+                        value={"••••••••"}
+                        disabled
+                      />
+                    ) : (
+                      <input
+                        className="w-full p-3 border rounded-xl"
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        placeholder="Current password"
+                        value={currentPassword}
+                        onChange={e => setCurrentPassword(e.target.value)}
+                      />
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    className="bg-orange-500 hover:bg-orange-600 text-white whitespace-nowrap self-center"
+                    onClick={() => {
+                      setShowManagePassword(v => !v);
+                      if (!showManagePassword) setCurrentPassword('');
+                    }}
+                  >
+                    {showManagePassword ? 'Hide' : 'Manage'}
+                  </Button>
+                </div>
+                {showManagePassword && (
+                  <div className="mt-4 space-y-2">
+                    <div className="relative">
+                      <input
+                        className="w-full p-3 border rounded-xl pr-10"
+                        type={showNewPassword ? 'text' : 'password'}
+                        placeholder="New password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                        onClick={() => setShowNewPassword(v => !v)}
+                        tabIndex={-1}
+                      >
+                        {showNewPassword ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        className="w-full p-3 border rounded-xl pr-10"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm new password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                        onClick={() => setShowConfirmPassword(v => !v)}
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                    {passwordError && (
+                      <div className="text-red-600 text-sm mt-1">{passwordError}</div>
+                    )}
+                    <Button
+                      onClick={() => {
+                        if (!currentPassword || !newPassword || !confirmPassword) {
+                          setPasswordError('❌ Please fill out all password fields.');
+                          return;
+                        }
+                        if (newPassword !== confirmPassword) {
+                          setPasswordError('❌ New passwords do not match.');
+                          return;
+                        }
+                        setPasswordError('');
+                        handlePasswordChange();
+                      }}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                      disabled={accountLoading}
+                    >
+                      Update Password
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {/* Phone Number */}
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-zinc-700">Phone Number</h2>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="p-3 border rounded-xl bg-gray-100 text-gray-700 select-all">{phoneNumber || <span className='text-gray-400'>No phone number</span>}</div>
+                  </div>
+                  <Button
+                    type="button"
+                    className="bg-orange-500 hover:bg-orange-600 text-white whitespace-nowrap self-center"
+                    onClick={() => setShowManagePhone(v => !v)}
+                  >
+                    {showManagePhone ? 'Hide' : 'Manage'}
+                  </Button>
+                </div>
+                {showManagePhone && (
+                  <div className="mt-4 space-y-2">
+                    <input
+                      className="w-full p-3 border rounded-xl"
+                      placeholder="New phone number"
+                      value={newPhoneNumber}
+                      onChange={e => setNewPhoneNumber(e.target.value)}
+                    />
+                    <Button
+                      onClick={handlePhoneChange}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                      disabled={phoneLoading || !newPhoneNumber || newPhoneNumber === phoneNumber}
+                    >
+                      {phoneLoading ? 'Updating...' : 'Update Phone Number'}
+                    </Button>
+                  </div>
+                )}
               </div>
         </div>
       </div>
