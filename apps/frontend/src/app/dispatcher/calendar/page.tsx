@@ -43,10 +43,15 @@ type Order = {
   tracking_id: string | null
   estimated_total_duration: number | null
   dropoff_count: number
+  driver_id?: string | null
   clients: {
     tracking_id: string
     business_name: string | null
     contact_person: string
+  } | null
+  profiles?: {
+    first_name: string
+    last_name: string
   } | null
 }
 
@@ -55,6 +60,43 @@ type Driver = {
   first_name: string
   last_name: string
   color: string
+}
+
+type AvailabilityData = {
+  id: string
+  title: string
+  start_time: string
+  end_time: string
+  driver_id: string
+  profiles: {
+    first_name: string
+    last_name: string
+  } | null
+}
+
+type OrderData = {
+  id: string
+  pickup_date: string
+  pickup_time: string
+  delivery_window_start: string | null
+  delivery_window_end: string | null
+  special_instructions: string
+  client_id: string
+  status: string
+  vehicle_type: string | null 
+  tail_lift_required: boolean | null
+  driver_id: string | null
+  tracking_id: string | null
+  estimated_total_duration: number | null
+  profiles: {
+    first_name: string
+    last_name: string
+  } | null
+  clients: {
+    tracking_id: string
+    business_name: string | null
+    contact_person: string
+  } | null
 }
 
 // Generate a consistent color for each driver
@@ -128,7 +170,7 @@ export default function DispatcherCalendarPage() {
             first_name,
             last_name
           )
-        `)
+        `) as { data: AvailabilityData[] | null, error: any }
 
       // Updated orders query with client data
       const { data: orderData, error: orderError } = await supabase
@@ -156,7 +198,7 @@ export default function DispatcherCalendarPage() {
             business_name,
             contact_person
           )
-        `)
+        `) as { data: OrderData[] | null, error: any }
 
       // Fetch dropoff counts for each order
       const { data: dropoffData, error: dropoffError } = await supabase
@@ -226,7 +268,7 @@ export default function DispatcherCalendarPage() {
           end: new Date(`${o.pickup_date}T${o.pickup_time}`),
           type: 'order',
           status: o.status === 'order_placed' ? 'unassigned' : 'assigned',
-          driverId: o.driver_id,
+          driverId: o.driver_id || undefined,
           driverName: o.profiles ? `${o.profiles.first_name} ${o.profiles.last_name}` : undefined
         }
       })
