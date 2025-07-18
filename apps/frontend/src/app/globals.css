@@ -163,3 +163,80 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+
+/* ───────────── PRINT STYLES ───────────── */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: 'Arial', sans-serif !important;
+  }
+
+  .pdf-report {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: white !important;
+  }
+
+  /* Hide UI-specific elements when printing */
+  button,
+  nav,
+  .no-print,
+  .lucide-icon,
+  .dropdown,
+  .shadow,
+  .rounded,
+  .rounded-lg,
+  .hover\:bg-gray-100 {
+    display: none !important;
+  }
+
+  /* Remove shadows and backgrounds */
+  .shadow,
+  .bg-white,
+  .bg-orange-100,
+  .bg-neutral-200 {
+    box-shadow: none !important;
+    background: none !important;
+  }
+
+  .text-orange-800,
+  .text-gray-800,
+  .text-gray-500 {
+    color: black !important;
+  }
+
+  .text-sm {
+    font-size: 12px !important;
+  }
+
+  .text-lg {
+    font-size: 16px !important;
+  }
+
+  .font-semibold,
+  .font-medium {
+    font-weight: 600 !important;
+  }
+
+  /* Reset border radius */
+  .rounded,
+  .rounded-lg,
+  .rounded-2xl {
+    border-radius: 0 !important;
+  }
+
+  /* You can also specifically style h1–h3 to make the report feel more like a doc */
+  h1, h2, h3 {
+    color: black !important;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Optional: Remove margins/padding if necessary */
+  .p-5, .p-6, .mt-4 {
+    padding: 0 !important;
+    margin-top: 0 !important;
+  }
+}
