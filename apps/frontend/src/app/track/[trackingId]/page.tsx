@@ -37,6 +37,7 @@ type OrderStatusLog = {
 type Order = {
   id: string
   status: string
+  estimated_total_duration?: number | null
   driver: {
     first_name: string
     last_name: string
@@ -101,7 +102,10 @@ if (clientError || !clientData) {
 // STEP 2: Get latest order by that client
 const { data: rawOrder, error: orderError } = await supabase
   .from('orders')
-  .select('*')
+  .select(`
+    *,
+    estimated_total_duration
+  `)
   .eq('client_id', clientData.id)
   .order('created_at', { ascending: false }) // fallback if multiple orders per client
   .limit(1)
@@ -203,6 +207,7 @@ const [driverData, fullClientData, dropoffs] = await Promise.all([
   dropoffs: dropoffs.data || [],
   order_status_logs: rawLogs, 
   mapUrl,
+  estimated_total_duration: rawOrder.estimated_total_duration || null,
 })
 
   } catch (err) {
@@ -318,12 +323,18 @@ const [driverData, fullClientData, dropoffs] = await Promise.all([
         <div className="bg-white p-5 rounded-lg shadow w-full lg:w-1/2">
           <h2 className="font-semibold text-lg mb-3">Order Details</h2>
           <ul className="text-sm space-y-1">
-            <li><b>Vehicle Type:</b> {order.vehicle_type}</li>
-            <li><b>Pickup Date:</b> {order.pickup_date}</li>
-            <li><b>Pickup Time:</b> {order.pickup_time}</li>
-            <li><b>Priority:</b> {order.priority_level}</li>
-            <li><b>Instructions:</b> {order.special_instructions}</li>
-          </ul>
+          <li><b>Vehicle Type:</b> {order.vehicle_type}</li>
+          <li><b>Pickup Date:</b> {order.pickup_date}</li>
+          <li><b>Pickup Time:</b> {order.pickup_time}</li>
+          <li><b>Instructions:</b> {order.special_instructions}</li>
+          <li>
+            <b>Estimated Travel Time:</b>{' '}
+            {order.estimated_total_duration != null
+              ? `${order.estimated_total_duration} mins`
+              : 'N/A'}
+          </li>
+        </ul>
+
         </div>
 
         {/* Driver Info */}
