@@ -41,6 +41,14 @@ type Order = {
   status: string
   vehicle_type: string | null 
   tail_lift_required: boolean | null
+  tracking_id: string | null
+  estimated_total_duration: number | null
+  dropoff_count: number
+  clients: {
+    tracking_id: string
+    business_name: string | null
+    contact_person: string
+  } | null
 }
 
 type Driver = {
@@ -123,7 +131,7 @@ export default function DispatcherCalendarPage() {
           )
         `)
 
-      // Fetch orders
+      // Updated orders query with client data
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
@@ -138,16 +146,34 @@ export default function DispatcherCalendarPage() {
           vehicle_type,
           tail_lift_required,
           driver_id,
+          tracking_id,
+          estimated_total_duration,
           profiles!driver_id (
             first_name,
             last_name
+          ),
+          clients!client_id (
+            tracking_id,
+            business_name,
+            contact_person
           )
         `)
 
-      if (availError || orderError) {
-        console.error('❌ Supabase error:', availError || orderError)
+      // Fetch dropoff counts for each order
+      const { data: dropoffData, error: dropoffError } = await supabase
+        .from('order_dropoffs')
+        .select('order_id')
+
+      if (availError || orderError || dropoffError) {
+        console.error('❌ Supabase error:', availError || orderError || dropoffError)
         return
       }
+
+      // Count dropoffs per order
+      const dropoffCounts = (dropoffData || []).reduce((acc, dropoff) => {
+        acc[dropoff.order_id] = (acc[dropoff.order_id] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
 
       // Process availability events
       const availEvents: DriverEvent[] = (availabilityData || []).map((e) => {
@@ -183,14 +209,15 @@ export default function DispatcherCalendarPage() {
         }
       })
 
-      // Process order events
+      // Process order events with enhanced data
       const orderEventsData: DriverEvent[] = (orderData || []).map((o) => {
         const driver = driversWithColors.find(d => d.id === o.driver_id)
-        let title = `Order #${o.id}`
+        const clientTrackingId = o.clients?.tracking_id || o.tracking_id || 'N/A'
+        let title = `${clientTrackingId}`
         
         if (o.driver_id && o.profiles) {
           const driverName = `${o.profiles.first_name} ${o.profiles.last_name}`
-          title = `${driverName} - Order #${o.id}`
+          title = `${driverName} - ${clientTrackingId}`
         }
 
         return {
@@ -205,9 +232,15 @@ export default function DispatcherCalendarPage() {
         }
       })
 
+      // Enhanced order data with dropoff counts
+      const enhancedOrders = (orderData || []).map(order => ({
+        ...order,
+        dropoff_count: dropoffCounts[order.id] || 0
+      }))
+
       setAvailabilityEvents(availEvents)
       setOrderEvents(orderEventsData)
-      setOrders(orderData || [])
+      setOrders(enhancedOrders)
       setLoading(false)
     }
 
@@ -350,144 +383,140 @@ export default function DispatcherCalendarPage() {
 
   return (
     <RoleGuard requiredRole="dispatcher">
-  <DndProvider backend={HTML5Backend}>
-    <div className="bg-gray-50 text-gray-800 min-h-screen">
-      <div className="flex px-4 py-4 gap-4">
-        {/* Sidebar */}
-        <aside
-          className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200"
-          style={{ height: currentView === 'month' ? '700px' : '400px' }}
-        >
-          <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
+      <DndProvider backend={HTML5Backend}>
+        <div className="bg-gray-50 text-gray-800 min-h-screen">
+          <div className="flex px-4 py-4 gap-4">
+            {/* Sidebar */}
+            <aside
+              className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200"
+              style={{ height: currentView === 'month' ? '700px' : '400px' }}
+            >
+              <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
 
-          {orders.length === 0 ? (
-            <p className="text-sm text-gray-500">All orders are assigned!</p>
-          ) : (
-            <div className="flex flex-col h-full">
-              {/* Scrollable orders list */}
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {orders
-                  .filter((o) => o.status === 'order_placed')
-                  .map((order) => (
-                    <DraggableOrder
-                      key={order.id}
-                      order={order}
-                      onClick={() => setSelectedOrder(order)}
-                    />
-                ))}
-              </div>
+              {orders.length === 0 ? (
+                <p className="text-sm text-gray-500">All orders are assigned!</p>
+              ) : (
+                <div className="flex flex-col h-full">
+                  {/* Scrollable orders list */}
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {orders
+                      .filter((o) => o.status === 'order_placed')
+                      .map((order) => (
+                        <DraggableOrder
+                          key={order.id}
+                          order={order}
+                          onClick={() => setSelectedOrder(order)}
+                        />
+                    ))}
+                  </div>
 
-              {/* Sticky bottom actions */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <button
-                  onClick={handleAutoAssign}
-                  disabled={assigning}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
-                >
-                  {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
-                </button>
-                <br/>
-                <br/>
-                <br/>
-              </div>
-            </div>
-          )}
-        </aside>
+                  {/* Sticky bottom actions */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={handleAutoAssign}
+                      disabled={assigning}
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
+                    >
+                      {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
+                    </button>
+                    <br/>
+                    <br/>
+                    <br/>
+                  </div>
+                </div>
+              )}
+            </aside>
 
-
-        {/* Main Calendar Area */}
-        <section className="flex-1 space-y-4">
-          <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold">
-                  {calendarType === 'availability' ? '🚛 Driver Availability' : '📦 Orders Schedule'}
-                </h1>
-                <select
-                  value={calendarType}
-                  onChange={(e) => setCalendarType(e.target.value as 'availability' | 'orders')}
-                  className="border rounded-md px-3 py-1 text-sm"
-                >
-                  <option value="availability">Driver Availability</option>
-                  <option value="orders">Orders Schedule</option>
-                </select>
-              </div>
-
-              {calendarType === 'availability' && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium">Driver:</label>
+            {/* Main Calendar Area */}
+            <section className="flex-1 space-y-4">
+              <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-bold">
+                      {calendarType === 'availability' ? '🚛 Driver Availability' : '📦 Orders Schedule'}
+                    </h1>
                     <select
-                      value={selectedDriverId}
-                      onChange={(e) => setSelectedDriverId(e.target.value)}
+                      value={calendarType}
+                      onChange={(e) => setCalendarType(e.target.value as 'availability' | 'orders')}
                       className="border rounded-md px-3 py-1 text-sm"
                     >
-                      <option value="all">All Drivers</option>
-                      {drivers.map(driver => (
-                        <option key={driver.id} value={driver.id}>
-                          {driver.first_name} {driver.last_name}
-                        </option>
-                      ))}
+                      <option value="availability">Driver Availability</option>
+                      <option value="orders">Orders Schedule</option>
                     </select>
                   </div>
-                )}
 
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">View:</label>
-                  <select
-                    value={currentView}
-                    onChange={(e) => setCurrentView(e.target.value as View)}
-                    className="border rounded-md px-3 py-1 text-sm"
-                  >
-                    <option value="month">Month</option>
-                    <option value="week">Week</option>
-                    <option value="day">Day</option>
-                  </select>
+                  {calendarType === 'availability' && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium">Driver:</label>
+                      <select
+                        value={selectedDriverId}
+                        onChange={(e) => setSelectedDriverId(e.target.value)}
+                        className="border rounded-md px-3 py-1 text-sm"
+                      >
+                        <option value="all">All Drivers</option>
+                        {drivers.map(driver => (
+                          <option key={driver.id} value={driver.id}>
+                            {driver.first_name} {driver.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">View:</label>
+                    <select
+                      value={currentView}
+                      onChange={(e) => setCurrentView(e.target.value as View)}
+                      className="border rounded-md px-3 py-1 text-sm"
+                    >
+                      <option value="month">Month</option>
+                      <option value="week">Week</option>
+                      <option value="day">Day</option>
+                    </select>
+                  </div>
                 </div>
 
-            </div>
-
-            <div className="overflow-auto">
-              <Calendar
-                localizer={localizer}
-                events={
-                  calendarType === 'availability'
-                    ? selectedDriverId === 'all'
-                      ? availabilityEvents
-                      : availabilityEvents.filter(event => event.driverId === selectedDriverId)
-                    : orderEvents
-                }
-
-                startAccessor={(event) => event.start}
-                endAccessor={(event) => event.end}
-                view={currentView}
-                date={currentDate}
-                onView={(view) => setCurrentView(view)}
-                onNavigate={(date) => setCurrentDate(date)}
-                style={calendarStyle}
-                components={customComponents}
-                eventPropGetter={(event: DriverEvent) => ({
-                  style: {
-                    backgroundColor: getEventColor(event),
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px'
-                  }
-                })}
-              />
-            </div>
+                <div className="overflow-auto">
+                  <Calendar
+                    localizer={localizer}
+                    events={
+                      calendarType === 'availability'
+                        ? selectedDriverId === 'all'
+                          ? availabilityEvents
+                          : availabilityEvents.filter(event => event.driverId === selectedDriverId)
+                        : orderEvents
+                    }
+                    startAccessor={(event) => event.start}
+                    endAccessor={(event) => event.end}
+                    view={currentView}
+                    date={currentDate}
+                    onView={(view) => setCurrentView(view)}
+                    onNavigate={(date) => setCurrentDate(date)}
+                    style={calendarStyle}
+                    components={customComponents}
+                    eventPropGetter={(event: DriverEvent) => ({
+                      style: {
+                        backgroundColor: getEventColor(event),
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px'
+                      }
+                    })}
+                  />
+                </div>
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
-    </div>
+        </div>
 
-    {selectedOrder && (
-      <OrderDetailsModal
-        order={selectedOrder}
-        onClose={() => setSelectedOrder(null)}
-      />
-    )}
-  </DndProvider>
-  </RoleGuard>
-)
-
+        {selectedOrder && (
+          <OrderDetailsModal
+            order={selectedOrder}
+            onClose={() => setSelectedOrder(null)}
+          />
+        )}
+      </DndProvider>
+    </RoleGuard>
+  )
 }
