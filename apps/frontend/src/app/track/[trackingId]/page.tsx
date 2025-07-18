@@ -291,7 +291,7 @@ const [driverData, fullClientData, dropoffs] = await Promise.all([
           <div className="space-y-6">
             {/* Pickup Map */}
               {order.mapUrl && (
-                <div className="rounded-lg overflow-hidden border aspect-[2/1] relative w-full">
+                <div className="no-print rounded-lg overflow-hidden border aspect-[2/1] relative w-full">
                   <Image
                     src={order.mapUrl}
                     alt="Pickup Map"
