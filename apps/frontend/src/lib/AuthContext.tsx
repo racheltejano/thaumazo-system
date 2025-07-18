@@ -48,6 +48,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
           return;
         }
+
+        // Try to get role from JWT first
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          try {
+            const payload = JSON.parse(atob(session.access_token.split('.')[1]));
+            if (payload.user_role) {
+              if (isMounted) {
+                setUser(user);
+                setRole(payload.user_role);
+                setLoading(false);
+              }
+              return;
+            }
+          } catch (jwtError) {
+            // JWT parsing failed, fallback to database
+          }
+        }
+
+        // Fallback to database query if JWT doesn't have role
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")

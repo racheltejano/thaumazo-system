@@ -3,15 +3,16 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
 import { InventoryItem, Product } from  '@/types/inventory.types';
+import { useAuth } from '@/lib/AuthContext';
 
 export const useInventory = () => {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<string | null>(null)
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [inventoryError, setInventoryError] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
+  const auth = useAuth();
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -26,29 +27,27 @@ export const useInventory = () => {
 
       setUser(user)
 
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+      // Check role using AuthContext
+      if (!auth || auth.loading) {
+        return
+      }
 
-      if (error || !profile) {
+      if (!auth.role) {
         router.push('/dashboard')
         return
       }
 
-      if (profile.role !== 'inventory_staff' && profile.role !== 'admin') {
+      if (auth.role !== 'inventory_staff' && auth.role !== 'admin') {
         router.push('/dashboard')
         return
       }
 
-      setRole(profile.role)
       await fetchInventoryAndProducts()
       setLoading(false)
     }
 
     checkAccess()
-  }, [router])
+  }, [router, auth])
 
   const fetchInventoryAndProducts = async () => {
     const { data: inventoryData, error: inventoryErr } = await supabase
@@ -94,7 +93,7 @@ export const useInventory = () => {
   return {
     loading,
     user,
-    role,
+    role: auth?.role,
     inventory,
     inventoryError,
     products,

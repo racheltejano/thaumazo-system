@@ -1,14 +1,15 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import AdminSummaryCard from '@/components/AdminSummaryCard/page'
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/lib/AuthContext'
 
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
   return `${prefix}_${random}`
 }
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [loadingAuth, setLoadingAuth] = useState(true)
@@ -18,34 +19,26 @@ export default function AdminDashboard() {
   const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState('')
   const [emailStatus, setEmailStatus] = useState('')
-  const auth = useAuth();
-    useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+  const auth = useAuth()
+  const user = auth?.user
+  const role = auth?.role
+  const authLoading = auth?.loading
 
+  useEffect(() => {
+    if (!authLoading) {
       if (!user) {
+        router.push('/login')
+        return
+      }
+      
+      if (role !== 'admin') {
         router.push('/dashboard')
         return
       }
-
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (error || !profile || profile.role !== 'admin') {
-        router.push('/dashboard')
-        return
-      }
-
+      
       setLoadingAuth(false)
     }
-
-    checkAccess()
-  }, [router])
+  }, [user, role, authLoading, router])
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -79,223 +72,139 @@ export default function AdminDashboard() {
   }
 
   const handleSendEmail = async () => {
+    if (!email) {
+      setEmailStatus('Please enter an email address.')
+      return
+    }
+
     setEmailStatus('Sending...')
+
     try {
-      const res = await fetch('/api/send-tracking-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, trackingId }),
+      const { error } = await supabase.functions.invoke('send-tracking-email', {
+        body: { email, trackingId: trackingId }
       })
-      const result = await res.json()
-      if (result.success) {
-        setEmailStatus('✅ Email sent successfully!')
+
+      if (error) {
+        setEmailStatus('Error sending email: ' + error.message)
       } else {
-        setEmailStatus('❌ Failed to send email.')
+        setEmailStatus('Email sent successfully!')
+        setEmail('')
       }
-    }  catch (e) {
-      console.error(e)
-      setEmailStatus('❌ An error occurred while sending.')
+    } catch (err) {
+      setEmailStatus('Error sending email.')
     }
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    if (auth && typeof auth.refresh === 'function') {
-      auth.refresh();
-    }
-    router.push('/login');
+  if (loadingAuth || authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen text-center">
+        <p className="text-orange-500 text-xl font-semibold mb-4">🔐 Checking your access...</p>
+        <div className="mt-4 h-8 w-8 border-4 border-orange-500 border-t-transparent animate-spin rounded-full" />
+      </div>
+    )
   }
 
-   return (
+  return (
     <main className="px-6 py-10 space-y-16 bg-[#f9fafb]">
-        {/* 📊 Overview + ⚠️ Inventory Alerts */}
-        {/* 📊 Dashboard Summary, Inventory Alerts, and Today’s Orders */}  
-<h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2>
-<section className="grid gap-6 lg:grid-cols-4">
-  {/* 📊 Dashboard Summary Cards */}
-  <div className="lg:col-span-2 space-y-6">
-    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-      <AdminSummaryCard title="Unassigned Orders" value="5" icon="📦" />
-      <AdminSummaryCard title="Deliveries In Progress" value="8" icon="🚚" />
-      <AdminSummaryCard title="Completed Today" value="12" icon="✅" />
-      <AdminSummaryCard title="Low Inventory Items" value="3" icon="📉" />
-      <AdminSummaryCard title="Active Drivers" value="4" icon="🧑‍✈️" />
-      <AdminSummaryCard title="Scheduled Today" value="9" icon="📅" />
-      <AdminSummaryCard title="Issues Flagged" value="1" icon="🆘" />
-      <AdminSummaryCard title="Avg Delivery Time" value="2h 35m" icon="⏱️" />
-      <AdminSummaryCard title="Cancelled Orders" value="2" icon="❌" />
-    </div>
-  </div>
-
-  {/* ⚠️ Inventory Alerts */}
-  <aside className="bg-white border border-red-200 rounded-xl p-5 shadow-sm h-fit space-y-4">
-    <h2 className="text-lg font-bold text-gray-700">⚠️ Inventory Alerts</h2>
-    <ul className="divide-y divide-red-100 text-sm">
-      {[
-        { name: 'Bubble Wrap', quantity: 4 },
-        { name: 'Small Cartons', quantity: 2 },
-        { name: 'Packing Tape', quantity: 5 },
-      ].map((item, index) => (
-        <li key={index} className="py-2">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="font-medium text-gray-800">{item.name}</p>
-              <p className="text-xs text-gray-500">Remaining: {item.quantity} units</p>
-            </div>
-            <span className="text-xs font-semibold bg-red-100 text-red-600 px-2 py-1 rounded-full">
-              LOW
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  </aside>
-
-  {/* 📅 Orders Scheduled Today */}
-  <aside className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm h-fit space-y-4">
-    <h2 className="text-lg font-bold text-gray-700">📅 Scheduled Today</h2>
-    <ul className="divide-y divide-gray-100 text-sm">
-      {[
-        { id: 'ORD004', client: 'Michael Reyes', time: '9:00 AM' },
-        { id: 'ORD005', client: 'Sarah Cruz', time: '11:30 AM' },
-        { id: 'ORD006', client: 'Brian Lim', time: '3:45 PM' },
-      ].map((order, index) => (
-        <li key={index} className="py-2">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="font-medium text-gray-800">{order.client}</p>
-              <p className="text-xs text-gray-500">{order.id} • {order.time}</p>
-            </div>
-            <span className="text-xs font-semibold bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
-              Scheduled
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  </aside>
-</section>
-
-
-        {/* 📦 Orders + 🎯 Tracking */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* 📝 Recent Orders */}
-          <div className="lg:col-span-2">
-            <h3 className="text-xl font-semibold text-gray-800 mb-3">📝 Recent Orders</h3>
-            <div className="overflow-x-auto shadow-md border border-gray-200 rounded-xl">
-              <table className="min-w-full bg-white text-sm">
-                <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-3">Order ID</th>
-                    <th className="text-left px-4 py-3">Client</th>
-                    <th className="text-left px-4 py-3">Status</th>
-                    <th className="text-left px-4 py-3">Scheduled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { id: 'ORD001', client: 'Juan Dela Cruz', status: 'Unassigned', scheduled: 'July 17' },
-                    { id: 'ORD002', client: 'Ana Reyes', status: 'In Transit', scheduled: 'July 17' },
-                    { id: 'ORD003', client: 'Pedro Santos', status: 'Completed', scheduled: 'July 16' },
-                  ].map((order) => (
-                    <tr key={order.id} className="border-t hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium">{order.id}</td>
-                      <td className="px-4 py-2">{order.client}</td>
-                      <td className="px-4 py-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          order.status === 'Unassigned' ? 'bg-red-100 text-red-600' :
-                          order.status === 'In Transit' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">{order.scheduled}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 🎯 Generate Tracking ID */}
-          <div className="bg-white shadow-md border border-gray-200 rounded-xl p-6 space-y-5">
-            <h2 className="text-xl font-semibold text-orange-600">🎯 Generate Tracking ID</h2>
-            <button
-              onClick={handleGenerate}
-              disabled={loading}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded-lg font-medium"
-            >
-              {loading ? 'Generating...' : 'Generate ID'}
-            </button>
-
-            {error && <p className="text-red-600 text-sm">{error}</p>}
-
-            {trackingId && (
-              <>
-                <div className="text-sm">
-                  <p className="text-gray-700 font-medium">Tracking ID:</p>
-                  <div className="flex items-center mt-1">
-                    <code className="bg-gray-100 border px-3 py-1 rounded text-orange-700 font-semibold text-sm">{trackingId}</code>
-                    <button
-                      onClick={handleCopy}
-                      className="ml-2 text-sm bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
-                    >
-                      {copied ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-1">📨 Send to Client</h3>
-                  <input
-                    type="email"
-                    placeholder="Client email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full border p-2 rounded text-sm mb-2"
-                  />
-                  <button
-                    onClick={handleSendEmail}
-                    className="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium py-2 rounded"
-                  >
-                    Send Email
-                  </button>
-                  {emailStatus && <p className="text-xs mt-2 text-gray-500">{emailStatus}</p>}
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* 👷 Driver Status */}
-        <section>
-          <h3 className="text-xl font-semibold text-gray-800 mb-3">🧑‍✈️ Driver Status Overview</h3>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {[
-              { name: 'Driver A', status: 'On-duty', color: 'green' },
-              { name: 'Driver B', status: 'On-duty', color: 'green' },
-              { name: 'Driver C', status: 'Off-duty', color: 'red' },
-              { name: 'Driver D', status: 'Pending', color: 'yellow' },
-            ].map((driver, index) => (
-              <div
-                key={index}
-                className={`border-l-4 border-${driver.color}-500 bg-white shadow p-4 rounded-lg`}
-              >
-                <h4 className="text-gray-800 font-medium">{driver.name}</h4>
-                <p className={`text-sm text-${driver.color}-600`}>{driver.status}</p>
+      {/* 📊 Overview + ⚠️ Inventory Alerts */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">📊 Admin Overview</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl">
+                <h3 className="font-semibold">Total Orders</h3>
+                <p className="text-2xl font-bold">1,234</p>
               </div>
-            ))}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-xl">
+                <h3 className="font-semibold">Active Drivers</h3>
+                <p className="text-2xl font-bold">45</p>
+              </div>
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 rounded-xl">
+                <h3 className="font-semibold">Revenue</h3>
+                <p className="text-2xl font-bold">$12,345</p>
+              </div>
+            </div>
           </div>
-        </section>
+        </div>
 
-        {/* 🗺️ Delivery Heatmap */}
-        <section>
-          <h3 className="text-xl font-semibold text-gray-800 mb-3">📍 Delivery Heatmap</h3>
-          <div className="bg-gray-100 border border-dashed border-gray-300 rounded-lg h-64 flex items-center justify-center text-gray-400 text-sm">
-            [Map Preview Placeholder – Coming Soon]
+        <div className="bg-white rounded-2xl shadow p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">⚠️ Quick Actions</h2>
+          <div className="space-y-3">
+            <button className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-lg font-semibold transition">
+              📋 View All Orders
+            </button>
+            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold transition">
+              👥 Manage Staff
+            </button>
+            <button className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-semibold transition">
+              📦 Inventory Check
+            </button>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* 🎯 Generate Tracking ID */}
+      <section className="bg-white rounded-2xl shadow p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">🎯 Generate Tracking ID</h2>
+        
+        <div className="space-y-4">
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold transition"
+          >
+            {loading ? 'Generating...' : 'Generate New Tracking ID'}
+          </button>
+
+          {trackingId && (
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Generated Tracking ID:</p>
+              <div className="flex items-center gap-2">
+                <code className="bg-white px-3 py-2 rounded border text-lg font-mono">
+                  {trackingId}
+                </code>
+                <button
+                  onClick={handleCopy}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+
+          {trackingId && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <h3 className="font-semibold text-blue-900 mb-2">📧 Send Tracking ID via Email</h3>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter email address"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+                <button
+                  onClick={handleSendEmail}
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold"
+                >
+                  Send
+                </button>
+              </div>
+              {emailStatus && (
+                <p className="mt-2 text-sm text-blue-700">{emailStatus}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
   )
 }

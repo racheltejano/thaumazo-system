@@ -9,6 +9,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const auth = useAuth();
   const [loading, setLoading] = useState(true)
+  
   type Profile = {
     id: string
     first_name?: string
@@ -17,8 +18,8 @@ export default function DashboardPage() {
     contact_number?: string
   }
 
-const [user, setUser] = useState<User | null>(null)
-const [profile, setProfile] = useState<Profile | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
     if (!auth || auth.loading) {
@@ -52,23 +53,25 @@ const [profile, setProfile] = useState<Profile | null>(null)
 
       setProfile(profileData)
 
-    // Redirect based on role
-    switch (profileData.role) {
-    case 'admin':
-        router.push('/admin')
-        break
-    case 'driver':
-        router.push('/driver')
-        break
-    case 'dispatcher':
-        router.push('/dispatcher')
-        break
-    case 'inventory_staff':
-        router.push('/inventory/dashboard')
-        break
-    default:
-        router.push('/dashboard')
-    }
+      // Redirect based on role from AuthContext
+      if (auth.role) {
+        switch (auth.role) {
+        case 'admin':
+            router.push('/admin')
+            break
+        case 'driver':
+            router.push('/driver')
+            break
+        case 'dispatcher':
+            router.push('/dispatcher')
+            break
+        case 'inventory_staff':
+            router.push('/inventory/dashboard')
+            break
+        default:
+            router.push('/dashboard')
+        }
+      }
       setLoading(false)
     }
 
@@ -80,7 +83,7 @@ const [profile, setProfile] = useState<Profile | null>(null)
   return (
   <div className="p-6">
     <h1 className="text-xl font-bold">Welcome, {(profile?.first_name || "") + (profile?.last_name ? ` ${profile.last_name}` : "") || user?.email}!</h1>
-    <p>You&apos;re logged in as <strong>{profile?.role}</strong>.</p>
+    <p>You&apos;re logged in as <strong>{auth?.role}</strong>.</p>
   </div>
 )
 }
