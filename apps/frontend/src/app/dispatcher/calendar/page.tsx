@@ -80,6 +80,7 @@ export default function DispatcherCalendarPage() {
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [calendarType, setCalendarType] = useState<'availability' | 'orders'>('availability')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -347,168 +348,122 @@ export default function DispatcherCalendarPage() {
   }
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="bg-gray-50 text-gray-800 min-h-screen">
-        <div className="flex px-4 py-4 gap-4">
-          {/* Sidebar */}
-          <aside className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200 sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
-            {orders.length === 0 ? (
-              <p className="text-sm text-gray-500">All orders are assigned!</p>
-            ) : (
-              <div className="space-y-3">
-                {orders
-                  .filter((o) => o.status === 'order_placed')
-                  .map((order) => (
-                    <DraggableOrder
-                      key={order.id}
-                      order={order}
-                      onClick={() => setSelectedOrder(order)}
-                    />
-                ))}
-                <button
-                  onClick={handleAutoAssign}
-                  disabled={assigning}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
+  <RoleGuard requiredRole="dispatcher">
+  <DndProvider backend={HTML5Backend}>
+    <div className="bg-gray-50 text-gray-800 min-h-screen">
+      <div className="flex px-4 py-4 gap-4">
+        {/* Sidebar */}
+        <aside className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200 sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
+          {orders.length === 0 ? (
+            <p className="text-sm text-gray-500">All orders are assigned!</p>
+          ) : (
+            <div className="space-y-3">
+              {orders
+                .filter((o) => o.status === 'order_placed')
+                .map((order) => (
+                  <DraggableOrder
+                    key={order.id}
+                    order={order}
+                    onClick={() => setSelectedOrder(order)}
+                  />
+              ))}
+              <button
+                onClick={handleAutoAssign}
+                disabled={assigning}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
+              >
+                {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
+              </button>
+            </div>
+          )}
+
+          {/* Driver Legend */}
+          <div className="mt-6 border-t pt-4">
+            <h3 className="text-sm font-semibold mb-3">👥 Driver Colors</h3>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {drivers.map((driver) => (
+                <div key={driver.id} className="flex items-center gap-2">
+                  <div 
+                    className="w-4 h-4 rounded-full border border-gray-300"
+                    style={{ backgroundColor: driver.color }}
+                  />
+                  <span className="text-xs text-gray-700">
+                    {driver.first_name} {driver.last_name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Calendar Area */}
+        <section className="flex-1 space-y-4">
+          <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-4">
+                <h1 className="text-xl font-bold">
+                  {calendarType === 'availability' ? '🚛 Driver Availability' : '📦 Orders Schedule'}
+                </h1>
+                <select
+                  value={calendarType}
+                  onChange={(e) => setCalendarType(e.target.value as 'availability' | 'orders')}
+                  className="border rounded-md px-3 py-1 text-sm"
                 >
-                  {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
-                </button>
-              </div>
-            )}
-
-            {/* Driver Legend */}
-            <div className="mt-6 border-t pt-4">
-              <h3 className="text-sm font-semibold mb-3">👥 Driver Colors</h3>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {drivers.map((driver) => (
-                  <div key={driver.id} className="flex items-center gap-2">
-                    <div 
-                      className="w-4 h-4 rounded-full border border-gray-300"
-                      style={{ backgroundColor: driver.color }}
-                    />
-                    <span className="text-xs text-gray-700">
-                      {driver.first_name} {driver.last_name}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
-
-          {/* Main Calendar Area */}
-          <section className="flex-1 space-y-4">
-            {/* Driver Availability Calendar */}
-            <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
-              <div className="flex justify-between items-center mb-4">
-                <h1 className="text-xl font-bold">🚛 Driver Availability</h1>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">View:</label>
-                  <select
-                    value={currentView}
-                    onChange={(e) => setCurrentView(e.target.value as View)}
-                    className="border rounded-md px-3 py-1 text-sm"
-                  >
-                    <option value="month">Month</option>
-                    <option value="week">Week</option>
-                    <option value="day">Day</option>
-                  </select>
-                </div>
+                  <option value="availability">Driver Availability</option>
+                  <option value="orders">Orders Schedule</option>
+                </select>
               </div>
 
-              <div className="overflow-auto">
-                <Calendar
-                  localizer={localizer}
-                  events={availabilityEvents}
-                  startAccessor={(event) => event.start}
-                  endAccessor={(event) => event.end}
-                  view={currentView}
-                  date={currentDate}
-                  onView={(view) => setCurrentView(view)}
-                  onNavigate={(date) => setCurrentDate(date)}
-                  style={calendarStyle}
-                  components={customComponents}
-                  eventPropGetter={(event: DriverEvent) => ({
-                    style: {
-                      backgroundColor: getEventColor(event),
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px'
-                    }
-                  })}
-                />
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">View:</label>
+                <select
+                  value={currentView}
+                  onChange={(e) => setCurrentView(e.target.value as View)}
+                  className="border rounded-md px-3 py-1 text-sm"
+                >
+                  <option value="month">Month</option>
+                  <option value="week">Week</option>
+                  <option value="day">Day</option>
+                </select>
               </div>
             </div>
 
-            {/* Orders Calendar */}
-            <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
-              <div className="flex justify-between items-center mb-4">
-                <h1 className="text-xl font-bold">📦 Orders Schedule</h1>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-orange-500 rounded"></div>
-                    <span className="text-sm">Unassigned</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-green-500 rounded"></div>
-                    <span className="text-sm">Assigned</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-auto">
-                <DnDCalendar
-                  localizer={localizer}
-                  events={orderEvents}
-                  startAccessor={(event) => event.start}
-                  endAccessor={(event) => event.end}
-                  view={currentView}
-                  date={currentDate}
-                  onView={(view) => setCurrentView(view)}
-                  onNavigate={(date) => setCurrentDate(date)}
-                  style={calendarStyle}
-                  components={customComponents}
-                  onDropFromOutside={({ start }) => {
-                    if (!draggedOrder) return
-                    const newEvent: DriverEvent = {
-                      id: draggedOrder.id,
-                      title: `Order #${draggedOrder.id}`,
-                      start: start as Date,
-                      end: start as Date,
-                      type: 'order',
-                      status: 'assigned',
-                    }
-                    setOrderEvents((prev) => [...prev, newEvent])
-                    setOrders((prev) => prev.filter((o) => o.id !== draggedOrder.id))
-                    setDraggedOrder(null)
-                  }}
-                  handleDragStart={(event: DriverEvent) => {
-                    if (event.type === 'order') {
-                      const matchingOrder = orders.find((o) => o.id === event.id)
-                      if (matchingOrder) setDraggedOrder(matchingOrder)
-                    }
-                  }}
-                  draggableAccessor={(event: DriverEvent) => event.type === 'order'}
-                  eventPropGetter={(event: DriverEvent) => ({
-                    style: {
-                      backgroundColor: getEventColor(event),
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px'
-                    }
-                  })}
-                />
-              </div>
+            <div className="overflow-auto">
+              <Calendar
+                localizer={localizer}
+                events={calendarType === 'availability' ? availabilityEvents : orderEvents}
+                startAccessor={(event) => event.start}
+                endAccessor={(event) => event.end}
+                view={currentView}
+                date={currentDate}
+                onView={(view) => setCurrentView(view)}
+                onNavigate={(date) => setCurrentDate(date)}
+                style={calendarStyle}
+                components={customComponents}
+                eventPropGetter={(event: DriverEvent) => ({
+                  style: {
+                    backgroundColor: getEventColor(event),
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px'
+                  }
+                })}
+              />
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
-      
-      {selectedOrder && (
-        <OrderDetailsModal
-          order={selectedOrder}
-          onClose={() => setSelectedOrder(null)}
-        />
-      )}
-    </DndProvider>
-  )
+    </div>
+
+    {selectedOrder && (
+      <OrderDetailsModal
+        order={selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+      />
+    )}
+  </DndProvider>
+  </RoleGuard>
+)
+
 }
