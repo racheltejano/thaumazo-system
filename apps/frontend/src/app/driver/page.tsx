@@ -779,62 +779,62 @@ return (
     </div>
 
     {/* Order Details Modal */}
-    {selectedOrder && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-          {/* Modal Header */}
-          <div className="p-6 border-b border-gray-200 bg-gray-50">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span>📝</span>
-                Order Details: {selectedOrder.tracking_id}
-              </h3>
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
-                disabled={statusLoading}
-                aria-label="Close modal"
-              >
-                ×
-              </button>
-            </div>
-          </div>
+{selectedOrder && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* Modal Header */}
+      <div className="p-6 border-b border-gray-200 bg-gray-50">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <span>📝</span>
+            Order Details: {selectedOrder.tracking_id}
+          </h3>
+          <button
+            onClick={() => setSelectedOrder(null)}
+            className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
+            disabled={statusLoading}
+            aria-label="Close modal"
+          >
+            ×
+          </button>
+        </div>
+      </div>
 
-          <div className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Order Details */}
-              <div className="space-y-6">
-                {/* Order Information */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
-                    <span>📋</span> Order Information
-                  </h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Pickup Date:</span>
-                      <span className="text-gray-900">{formatDate(selectedOrder.pickup_date)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Pickup Time:</span>
-                      <span className="text-gray-900">{formatTime(selectedOrder.pickup_time)}</span>
-                    </div>
-                    {selectedOrder.delivery_window_start && (
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Delivery Window:</span>
-                        <span className="text-gray-900">
-                          {formatTime(selectedOrder.delivery_window_start)} - {formatTime(selectedOrder.delivery_window_end || '')}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Vehicle Type:</span>
-                      <span className="text-gray-900">{selectedOrder.vehicle_type || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Tail Lift:</span>
-                      <span className="text-gray-900">{selectedOrder.tail_lift_required ? 'Required' : 'Not Required'}</span>
-                    </div>
-                    {estimatedTime && (
+      <div className="p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Order Details */}
+          <div className="space-y-6">
+            {/* Order Information */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <span>📋</span> Order Information
+              </h4>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Pickup Date:</span>
+                  <span className="text-gray-900">{formatDate(selectedOrder.pickup_date)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Pickup Time:</span>
+                  <span className="text-gray-900">{formatTime(selectedOrder.pickup_time)}</span>
+                </div>
+                {selectedOrder.delivery_window_start && (
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-700">Delivery Window:</span>
+                    <span className="text-gray-900">
+                      {formatTime(selectedOrder.delivery_window_start)} - {formatTime(selectedOrder.delivery_window_end || '')}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Vehicle Type:</span>
+                  <span className="text-gray-900">{selectedOrder.vehicle_type || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Tail Lift:</span>
+                  <span className="text-gray-900">{selectedOrder.tail_lift_required ? 'Required' : 'Not Required'}</span>
+                </div>
+                {estimatedTime && (
                       <div className="flex justify-between">
                         <span className="font-medium text-gray-700">Est. Travel Time:</span>
                         <span className="text-gray-900">{estimatedTime}</span>
@@ -842,137 +842,193 @@ return (
                     )}
                   </div>
                 </div>
-
-                {/* Current Status */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
-                    <span>🔄</span> Current Status
-                  </h4>
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="px-3 py-2 rounded-lg text-sm font-medium text-white"
-                      style={{ backgroundColor: getStatusColor(selectedOrder.status) }}
-                    >
-                      {getStatusLabel(selectedOrder.status)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Special Instructions */}
-                {selectedOrder.special_instructions && (
-                  <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                    <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-yellow-800">
-                      <span>⚠️</span> Special Instructions
-                    </h4>
-                    <p className="text-sm text-yellow-800">{selectedOrder.special_instructions}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Right Column - Client & Status Updates */}
-              <div className="space-y-6">
-                {/* Client Information */}
-                {client && (
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-blue-800">
-                      <span>👤</span> Client Information
-                    </h4>
-                    <div className="space-y-3 text-sm">
-                      <div>
-                        <span className="font-medium text-blue-700">Business:</span>
-                        <div className="text-blue-900">{client.business_name}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-blue-700">Contact:</span>
-                        <div className="text-blue-900">{client.contact_person}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-blue-700">Phone:</span>
-                        <div className="text-blue-900">{client.contact_number}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-blue-700">Pickup Address:</span>
-                        <div className="text-blue-900">{client.pickup_address}</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Dropoff Information */}
-                {dropoffs.length > 0 && (
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-green-800">
-                      <span>📍</span> Dropoff Locations
-                    </h4>
-                    <div className="space-y-3">
-                      {dropoffs.map((dropoff) => (
-                        <div key={dropoff.id} className="text-sm">
-                          <div className="font-medium text-green-700">
-                            {dropoff.sequence}. {dropoff.dropoff_name}
-                          </div>
-                          <div className="text-green-600">{dropoff.dropoff_address}</div>
-                          <div className="text-green-600">{dropoff.dropoff_contact} - {dropoff.dropoff_phone}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Status Update Section */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
-                    <span>🔄</span> Update Status
-                  </h4>
-                  <div className="space-y-2">
-                    {getAvailableNextStatuses(selectedOrder.status).map((status) => (
-                      <button
-                        key={status}
-                        onClick={() => updateOrderStatus(selectedOrder.id, status)}
-                        disabled={statusLoading}
-                        className={`w-full px-4 py-3 text-sm font-medium rounded-lg transition-all ${
-                          statusLoading
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'text-white hover:opacity-90 hover:shadow-md'
-                        }`}
-                        style={{ backgroundColor: statusLoading ? '#e5e7eb' : getStatusColor(status) }}
-                      >
-                        {statusLoading ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
-                            Updating...
-                          </div>
-                        ) : (
-                          `Mark as ${getStatusLabel(status)}`
-                        )}
-                      </button>
-                    ))}
-                    {getAvailableNextStatuses(selectedOrder.status).length === 0 && (
-                      <div className="text-center py-4">
-                        <div className="text-gray-400 text-xl mb-2">✅</div>
-                        <p className="text-sm text-gray-500 italic">No status updates available</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {/* Current Status */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <span>🔄</span> Current Status
+              </h4>
+              <div className="flex items-center gap-3">
+                <span
+                  className="px-3 py-2 rounded-lg text-sm font-medium text-white"
+                  style={{ backgroundColor: getStatusColor(selectedOrder.status) }}
+                >
+                  {getStatusLabel(selectedOrder.status)}
+                </span>
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  disabled={statusLoading}
-                  className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  Close
-                </button>
+            {/* Special Instructions */}
+            {selectedOrder.special_instructions && (
+              <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-yellow-800">
+                  <span>⚠️</span> Special Instructions
+                </h4>
+                <p className="text-sm text-yellow-800">{selectedOrder.special_instructions}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Client & Status Updates */}
+          <div className="space-y-6">
+            {/* Client Information with Map Button */}
+            {client && (
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-blue-800">
+                  <span>👤</span> Client Information
+                </h4>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <span className="font-medium text-blue-700">Business:</span>
+                    <div className="text-blue-900">{client.business_name}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Contact:</span>
+                    <div className="text-blue-900">{client.contact_person}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Phone:</span>
+                    <div className="text-blue-900">{client.contact_number}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Pickup Address:</span>
+                    <div className="text-blue-900 mb-2">{client.pickup_address}</div>
+                    {/* Map button for pickup location */}
+                    {client.pickup_latitude && client.pickup_longitude && (
+                      <button
+                        onClick={() => setShowPickupMap(!showPickupMap)}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors flex items-center gap-1"
+                      >
+                        <span>🗺️</span>
+                        {showPickupMap ? 'Hide Map' : 'Show Map'}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Pickup Location Map */}
+                  {showPickupMap && client.pickup_latitude && client.pickup_longitude && (
+                    <div className="mt-3 rounded-lg overflow-hidden border border-blue-300">
+                      <img
+                        src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-p+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},14,0/400x200@2x?access_token=${MAPBOX_TOKEN}`}
+                        alt="Pickup Location Map"
+                        className="w-full h-48 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling.style.display = 'block';
+                        }}
+                      />
+                      <div className="hidden p-3 bg-red-50 text-red-600 text-sm text-center">
+                        Map could not be loaded
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Dropoff Information with Map Buttons */}
+            {dropoffs.length > 0 && (
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-green-800">
+                  <span>📍</span> Dropoff Locations
+                </h4>
+                <div className="space-y-4">
+                  {dropoffs.map((dropoff) => (
+                    <div key={dropoff.id} className="text-sm border-b border-green-200 last:border-b-0 pb-3 last:pb-0">
+                      <div className="font-medium text-green-700">
+                        {dropoff.sequence}. {dropoff.dropoff_name}
+                      </div>
+                      <div className="text-green-600 mb-1">{dropoff.dropoff_address}</div>
+                      <div className="text-green-600 mb-2">{dropoff.dropoff_contact} - {dropoff.dropoff_phone}</div>
+                      
+                      {/* Map button for dropoff location */}
+                      {dropoff.latitude && dropoff.longitude && (
+                        <button
+                          onClick={() => toggleDropoffMap(dropoff.id)}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded-md transition-colors flex items-center gap-1 mb-2"
+                        >
+                          <span>🗺️</span>
+                          {showDropoffMaps[dropoff.id] ? 'Hide Map' : 'Show Map'}
+                        </button>
+                      )}
+                      
+                      {/* Dropoff Location Map */}
+                      {showDropoffMaps[dropoff.id] && dropoff.latitude && dropoff.longitude && (
+                        <div className="mt-2 rounded-lg overflow-hidden border border-green-300">
+                          <img
+                            src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-${dropoff.sequence}+00ff00(${dropoff.longitude},${dropoff.latitude})/${dropoff.longitude},${dropoff.latitude},14,0/400x200@2x?access_token=${MAPBOX_TOKEN}`}
+                            alt={`Dropoff ${dropoff.sequence} Location Map`}
+                            className="w-full h-48 object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling.style.display = 'block';
+                            }}
+                          />
+                          <div className="hidden p-3 bg-red-50 text-red-600 text-sm text-center">
+                            Map could not be loaded
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Status Update Section */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <span>🔄</span> Update Status
+              </h4>
+              <div className="space-y-2">
+                {getAvailableNextStatuses(selectedOrder.status).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => updateOrderStatus(selectedOrder.id, status)}
+                    disabled={statusLoading}
+                    className={`w-full px-4 py-3 text-sm font-medium rounded-lg transition-all ${
+                      statusLoading
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'text-white hover:opacity-90 hover:shadow-md'
+                    }`}
+                    style={{ backgroundColor: statusLoading ? '#e5e7eb' : getStatusColor(status) }}
+                  >
+                    {statusLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                        Updating...
+                      </div>
+                    ) : (
+                      `Mark as ${getStatusLabel(status)}`
+                    )}
+                  </button>
+                ))}
+                {getAvailableNextStatuses(selectedOrder.status).length === 0 && (
+                  <div className="text-center py-4">
+                    <div className="text-gray-400 text-xl mb-2">✅</div>
+                    <p className="text-sm text-gray-500 italic">No status updates available</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Modal Footer */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="flex justify-end">
+            <button
+              onClick={() => setSelectedOrder(null)}
+              disabled={statusLoading}
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </div>
-    )}
+    </div>
+  </div>
+)}
   </div>
 )
 }
