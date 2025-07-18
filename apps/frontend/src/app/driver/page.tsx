@@ -390,19 +390,21 @@ export default function DriverCalendarPage() {
   }
 
   navigator.geolocation.getCurrentPosition(
-    (position) => {
-      // Fetch weather data using real coords
-      fetchWeather(position.coords.latitude, position.coords.longitude)
-    },
-    (error) => {
-      // Only log if fallback data is not used
-      if (error.code !== 1) { // Geolocation denied
+  (position) => {
+    fetchWeather(position.coords.latitude, position.coords.longitude)
+  },
+  (error) => {
+    if (error.code !== 1) { 
+      if (error && Object.keys(error).length > 0) {
         console.error('Geolocation error:', error)
+      } else {
+        console.warn('Geolocation failed with empty error object.')
       }
-      // Fallback to Manila coords if location denied/unavailable
-      fetchWeather(14.5995, 120.9842)  // Manila coords
     }
-  )
+    fetchWeather(14.5995, 120.9842)  
+  }
+)
+
 }, [])
 
 
