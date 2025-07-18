@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Settings, Truck } from 'lucide-react';
+import { Settings, Truck, ChevronDown } from 'lucide-react';
 import { Driver } from '../hooks/useDrivers';
 import Link from 'next/link';
 
@@ -37,6 +36,7 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     const defaultVisible: Record<string, boolean> = {};
     Object.entries(columnConfig).forEach(([key, config]) => {
@@ -151,37 +151,43 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
               </option>
             ))}
           </select>
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-400 bg-gray-50 text-black hover:bg-orange-50 transition-colors flex items-center gap-2">
-                <Settings className="w-4 h-4" />
-                Columns ({getVisibleColumnCount()})
-              </button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Table Column Settings</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                {Object.entries(columnConfig).map(([key, config]) => (
-                  <label key={key} className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns[key]}
-                      onChange={(e) => {
-                        setVisibleColumns(prev => ({
-                          ...prev,
-                          [key]: e.target.checked
-                        }));
-                      }}
-                      className="form-checkbox h-4 w-4 text-orange-500 rounded focus:ring-orange-400"
-                    />
-                    <span className="text-sm text-gray-700">{config.label}</span>
-                  </label>
-                ))}
+          {/* Column Settings Dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowColumnSettings(!showColumnSettings)}
+              className="px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-400 bg-gray-50 text-black hover:bg-orange-50 transition-colors flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Columns ({getVisibleColumnCount()})
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            
+            {showColumnSettings && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                <div className="p-3">
+                  <div className="text-sm font-medium text-gray-700 mb-2">Visible Columns</div>
+                  <div className="space-y-2">
+                    {Object.entries(columnConfig).map(([key, config]) => (
+                      <label key={key} className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns[key]}
+                          onChange={(e) => {
+                            setVisibleColumns(prev => ({
+                              ...prev,
+                              [key]: e.target.checked
+                            }));
+                          }}
+                          className="form-checkbox h-4 w-4 text-orange-500 rounded focus:ring-orange-400"
+                        />
+                        <span className="text-sm text-gray-700">{config.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </DialogContent>
-          </Dialog>
+            )}
+          </div>
         </div>
       </div>
 
@@ -199,86 +205,89 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
             </tr>
           </thead>
           <tbody>
-            {paginated.map((driver) => (
-              <tr
-                key={driver.id}
-                className="border-b last:border-b-0 hover:bg-orange-50 transition-colors"
-              >
-                {visibleColumns.name && (
-                  <td className="px-4 py-3">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        {driver.profile_pic ? (
-                          <img
-                            className="h-10 w-10 rounded-full object-cover"
-                            src={driver.profile_pic.replace('/upload/', '/upload/w_40,h_40,c_fill,f_auto,q_auto/')}
-                            alt={driver.name}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              target.nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                        ) : null}
-                        <div className={`h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center ${driver.profile_pic ? 'hidden' : ''}`}>
-                          <span className="text-white font-medium text-sm">
-                            {driver.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </span>
+            {paginated.length === 0 ? (
+              <tr>
+                <td colSpan={getVisibleColumnCount()} className="text-center py-8 text-gray-400">
+                  No drivers found.
+                </td>
+              </tr>
+            ) : (
+              paginated.map((driver) => (
+                <tr key={driver.id} className="border-b last:border-b-0 hover:bg-orange-50 transition-colors text-black">
+                  {visibleColumns.name && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          {driver.profile_pic ? (
+                            <img
+                              className="h-10 w-10 rounded-full object-cover"
+                              src={driver.profile_pic.replace('/upload/', '/upload/w_40,h_40,c_fill,f_auto,q_auto/')}
+                              alt={driver.name}
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                target.nextElementSibling?.classList.remove('hidden');
+                              }}
+                            />
+                          ) : null}
+                          <div className={`h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center ${driver.profile_pic ? 'hidden' : ''}`}>
+                            <span className="text-white font-medium text-sm">
+                              {driver.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-900">{driver.name}</p>
+                          <Link href={`/admin/drivers/${driver.id}`} className="text-xs text-blue-600 hover:underline">
+                            View Profile
+                          </Link>
                         </div>
                       </div>
-                      <div className="ml-3">
-                        <Link 
-                          href={`/admin/drivers/${driver.id}`}
-                          className="text-sm font-medium text-gray-900 hover:text-orange-600 transition-colors cursor-pointer"
-                        >
-                          {driver.name}
-                        </Link>
+                    </td>
+                  )}
+                  {visibleColumns.email && (
+                    <td className="px-4 py-3">{driver.email}</td>
+                  )}
+                  {visibleColumns.phone && (
+                    <td className="px-4 py-3">{driver.phone}</td>
+                  )}
+                  {visibleColumns.status && (
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(driver.status)}`}>
+                        {driver.status}
+                      </span>
+                    </td>
+                  )}
+                  {visibleColumns.performance && (
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <div className="text-xs">
+                          <span className="font-medium">Orders:</span> {driver.total_orders}
+                        </div>
+                        <div className="text-xs">
+                          <span className="font-medium">Success Rate:</span> {driver.total_orders > 0 ? Math.round((driver.total_orders / (driver.total_orders + driver.active_orders)) * 100) : 0}%
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                )}
-                {visibleColumns.email && (
-                  <td className="px-4 py-3">{driver.email}</td>
-                )}
-                {visibleColumns.phone && (
-                  <td className="px-4 py-3">{driver.phone}</td>
-                )}
-                {visibleColumns.status && (
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-600">
-                      {driver.status}
-                    </span>
-                  </td>
-                )}
-                {visibleColumns.performance && (
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div className="text-xs">
-                        <span className="font-medium">Orders:</span> {driver.total_orders}
+                    </td>
+                  )}
+                  {visibleColumns.orders && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Truck className="w-4 h-4 text-blue-500" />
+                        <span className="font-medium">{driver.active_orders}</span>
                       </div>
-                      <div className="text-xs">
-                        <span className="font-medium">Success Rate:</span> {driver.total_orders > 0 ? Math.round((driver.total_orders / (driver.total_orders + driver.active_orders)) * 100) : 0}%
+                    </td>
+                  )}
+                  {visibleColumns.lastLogin && (
+                    <td className="px-4 py-3">
+                      <div className="text-xs text-gray-500">
+                        {formatLastLogin(driver.last_login)}
                       </div>
-                    </div>
-                  </td>
-                )}
-                {visibleColumns.orders && (
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Truck className="w-4 h-4 text-blue-500" />
-                      <span className="font-medium">{driver.active_orders}</span>
-                    </div>
-                  </td>
-                )}
-                {visibleColumns.lastLogin && (
-                  <td className="px-4 py-3">
-                    <div className="text-xs text-gray-500">
-                      {formatLastLogin(driver.last_login)}
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))}
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -286,24 +295,24 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-500">
-            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, sorted.length)} of {sorted.length} drivers
+          <div className="text-sm text-gray-700">
+            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, sorted.length)} of {sorted.length} results
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
             >
               Previous
             </button>
-            <span className="px-3 py-1 rounded-lg bg-orange-500 text-white">
-              {page} of {totalPages}
+            <span className="px-3 py-1 text-sm">
+              Page {page} of {totalPages}
             </span>
             <button
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
             >
               Next
             </button>
