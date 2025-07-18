@@ -12,6 +12,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
 
+
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
 
@@ -22,6 +23,13 @@ type DriverEvent = {
   end: Date
   type: 'order' | 'availability'
   order?: Order
+}
+
+type WeatherData = {
+  temperature: number | null
+  windspeed: number | null
+  weathercode: number | null
+  weatherDescription: string
 }
 
 type Order = {
@@ -48,6 +56,40 @@ const ORDER_STATUSES = [
   { value: 'cancelled', label: 'Cancelled', color: '#e53e3e' },
 ]
 
+function getWeatherDescription(code: number): string {
+  const weatherCodes: Record<number, string> = {
+    0: 'Clear sky',
+    1: 'Mainly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Depositing rime fog',
+    51: 'Light drizzle',
+    53: 'Moderate drizzle',
+    55: 'Dense drizzle',
+    56: 'Light freezing drizzle',
+    57: 'Dense freezing drizzle',
+    61: 'Slight rain',
+    63: 'Moderate rain',
+    65: 'Heavy rain',
+    66: 'Light freezing rain',
+    67: 'Heavy freezing rain',
+    71: 'Slight snow fall',
+    73: 'Moderate snow fall',
+    75: 'Heavy snow fall',
+    77: 'Snow grains',
+    80: 'Slight rain showers',
+    81: 'Moderate rain showers',
+    82: 'Violent rain showers',
+    85: 'Slight snow showers',
+    86: 'Heavy snow showers',
+    95: 'Thunderstorm',
+    96: 'Thunderstorm with slight hail',
+    99: 'Thunderstorm with heavy hail'
+  }
+  return weatherCodes[code] || 'Unknown'
+}
+
 export default function DriverCalendarPage() {
   const [events, setEvents] = useState<DriverEvent[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -57,6 +99,15 @@ export default function DriverCalendarPage() {
   const [statusLoading, setStatusLoading] = useState(false)
   const auth = useAuth();
   const router = useRouter();
+  const currentDate = moment();
+  const startOfWeek = currentDate.clone().startOf('week');
+  const endOfWeek = currentDate.clone().endOf('week'); 
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherError, setWeatherError] = useState('')
+
+
+
 
   useEffect(() => {
   const fetchSessionThenData = async () => {
@@ -72,6 +123,7 @@ export default function DriverCalendarPage() {
 
     await fetchDriverData()
   }
+
 
   fetchSessionThenData()
 }, [])
@@ -306,6 +358,67 @@ export default function DriverCalendarPage() {
     return events.filter(e => e.type === 'order').length
   }
 
+  useEffect(() => {
+  const fetchWeather = async (lat: number, lon: number) => {
+    try {
+      setWeatherLoading(true)
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`
+      )
+      const data = await res.json()
+      if (data && data.current_weather) {
+        setWeather({
+          temperature: data.current_weather.temperature,
+          windspeed: data.current_weather.windspeed,
+          weathercode: data.current_weather.weathercode,
+          weatherDescription: getWeatherDescription(data.current_weather.weathercode)
+        })
+      } else {
+        setWeatherError('Failed to fetch weather data.')
+      }
+    } catch {
+      setWeatherError('Failed to fetch weather data.')
+    } finally {
+      setWeatherLoading(false)
+    }
+  }
+
+  if (!navigator.geolocation) {
+    setWeatherError('Geolocation is not supported by your browser.')
+    setWeatherLoading(false)
+    return
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      // Fetch weather data using real coords
+      fetchWeather(position.coords.latitude, position.coords.longitude)
+    },
+    (error) => {
+      // Only log if fallback data is not used
+      if (error.code !== 1) { // Geolocation denied
+        console.error('Geolocation error:', error)
+      }
+      // Fallback to Manila coords if location denied/unavailable
+      fetchWeather(14.5995, 120.9842)  // Manila coords
+    }
+  )
+}, [])
+
+
+
+  const upcomingOrders = events
+    .filter(e => e.type === 'order' && moment(e.start).isBetween(moment().startOf('day'), moment().add(7, 'days').endOf('day'), null, '[]'))
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+
+  const filteredAvailability = events.filter((e) => {
+  if (e.type === 'availability') {
+    const startMoment = moment(e.start);
+    return startMoment.isBetween(startOfWeek, endOfWeek, 'days', '[]');
+  }
+  return false;
+});
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
@@ -318,7 +431,133 @@ export default function DriverCalendarPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Weather Info Card */}
+      <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 max-w-md">
+        <h2 className="text-lg font-semibold mb-2">🌤️ Current Weather</h2>
+        {weatherLoading ? (
+          <p>Loading weather...</p>
+        ) : weatherError ? (
+          <p className="text-red-600">{weatherError}</p>
+        ) : weather ? (
+          <div>
+            <p><strong>Temperature:</strong> {weather.temperature}°C</p>
+            <p><strong>Wind Speed:</strong> {weather.windspeed} km/h</p>
+            <p><strong>Condition:</strong> {weather.weatherDescription}</p>
+          </div>
+        ) : (
+          <p>No weather data available.</p>
+        )}
+      </div>
+
+      {/* Upcoming Orders Next 7 Days */}
+      <div className="mb-6 p-4 rounded-xl bg-white border border-gray-200 shadow max-w-md">
+        <h2 className="text-lg font-semibold text-orange-600 mb-3">📅 Upcoming Orders (Next 7 Days)</h2>
+        {upcomingOrders.length === 0 ? (
+          <p className="text-gray-500 italic">No upcoming orders in the next 7 days.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {upcomingOrders.map((orderEvent) => (
+              <li key={orderEvent.id} className="flex justify-between items-center">
+                <div>
+                  <p><strong>Order #{orderEvent.id}</strong></p>
+                  <p>{moment(orderEvent.start).format('ddd, MMM D, hh:mm A')}</p>
+                </div>
+                <span
+                  className="text-xs font-semibold px-2 py-1 rounded"
+                  style={{ backgroundColor: getStatusColor(orderEvent.order?.status || 'order_placed'), color: 'white' }}
+                >
+                  {getStatusLabel(orderEvent.order?.status || 'order_placed')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+
+      {/* Dashboard Summary Placeholder */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+  {/* Assigned Orders Today */}
+  <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
+    <h2 className="text-lg font-semibold text-orange-600 mb-3">📦 Assigned Orders Today</h2>
+    {events.filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day')).length === 0 ? (
+      <p className="text-sm text-gray-500 italic">You have no assigned orders today.</p>
+    ) : (
+      <ul className="space-y-2">
+        {events
+          .filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day'))
+          .map(order => (
+            <li key={order.id} className="flex justify-between items-center text-sm">
+              <div>
+                <p className="font-medium">Order #{order.id}</p>
+                <p className="text-gray-500">{moment(order.start).format('hh:mm A')} → {moment(order.end).format('hh:mm A')}</p>
+              </div>
+              <span
+                className="text-xs font-semibold px-2 py-1 rounded"
+                style={{ backgroundColor: getStatusColor(order.order?.status || 'order_placed'), color: 'white' }}
+              >
+                {getStatusLabel(order.order?.status || 'order_placed')}
+              </span>
+            </li>
+          ))}
+      </ul>
+    )}
+  </div>
+
+ {/* Weekly Availability */}
+<div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+  <h2 className="text-xl font-semibold text-orange-600 mb-4">🕐 Weekly Availability</h2>
+
+  {filteredAvailability.length === 0 ? (
+    <div className="text-center text-sm text-red-500 font-medium">⚠️ You haven't set your availability for this week.</div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="min-w-full table-auto text-sm">
+        <thead className="bg-gray-100">
+          <tr className="text-left text-gray-600">
+            <th className="px-4 py-2 text-sm font-medium">Day</th>
+            <th className="px-4 py-2 text-sm font-medium">Start Time</th>
+            <th className="px-4 py-2 text-sm font-medium">End Time</th>
+            <th className="px-4 py-2 text-sm font-medium">Duration</th>
+            <th className="px-4 py-2 text-sm font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {filteredAvailability
+            .sort((a, b) => a.start.getTime() - b.start.getTime())
+            .map((block) => {
+              const startTime = moment(block.start).format('hh:mm A');
+              const endTime = moment(block.end).format('hh:mm A');
+              const duration = ((block.end.getTime() - block.start.getTime()) / (1000 * 60 * 60)).toFixed(2);
+              const isUnavailable = block.title.includes('Unavailable');
+              
+              return (
+                <tr key={block.id} className="hover:bg-gray-50 transition-all cursor-pointer">
+                  <td className="px-4 py-2 text-gray-600">{moment(block.start).format('dddd, MMM D')}</td>
+                  <td className="px-4 py-2 text-gray-600">{startTime}</td>
+                  <td className="px-4 py-2 text-gray-600">{endTime}</td>
+                  <td className="px-4 py-2 text-gray-600">{duration} hrs</td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${isUnavailable ? 'bg-red-400 text-white' : 'bg-green-400 text-white'}`}
+                    >
+                      {isUnavailable ? 'Unavailable' : 'Available'}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
+
+
+</div>
+
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-black">📅 My Schedule</h1>
         <p className="text-sm text-gray-500">
