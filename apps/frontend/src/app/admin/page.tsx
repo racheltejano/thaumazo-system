@@ -111,50 +111,73 @@ export default function AdminDashboard() {
     <RoleGuard requiredRole="admin">
       <main className="px-6 py-10 space-y-16 bg-[#f9fafb]">
         {/* 📊 Overview + ⚠️ Inventory Alerts */}
-        <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2>
-        <section className="grid gap-6 lg:grid-cols-4">
-          {/* 📊 Dashboard Summary Cards */}
-          <div className="lg:col-span-3 space-y-6">
-           <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-              <AdminSummaryCard title="Unassigned Orders" value="5" icon="📦" />
-              <AdminSummaryCard title="Deliveries In Progress" value="8" icon="🚚" />
-              <AdminSummaryCard title="Completed Today" value="12" icon="✅" />
-              <AdminSummaryCard title="Low Inventory Items" value="3" icon="📉" />
-              <AdminSummaryCard title="Active Drivers" value="4" icon="🧑‍✈️" />
-              <AdminSummaryCard title="Scheduled Today" value="9" icon="📅" />
-              <AdminSummaryCard title="Issues Flagged" value="1" icon="🆘" />
-              <AdminSummaryCard title="Avg Delivery Time" value="2h 35m" icon="⏱️" />
-              <AdminSummaryCard title="Cancelled Orders" value="2" icon="❌" />
-            </div>
-          </div>
+        {/* 📊 Dashboard Summary, Inventory Alerts, and Today’s Orders */}  
+<h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2>
+<section className="grid gap-6 lg:grid-cols-4">
+  {/* 📊 Dashboard Summary Cards */}
+  <div className="lg:col-span-2 space-y-6">
+    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+      <AdminSummaryCard title="Unassigned Orders" value="5" icon="📦" />
+      <AdminSummaryCard title="Deliveries In Progress" value="8" icon="🚚" />
+      <AdminSummaryCard title="Completed Today" value="12" icon="✅" />
+      <AdminSummaryCard title="Low Inventory Items" value="3" icon="📉" />
+      <AdminSummaryCard title="Active Drivers" value="4" icon="🧑‍✈️" />
+      <AdminSummaryCard title="Scheduled Today" value="9" icon="📅" />
+      <AdminSummaryCard title="Issues Flagged" value="1" icon="🆘" />
+      <AdminSummaryCard title="Avg Delivery Time" value="2h 35m" icon="⏱️" />
+      <AdminSummaryCard title="Cancelled Orders" value="2" icon="❌" />
+    </div>
+  </div>
 
-          {/* ⚠️ Low Inventory Panel */}
-          
-          <aside className="bg-white border border-red-200 rounded-xl p-5 shadow-sm h-fit">
-            <h2 className="text-2xl font-bold text-gray-800">📊 Inventory Alerts</h2>
-            <ul className="divide-y divide-red-100">
-              {[
-                { name: 'Bubble Wrap', quantity: 4 },
-                { name: 'Small Cartons', quantity: 2 },
-                { name: 'Packing Tape', quantity: 5 },
-              ].map((item, index) => (
-                <li key={index} className="py-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-gray-800">{item.name}</p>
-                      <p className="text-sm text-gray-500">
-                        Remaining: {item.quantity} units
-                      </p>
-                    </div>
-                    <span className="text-xs font-semibold bg-red-100 text-red-600 px-2 py-1 rounded-full self-start">
-                      LOW
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </aside>
-        </section>
+  {/* ⚠️ Inventory Alerts */}
+  <aside className="bg-white border border-red-200 rounded-xl p-5 shadow-sm h-fit space-y-4">
+    <h2 className="text-lg font-bold text-gray-700">⚠️ Inventory Alerts</h2>
+    <ul className="divide-y divide-red-100 text-sm">
+      {[
+        { name: 'Bubble Wrap', quantity: 4 },
+        { name: 'Small Cartons', quantity: 2 },
+        { name: 'Packing Tape', quantity: 5 },
+      ].map((item, index) => (
+        <li key={index} className="py-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="font-medium text-gray-800">{item.name}</p>
+              <p className="text-xs text-gray-500">Remaining: {item.quantity} units</p>
+            </div>
+            <span className="text-xs font-semibold bg-red-100 text-red-600 px-2 py-1 rounded-full">
+              LOW
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </aside>
+
+  {/* 📅 Orders Scheduled Today */}
+  <aside className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm h-fit space-y-4">
+    <h2 className="text-lg font-bold text-gray-700">📅 Scheduled Today</h2>
+    <ul className="divide-y divide-gray-100 text-sm">
+      {[
+        { id: 'ORD004', client: 'Michael Reyes', time: '9:00 AM' },
+        { id: 'ORD005', client: 'Sarah Cruz', time: '11:30 AM' },
+        { id: 'ORD006', client: 'Brian Lim', time: '3:45 PM' },
+      ].map((order, index) => (
+        <li key={index} className="py-2">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="font-medium text-gray-800">{order.client}</p>
+              <p className="text-xs text-gray-500">{order.id} • {order.time}</p>
+            </div>
+            <span className="text-xs font-semibold bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+              Scheduled
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </aside>
+</section>
+
 
         {/* 📦 Orders + 🎯 Tracking */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-10">
