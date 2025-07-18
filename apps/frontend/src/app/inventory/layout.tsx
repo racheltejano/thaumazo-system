@@ -11,8 +11,14 @@ export default function InventorySectionLayout({ children }: { children: React.R
 
   useEffect(() => {
     if (!auth) return;
-    if (!auth.loading && auth.role !== 'inventory_staff') {
-      router.replace('/unauthorized');
+    if (!auth.loading) {
+      if (!auth.user) {
+        router.replace('/login');
+        return;
+      }
+      if (auth.role !== 'inventory_staff') {
+        router.replace('/unauthorized');
+      }
     }
   }, [auth, router]);
 

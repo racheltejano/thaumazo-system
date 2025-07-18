@@ -321,10 +321,9 @@ export default function DashboardLayout({
     };
   }, [profileMenuOpen]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     setProfileMenuOpen(false);
-    await supabase.auth.signOut();
-    router.push('/login');
+    router.push('/logout');
   };
 
   // Logo path variable for dashboard navbar

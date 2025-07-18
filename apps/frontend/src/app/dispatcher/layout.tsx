@@ -11,8 +11,14 @@ export default function DispatcherLayout({ children }: { children: React.ReactNo
 
   useEffect(() => {
     if (!auth) return;
-    if (!auth.loading && auth.role !== 'dispatcher') {
-      router.replace('/unauthorized');
+    if (!auth.loading) {
+      if (!auth.user) {
+        router.replace('/login');
+        return;
+      }
+      if (auth.role !== 'dispatcher') {
+        router.replace('/unauthorized');
+      }
     }
   }, [auth, router]);
 

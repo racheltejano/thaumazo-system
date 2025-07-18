@@ -11,8 +11,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!auth) return;
-    if (!auth.loading && auth.role !== 'admin') {
-      router.replace('/unauthorized');
+    if (!auth.loading) {
+      if (!auth.user) {
+        router.replace('/login');
+        return;
+      }
+      if (auth.role !== 'admin') {
+        router.replace('/unauthorized');
+      }
     }
   }, [auth, router]);
 
