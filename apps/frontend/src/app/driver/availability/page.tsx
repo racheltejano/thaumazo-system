@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { startOfWeek, addDays, format, isToday, isPast } from 'date-fns'
 import DashboardLayout from '@/components/DashboardLayout'
-// import RoleGuard from '@/components/auth/RoleGuard'
 
 type AvailabilityEntry = {
   id: string

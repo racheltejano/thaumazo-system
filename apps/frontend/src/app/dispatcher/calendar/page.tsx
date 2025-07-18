@@ -1,5 +1,4 @@
 'use client'
-import RoleGuard from '@/components/auth/RoleGuard'
 import { useEffect, useState } from 'react'
 import {
   Calendar,
@@ -349,8 +348,7 @@ export default function DispatcherCalendarPage() {
   }
 
   return (
-    <RoleGuard requiredRole="dispatcher">
-  <DndProvider backend={HTML5Backend}>
+    <DndProvider backend={HTML5Backend}>
     <div className="bg-gray-50 text-gray-800 min-h-screen">
       <div className="flex px-4 py-4 gap-4">
         {/* Sidebar */}
@@ -487,7 +485,6 @@ export default function DispatcherCalendarPage() {
       />
     )}
   </DndProvider>
-  </RoleGuard>
 )
 
 }

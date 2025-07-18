@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import RoleGuard from '@/components/auth/RoleGuard'
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
   return `${prefix}_${random}`
@@ -44,7 +43,6 @@ export default function GenerateTrackingIdPage() {
   }
 
    return (
-      <RoleGuard requiredRole="admin">  
     <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">🎯 Generate Tracking ID</h1>
       <button
@@ -72,6 +70,5 @@ export default function GenerateTrackingIdPage() {
         </div>
       )}
     </main>
-    </RoleGuard>
   )
 }

@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AdminSummaryCard from '@/components/AdminSummaryCard/page'
-import RoleGuard from '@/components/auth/RoleGuard'
 import { useAuth } from '@/lib/AuthContext';
 
 function generateTrackingId(prefix = 'TXT') {
@@ -108,8 +107,7 @@ export default function AdminDashboard() {
   }
 
    return (
-    <RoleGuard requiredRole="admin">
-      <main className="px-6 py-10 space-y-16 bg-[#f9fafb]">
+    <main className="px-6 py-10 space-y-16 bg-[#f9fafb]">
         {/* 📊 Overview + ⚠️ Inventory Alerts */}
         {/* 📊 Dashboard Summary, Inventory Alerts, and Today’s Orders */}  
 <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2>
@@ -299,6 +297,5 @@ export default function AdminDashboard() {
           </div>
         </section>
       </main>
-    </RoleGuard>
   )
 }

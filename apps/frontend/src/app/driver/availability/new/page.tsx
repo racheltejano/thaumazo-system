@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 import { addDays, startOfWeek, format } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
 import DashboardLayout from '@/components/DashboardLayout'
-// import RoleGuard from '@/components/auth/RoleGuard'
 
 const SHIFT_PRESETS = {
   morning: { label: 'Morning (8AM–12PM)', start: '08:00', end: '12:00', hours: 4 },

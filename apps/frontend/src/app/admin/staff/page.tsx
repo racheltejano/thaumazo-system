@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Settings } from 'lucide-react';
-import RoleGuard from '@/components/auth/RoleGuard'
 
 const sortOptions = [
   { label: 'Newest', value: 'newest' },
@@ -107,28 +106,25 @@ export default function StaffManagementPage() {
 
   if (loading) {
     return (
-      <RoleGuard requiredRole="admin">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6">
-              <div className="animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-                <div className="space-y-3">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="h-12 bg-gray-200 rounded"></div>
-                  ))}
-                </div>
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6">
+            <div className="animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-12 bg-gray-200 rounded"></div>
+                ))}
               </div>
             </div>
           </div>
         </div>
-      </RoleGuard>
+      </div>
     );
   }
 
   return (
-      <RoleGuard requiredRole="admin"> 
-        <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-2xl shadow p-6 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <h2 className="text-xl font-bold text-black">👥 Staff Management</h2>
@@ -350,6 +346,5 @@ export default function StaffManagementPage() {
             )}
           </div>
         </div>
-      </RoleGuard>
   );
 }
