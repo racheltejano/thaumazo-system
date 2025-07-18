@@ -70,6 +70,7 @@ export default function DriverCalendarPage() {
         .from('orders')
         .select(`
           id,
+          tracking_id,
           pickup_date,
           pickup_time,
           delivery_window_start,
@@ -113,7 +114,7 @@ export default function DriverCalendarPage() {
 
         return {
           id: o.id,
-          title: `Order #${o.id}`,
+          title: `Tracking #${o.tracking_id}`,
           start: pickupDateTime,
           end: endDateTime,
           type: 'order',
@@ -312,7 +313,7 @@ export default function DriverCalendarPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Order #{selectedOrder.id}</h3>
+              <h3 className="text-lg font-semibold">Tracking #{selectedOrder.tracking_id}</h3>
               <button
                 onClick={() => setSelectedOrder(null)}
                 className="text-gray-400 hover:text-gray-600"

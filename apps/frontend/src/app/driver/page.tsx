@@ -34,6 +34,7 @@ type WeatherData = {
 
 type Order = {
   id: string
+  tracking_id: string
   pickup_date: string
   pickup_time: string
   delivery_window_start: string | null
@@ -157,6 +158,7 @@ export default function DriverCalendarPage() {
         .from('orders')
         .select(`
           id,
+          tracking_id,
           pickup_date,
           pickup_time,
           delivery_window_start,
@@ -202,7 +204,7 @@ export default function DriverCalendarPage() {
 
         return {
           id: o.id,
-          title: `Order #${o.id}`,
+          title: `Tracking #${o.tracking_id}`,
           start: pickupDateTime,
           end: endDateTime,
           type: 'order',
@@ -243,7 +245,7 @@ export default function DriverCalendarPage() {
       // Check if this order belongs to the current driver
       const { data: orderCheck, error: checkError } = await supabase
         .from('orders')
-        .select('id, driver_id, status')
+        .select('id, tracking_id, driver_id, status')
         .eq('id', orderId)
         .single()
 
@@ -432,187 +434,83 @@ export default function DriverCalendarPage() {
     )
   }
 
-  return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Weather Info Card */}
-      <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 max-w-md">
-        <h2 className="text-lg font-semibold mb-2">🌤️ Current Weather</h2>
-        {weatherLoading ? (
-          <p>Loading weather...</p>
-        ) : weatherError ? (
-          <p className="text-red-600">{weatherError}</p>
-        ) : weather ? (
-          <div>
-            <p><strong>Temperature:</strong> {weather.temperature}°C</p>
-            <p><strong>Wind Speed:</strong> {weather.windspeed} km/h</p>
-            <p><strong>Condition:</strong> {weather.weatherDescription}</p>
-          </div>
-        ) : (
-          <p>No weather data available.</p>
-        )}
+ return (
+  <div className="max-w-7xl mx-auto px-4 py-8">
+
+    {/* Dashboard Summary Cards */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {/* Hours Scheduled */}
+      <div className="bg-white rounded-xl shadow p-4 border border-gray-200 text-center">
+        <div className="text-2xl font-bold text-orange-600">{getTotalHours().toFixed(1)}</div>
+        <div className="text-sm text-gray-600">Hours Scheduled</div>
       </div>
-
-      {/* Upcoming Orders Next 7 Days */}
-      <div className="mb-6 p-4 rounded-xl bg-white border border-gray-200 shadow max-w-md">
-        <h2 className="text-lg font-semibold text-orange-600 mb-3">📅 Upcoming Orders (Next 7 Days)</h2>
-        {upcomingOrders.length === 0 ? (
-          <p className="text-gray-500 italic">No upcoming orders in the next 7 days.</p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {upcomingOrders.map((orderEvent) => (
-              <li key={orderEvent.id} className="flex justify-between items-center">
-                <div>
-                  <p><strong>Order #{orderEvent.id}</strong></p>
-                  <p>{moment(orderEvent.start).format('ddd, MMM D, hh:mm A')}</p>
-                </div>
-                <span
-                  className="text-xs font-semibold px-2 py-1 rounded"
-                  style={{ backgroundColor: getStatusColor(orderEvent.order?.status || 'order_placed'), color: 'white' }}
-                >
-                  {getStatusLabel(orderEvent.order?.status || 'order_placed')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* Orders Assigned */}
+      <div className="bg-white rounded-xl shadow p-4 border border-gray-200 text-center">
+        <div className="text-2xl font-bold text-blue-600">{getOrderCount()}</div>
+        <div className="text-sm text-gray-600">Orders Assigned</div>
       </div>
-
-
-      {/* Dashboard Summary Placeholder */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-
-  {/* Assigned Orders Today */}
-  <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
-    <h2 className="text-lg font-semibold text-orange-600 mb-3">📦 Assigned Orders Today</h2>
-    {events.filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day')).length === 0 ? (
-      <p className="text-sm text-gray-500 italic">You have no assigned orders today.</p>
-    ) : (
-      <ul className="space-y-2">
-        {events
-          .filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day'))
-          .map(order => (
-            <li key={order.id} className="flex justify-between items-center text-sm">
-              <div>
-                <p className="font-medium">Order #{order.id}</p>
-                <p className="text-gray-500">{moment(order.start).format('hh:mm A')} → {moment(order.end).format('hh:mm A')}</p>
-              </div>
-              <span
-                className="text-xs font-semibold px-2 py-1 rounded"
-                style={{ backgroundColor: getStatusColor(order.order?.status || 'order_placed'), color: 'white' }}
-              >
-                {getStatusLabel(order.order?.status || 'order_placed')}
-              </span>
-            </li>
-          ))}
-      </ul>
-    )}
-  </div>
-
- {/* Weekly Availability */}
-<div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-  <h2 className="text-xl font-semibold text-orange-600 mb-4">🕐 Weekly Availability</h2>
-
-  {filteredAvailability.length === 0 ? (
-    <div className="text-center text-sm text-red-500 font-medium">⚠️ You haven't set your availability for this week.</div>
-  ) : (
-    <div className="overflow-x-auto">
-      <table className="min-w-full table-auto text-sm">
-        <thead className="bg-gray-100">
-          <tr className="text-left text-gray-600">
-            <th className="px-4 py-2 text-sm font-medium">Day</th>
-            <th className="px-4 py-2 text-sm font-medium">Start Time</th>
-            <th className="px-4 py-2 text-sm font-medium">End Time</th>
-            <th className="px-4 py-2 text-sm font-medium">Duration</th>
-            <th className="px-4 py-2 text-sm font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {filteredAvailability
-            .sort((a, b) => a.start.getTime() - b.start.getTime())
-            .map((block) => {
-              const startTime = moment(block.start).format('hh:mm A');
-              const endTime = moment(block.end).format('hh:mm A');
-              const duration = ((block.end.getTime() - block.start.getTime()) / (1000 * 60 * 60)).toFixed(2);
-              const isUnavailable = block.title.includes('Unavailable');
-              
-              return (
-                <tr key={block.id} className="hover:bg-gray-50 transition-all cursor-pointer">
-                  <td className="px-4 py-2 text-gray-600">{moment(block.start).format('dddd, MMM D')}</td>
-                  <td className="px-4 py-2 text-gray-600">{startTime}</td>
-                  <td className="px-4 py-2 text-gray-600">{endTime}</td>
-                  <td className="px-4 py-2 text-gray-600">{duration} hrs</td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${isUnavailable ? 'bg-red-400 text-white' : 'bg-green-400 text-white'}`}
-                    >
-                      {isUnavailable ? 'Unavailable' : 'Available'}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-        </tbody>
-      </table>
+      {/* Orders Delivered */}
+      <div className="bg-white rounded-xl shadow p-4 border border-gray-200 text-center">
+        <div className="text-2xl font-bold text-green-600">
+          {events.filter(e => e.type === 'order' && e.order?.status === 'delivered').length}
+        </div>
+        <div className="text-sm text-gray-600">Orders Delivered</div>
+      </div>
     </div>
-  )}
-</div>
 
+    {/* Current Weather + Assigned Orders Today + Calendar View */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
 
-</div>
-
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-black">📅 My Schedule</h1>
-        <p className="text-sm text-gray-500">
-          View your availability and assigned orders
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-6 text-center text-sm font-medium text-red-600 bg-red-50 py-3 px-4 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">{getTotalHours().toFixed(1)}</div>
-            <div className="text-sm text-gray-600">Hours Scheduled</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{getOrderCount()}</div>
-            <div className="text-sm text-gray-600">Orders Assigned</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {events.filter(e => e.type === 'order' && e.order?.status === 'delivered').length}
+      {/* Left Column: Weather + Assigned Orders (stacked) */}
+      <div className="md:col-span-1 space-y-6 max-w-md">
+        {/* Current Weather */}
+        <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800">
+          <h2 className="text-lg font-semibold mb-2">🌤️ Current Weather</h2>
+          {weatherLoading ? (
+            <p>Loading weather...</p>
+          ) : weatherError ? (
+            <p className="text-red-600">{weatherError}</p>
+          ) : weather ? (
+            <div>
+              <p><strong>Temperature:</strong> {weather.temperature}°C</p>
+              <p><strong>Wind Speed:</strong> {weather.windspeed} km/h</p>
+              <p><strong>Condition:</strong> {weather.weatherDescription}</p>
             </div>
-            <div className="text-sm text-gray-600">Orders Delivered</div>
-          </div>
+          ) : (
+            <p>No weather data available.</p>
+          )}
+        </div>
+
+        {/* Assigned Orders Today */}
+        <div className="p-4 rounded-xl bg-white border border-gray-200 shadow">
+          <h2 className="text-lg font-semibold text-orange-600 mb-3">📦 Assigned Orders Today</h2>
+          {events.filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day')).length === 0 ? (
+            <p className="text-sm text-gray-500 italic">You have no assigned orders today.</p>
+          ) : (
+            <ul className="space-y-2">
+              {events
+                .filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day'))
+                .map(order => (
+                  <li key={order.id} className="flex justify-between items-center text-sm">
+                    <div>
+                      <p className="font-medium">Tracking #{order.order?.tracking_id}</p>
+                      <p className="text-gray-500">{moment(order.start).format('hh:mm A')} → {moment(order.end).format('hh:mm A')}</p>
+                    </div>
+                    <span
+                      className="text-xs font-semibold px-2 py-1 rounded"
+                      style={{ backgroundColor: getStatusColor(order.order?.status || 'order_placed'), color: 'white' }}
+                    >
+                      {getStatusLabel(order.order?.status || 'order_placed')}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
         </div>
       </div>
 
-      {/* Calendar Controls */}
-      <div className="flex items-center gap-2 mb-4">
-        <label className="text-sm font-medium">View:</label>
-        <select
-          value={currentView}
-          onChange={(e) => setCurrentView(e.target.value as View)}
-          className="border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-        >
-          <option value="month">Month</option>
-          <option value="week">Week</option>
-          <option value="day">Day</option>
-        </select>
-      </div>
-
-      {/* Calendar */}
-      <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
+      {/* Right Column: Calendar View (75%) */}
+      <div className="md:col-span-3 bg-white rounded-xl shadow overflow-hidden border border-gray-200">
         <Calendar
           localizer={localizer}
           events={events}
@@ -625,20 +523,20 @@ export default function DriverCalendarPage() {
           eventPropGetter={(event: DriverEvent) => {
             let backgroundColor = '#3182ce'
             let textColor = '#fff'
-            
+
             if (event.type === 'availability') {
               backgroundColor = event.title.includes('Unavailable') ? '#e53e3e' : '#38a169'
             } else if (event.type === 'order' && event.order) {
               backgroundColor = getStatusColor(event.order.status)
             }
-            
-            return { 
-              style: { 
-                backgroundColor, 
+
+            return {
+              style: {
+                backgroundColor,
                 color: textColor,
                 border: 'none',
                 borderRadius: '4px'
-              } 
+              }
             }
           }}
           dayPropGetter={(date) => {
@@ -647,127 +545,142 @@ export default function DriverCalendarPage() {
           }}
         />
       </div>
+    </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 mt-6">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded"></div>
-          <span>Available</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-500 rounded"></div>
-          <span>Unavailable</span>
-        </div>
-        {ORDER_STATUSES.map((status) => (
-          <div key={status.value} className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: status.color }}></div>
-            <span>{status.label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Order Details Modal */}
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Order #{selectedOrder.id}</h3>
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="text-gray-400 hover:text-gray-600"
-                disabled={statusLoading}
+    {/* Upcoming Orders Next 7 Days */}
+    <div className="p-4 rounded-xl bg-white border border-gray-200 shadow max-w-full mb-8">
+      <h2 className="text-lg font-semibold text-orange-600 mb-3">📅 Upcoming Orders (Next 7 Days)</h2>
+      {upcomingOrders.length === 0 ? (
+        <p className="text-gray-500 italic">No upcoming orders in the next 7 days.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {upcomingOrders.map((orderEvent) => (
+            <li key={orderEvent.id} className="flex justify-between items-center">
+              <div>
+                <p><strong>Tracking #{orderEvent.order?.tracking_id}</strong></p>
+                <p>{moment(orderEvent.start).format('ddd, MMM D, hh:mm A')}</p>
+              </div>
+              <span
+                className="text-xs font-semibold px-2 py-1 rounded"
+                style={{ backgroundColor: getStatusColor(orderEvent.order?.status || 'order_placed'), color: 'white' }}
               >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-sm">
-              <div>
-                <span className="font-medium">Pickup Date:</span> {selectedOrder.pickup_date}
-              </div>
-              <div>
-                <span className="font-medium">Pickup Time:</span> {selectedOrder.pickup_time}
-              </div>
-              {selectedOrder.delivery_window_start && (
-                <div>
-                  <span className="font-medium">Delivery Window:</span>{' '}
-                  {selectedOrder.delivery_window_start} - {selectedOrder.delivery_window_end}
-                </div>
-              )}
-              {selectedOrder.vehicle_type && (
-                <div>
-                  <span className="font-medium">Vehicle Type:</span> {selectedOrder.vehicle_type}
-                </div>
-              )}
-              {selectedOrder.tail_lift_required && (
-                <div>
-                  <span className="font-medium">Tail Lift:</span> Required
-                </div>
-              )}
-              
-              {/* Current Status */}
-              <div>
-                <span className="font-medium">Current Status:</span>{' '}
-                <span 
-                  className="px-2 py-1 rounded text-xs font-medium text-white"
-                  style={{ backgroundColor: getStatusColor(selectedOrder.status) }}
-                >
-                  {getStatusLabel(selectedOrder.status)}
-                </span>
-              </div>
-
-              {/* Status Update Section */}
-              <div className="border-t pt-3">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Update Status:
-                </label>
-                <div className="space-y-2">
-                  {getAvailableNextStatuses(selectedOrder.status).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => updateOrderStatus(selectedOrder.id, status)}
-                      disabled={statusLoading}
-                      className={`w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        statusLoading 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'text-white hover:opacity-90'
-                      }`}
-                      style={{ 
-                        backgroundColor: statusLoading ? '#f3f4f6' : getStatusColor(status)
-                      }}
-                    >
-                      {statusLoading ? 'Updating...' : `Mark as ${getStatusLabel(status)}`}
-                    </button>
-                  ))}
-                </div>
-                
-                {getAvailableNextStatuses(selectedOrder.status).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">
-                    No status updates available for this order.
-                  </p>
-                )}
-              </div>
-
-              {selectedOrder.special_instructions && (
-                <div className="border-t pt-3">
-                  <span className="font-medium">Special Instructions:</span>
-                  <p className="text-gray-600 mt-1">{selectedOrder.special_instructions}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex gap-2">
-              <button
-                onClick={() => setSelectedOrder(null)}
-                disabled={statusLoading}
-                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-md text-sm font-medium disabled:opacity-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+                {getStatusLabel(orderEvent.order?.status || 'order_placed')}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
-  )
+
+
+
+
+    {/* Error Message */}
+    {error && (
+      <div className="mb-6 text-center text-sm font-medium text-red-600 bg-red-50 py-3 px-4 rounded-lg">
+        {error}
+      </div>
+    )}
+
+
+    {/* Order Details Modal */}
+    {selectedOrder && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">Order #{selectedOrder.id}</h3>
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="text-gray-400 hover:text-gray-600"
+              disabled={statusLoading}
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <div>
+              <span className="font-medium">Pickup Date:</span> {selectedOrder.pickup_date}
+            </div>
+            <div>
+              <span className="font-medium">Pickup Time:</span> {selectedOrder.pickup_time}
+            </div>
+            {selectedOrder.delivery_window_start && (
+              <div>
+                <span className="font-medium">Delivery Window:</span>{' '}
+                {selectedOrder.delivery_window_start} - {selectedOrder.delivery_window_end}
+              </div>
+            )}
+            {selectedOrder.vehicle_type && (
+              <div>
+                <span className="font-medium">Vehicle Type:</span> {selectedOrder.vehicle_type}
+              </div>
+            )}
+            {selectedOrder.tail_lift_required && (
+              <div>
+                <span className="font-medium">Tail Lift:</span> Required
+              </div>
+            )}
+
+            {/* Current Status */}
+            <div>
+              <span className="font-medium">Current Status:</span>{' '}
+              <span
+                className="px-2 py-1 rounded text-xs font-medium text-white"
+                style={{ backgroundColor: getStatusColor(selectedOrder.status) }}
+              >
+                {getStatusLabel(selectedOrder.status)}
+              </span>
+            </div>
+
+            {/* Status Update Buttons */}
+            <div className="border-t pt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Update Status:</label>
+              <div className="space-y-2">
+                {getAvailableNextStatuses(selectedOrder.status).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => updateOrderStatus(selectedOrder.id, status)}
+                    disabled={statusLoading}
+                    className={`w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      statusLoading
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'text-white hover:opacity-90'
+                    }`}
+                    style={{ backgroundColor: statusLoading ? '#f3f4f6' : getStatusColor(status) }}
+                  >
+                    {statusLoading ? 'Updating...' : `Mark as ${getStatusLabel(status)}`}
+                  </button>
+                ))}
+                {getAvailableNextStatuses(selectedOrder.status).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No status updates available for this order.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Special Instructions */}
+            {selectedOrder.special_instructions && (
+              <div className="border-t pt-3">
+                <span className="font-medium">Special Instructions:</span>
+                <p className="text-gray-600 mt-1">{selectedOrder.special_instructions}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 flex gap-2">
+            <button
+              onClick={() => setSelectedOrder(null)}
+              disabled={statusLoading}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded-md text-sm font-medium disabled:opacity-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)
+
 }
