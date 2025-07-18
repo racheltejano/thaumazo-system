@@ -9,9 +9,8 @@ import {
 import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
-import { useAuth } from '@/lib/AuthContext';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image'
+
+
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -136,8 +135,6 @@ export default function DriverCalendarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [statusLoading, setStatusLoading] = useState(false)
-  const auth = useAuth();
-  const router = useRouter();
   const currentDate = moment();
   const startOfWeek = currentDate.clone().startOf('week');
   const endOfWeek = currentDate.clone().endOf('week'); 
@@ -444,13 +441,7 @@ export default function DriverCalendarPage() {
     }
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    if (auth && typeof auth.refresh === 'function') {
-      auth.refresh();
-    }
-    router.push('/login');
-  }
+  
 
   const getStatusColor = (status: string) => {
     const statusObj = ORDER_STATUSES.find(s => s.value === status)
@@ -652,7 +643,7 @@ return (
         <div className="p-6 rounded-xl bg-white border border-gray-200 shadow-sm">
           <h2 className="text-lg font-semibold text-orange-600 mb-4 flex items-center gap-2">
             <span>📦</span>
-            Today's Orders
+            Orders for Today
           </h2>
           {events.filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day')).length === 0 ? (
             <div className="text-center py-4">
@@ -780,7 +771,7 @@ return (
 
     {/* Order Details Modal */}
 {selectedOrder && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
       {/* Modal Header */}
       <div className="p-6 border-b border-gray-200 bg-gray-50">
