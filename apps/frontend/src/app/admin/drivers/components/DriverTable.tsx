@@ -114,7 +114,7 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
   return (
     <div className="bg-white rounded-2xl shadow p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-        <h2 className="text-xl font-bold text-black">🚚 Driver Management</h2>
+        <h2 className="text-xl font-bold text-black">🚚 Driver Table</h2>
         <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full md:w-auto">
           <input
             type="text"
