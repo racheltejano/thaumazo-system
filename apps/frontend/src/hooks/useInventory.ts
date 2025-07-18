@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
-import { InventoryItem, Product } from '../types/inventory.types'
+import { InventoryItem, Product } from  '@/types/inventory.types';
 
 export const useInventory = () => {
   const router = useRouter()
@@ -37,7 +37,7 @@ export const useInventory = () => {
         return
       }
 
-      if (profile.role !== 'inventory_staff') {
+      if (profile.role !== 'inventory_staff' && profile.role !== 'admin') {
         router.push('/dashboard')
         return
       }

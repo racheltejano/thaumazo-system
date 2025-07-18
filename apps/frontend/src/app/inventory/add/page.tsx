@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Product, NewProduct } from '../types/inventory.types';
-import { NewProductForm } from '../components/NewProductForm';
+import { Product, NewProduct } from '@/types/inventory.types';
+import { NewProductForm } from '@/components/inventory/NewProductForm';
 
 export default function AddInventoryPage() {
   const router = useRouter();

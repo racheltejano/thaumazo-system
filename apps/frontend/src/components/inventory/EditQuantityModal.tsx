@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { EditQtyItem } from '../types/inventory.types';
+import { EditQtyItem } from '@/types/inventory.types';
 import { X, Plus, Minus } from 'lucide-react';
 
 interface EditQuantityModalProps {

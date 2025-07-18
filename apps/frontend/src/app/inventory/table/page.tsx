@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useInventory } from '../hooks/useInventory';
-import { InventoryTable } from '../components/InventoryTable';
-import { EditQuantityModal } from '../components/EditQuantityModal';
-import { ProductDetailsModal } from '../components/ProductDetailsModal';
-import { EditQtyItem, InventoryItem } from '../types/inventory.types';
+import { useInventory } from '@/hooks/useInventory';
+import { InventoryTable } from '@/components/inventory/InventoryTable';
+import { EditQuantityModal } from '@/components/inventory/EditQuantityModal';
+import { ProductDetailsModal } from '@/components/inventory/ProductDetailsModal';
+import { EditQtyItem, InventoryItem } from '@/types/inventory.types';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';

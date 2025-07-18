@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Product, NewProduct } from '../types/inventory.types'
+import { Product, NewProduct } from '@/types/inventory.types'; // '../../types/inventory.types'
 import { NewProductForm } from './NewProductForm'
 
 interface AddInventoryModalProps {

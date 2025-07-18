@@ -1,4 +1,4 @@
-import { NewProduct } from '../types/inventory.types'
+import { NewProduct } from '@/types/inventory.types';
 
 interface NewProductFormProps {
   newProduct: NewProduct

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { InventoryItem, EditQtyItem } from '../types/inventory.types';
+import { InventoryItem, EditQtyItem } from '@/types/inventory.types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Settings, Search, ChevronUp, ChevronDown } from 'lucide-react';
 

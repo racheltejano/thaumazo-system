@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { InventoryItem, Product } from '../types/inventory.types';
+import { InventoryItem, Product } from '@/types/inventory.types';
 import { X, Edit, Save, Package, MapPin, Scale, Box, AlertTriangle } from 'lucide-react';
 
 interface ProductDetailsModalProps {
