@@ -14,22 +14,57 @@ export const exportHtmlToPdf = (elementId: string) => {
   const styles = `
     @page {
       size: A4;
-      margin: 20mm;
+      margin: 20mm 15mm;
     }
 
     body {
       font-family: 'Arial', sans-serif;
-      font-size: 14px;
-      color: #000;
+      font-size: 13px;
+      color: #111;
       background-color: #fff;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      line-height: 1.6;
+    }
+
+    header, footer {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
     }
 
     .invoice {
       max-width: 900px;
       margin: auto;
-      padding: 2rem;
+      padding: 0 10px;
+    }
+
+    h1, h2, h3 {
+      color: #EA580C;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-bottom: 2px solid #EA580C;
+      margin-bottom: 10px;
+      padding-bottom: 4px;
     }
 
     .space-y-6 > * + * {
@@ -40,40 +75,20 @@ export const exportHtmlToPdf = (elementId: string) => {
       display: flex;
     }
 
-    .flex-col {
-      flex-direction: column;
-    }
-
     .flex-row {
       flex-direction: row;
     }
 
-    .gap-6 {
-      gap: 1.5rem;
+    .flex-col {
+      flex-direction: column;
     }
 
     .justify-between {
       justify-content: space-between;
     }
 
-    .border-b-4 {
-      border-bottom: 4px solid #F97316;
-    }
-
-    .border {
-      border: 1px solid #ddd;
-    }
-
-    .text-xl {
-      font-size: 1.25rem;
-    }
-
-    .text-md {
-      font-size: 1rem;
-    }
-
-    .text-sm {
-      font-size: 0.875rem;
+    .gap-6 {
+      gap: 1.5rem;
     }
 
     .font-bold {
@@ -84,63 +99,53 @@ export const exportHtmlToPdf = (elementId: string) => {
       font-weight: 600;
     }
 
-    .text-orange-600 {
+    .text-right {
+      text-align: right;
+    }
+
+    .text-sm {
+      font-size: 0.875rem;
+    }
+
+    .text-md {
+      font-size: 1rem;
+    }
+
+    .text-orange {
       color: #EA580C;
     }
 
-    .bg-orange-500 {
-      background-color: #F97316 !important;
-    }
-
-    .text-white {
-      color: white;
-    }
-
-    .italic {
-      font-style: italic;
-    }
-
-    .text-gray-500 {
-      color: #6B7280;
+    .border {
+      border: 1px solid #ccc;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.875rem;
+      margin-top: 1rem;
+      font-size: 0.85rem;
     }
 
     th, td {
       border: 1px solid #ccc;
-      padding: 6px 8px;
+      padding: 8px 10px;
       text-align: left;
     }
 
     th {
       background-color: #F97316;
       color: white;
+      font-weight: bold;
     }
 
-    h2 {
-      color: #EA580C;
-      font-weight: 600;
-      font-size: 1rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .w-full {
-      width: 100%;
-    }
-
-    .text-right {
-      text-align: right;
+    tr:nth-child(even) td {
+      background-color: #f9f9f9;
     }
 
     img {
       max-width: 100%;
       height: auto;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      margin-top: 1rem;
     }
 
     .no-print, button, .lucide-icon, nav {
@@ -148,8 +153,18 @@ export const exportHtmlToPdf = (elementId: string) => {
     }
   `
 
-  // 🧙‍♀️ Wrap content with `.invoice space-y-6`
-  const wrappedContent = `<div class="invoice space-y-6">${content.outerHTML}</div>`
+  const wrappedContent = `
+    <div class="invoice space-y-6">
+      <header>
+        <h1>Order Report</h1>
+        <p>Generated on ${new Date().toLocaleString()}</p>
+      </header>
+      ${content.outerHTML}
+      <footer>
+        <p>Thaumazo Express — Confidential Report</p>
+      </footer>
+    </div>
+  `
 
   printWindow.document.write(`
     <html>
