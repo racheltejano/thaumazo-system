@@ -81,6 +81,7 @@ export default function DispatcherCalendarPage() {
   const [assigning, setAssigning] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [calendarType, setCalendarType] = useState<'availability' | 'orders'>('availability')
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('all')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -348,54 +349,51 @@ export default function DispatcherCalendarPage() {
   }
 
   return (
-  <RoleGuard requiredRole="dispatcher">
+    <RoleGuard requiredRole="dispatcher">
   <DndProvider backend={HTML5Backend}>
     <div className="bg-gray-50 text-gray-800 min-h-screen">
       <div className="flex px-4 py-4 gap-4">
         {/* Sidebar */}
-        <aside className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200 sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <aside
+          className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200"
+          style={{ height: currentView === 'month' ? '700px' : '400px' }}
+        >
           <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
+
           {orders.length === 0 ? (
             <p className="text-sm text-gray-500">All orders are assigned!</p>
           ) : (
-            <div className="space-y-3">
-              {orders
-                .filter((o) => o.status === 'order_placed')
-                .map((order) => (
-                  <DraggableOrder
-                    key={order.id}
-                    order={order}
-                    onClick={() => setSelectedOrder(order)}
-                  />
-              ))}
-              <button
-                onClick={handleAutoAssign}
-                disabled={assigning}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
-              >
-                {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
-              </button>
+            <div className="flex flex-col h-full">
+              {/* Scrollable orders list */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {orders
+                  .filter((o) => o.status === 'order_placed')
+                  .map((order) => (
+                    <DraggableOrder
+                      key={order.id}
+                      order={order}
+                      onClick={() => setSelectedOrder(order)}
+                    />
+                ))}
+              </div>
+
+              {/* Sticky bottom actions */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleAutoAssign}
+                  disabled={assigning}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
+                >
+                  {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
+                </button>
+                <br/>
+                <br/>
+                <br/>
+              </div>
             </div>
           )}
-
-          {/* Driver Legend */}
-          <div className="mt-6 border-t pt-4">
-            <h3 className="text-sm font-semibold mb-3">👥 Driver Colors</h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {drivers.map((driver) => (
-                <div key={driver.id} className="flex items-center gap-2">
-                  <div 
-                    className="w-4 h-4 rounded-full border border-gray-300"
-                    style={{ backgroundColor: driver.color }}
-                  />
-                  <span className="text-xs text-gray-700">
-                    {driver.first_name} {driver.last_name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
         </aside>
+
 
         {/* Main Calendar Area */}
         <section className="flex-1 space-y-4">
@@ -415,24 +413,50 @@ export default function DispatcherCalendarPage() {
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">View:</label>
-                <select
-                  value={currentView}
-                  onChange={(e) => setCurrentView(e.target.value as View)}
-                  className="border rounded-md px-3 py-1 text-sm"
-                >
-                  <option value="month">Month</option>
-                  <option value="week">Week</option>
-                  <option value="day">Day</option>
-                </select>
-              </div>
+              {calendarType === 'availability' && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">Driver:</label>
+                    <select
+                      value={selectedDriverId}
+                      onChange={(e) => setSelectedDriverId(e.target.value)}
+                      className="border rounded-md px-3 py-1 text-sm"
+                    >
+                      <option value="all">All Drivers</option>
+                      {drivers.map(driver => (
+                        <option key={driver.id} value={driver.id}>
+                          {driver.first_name} {driver.last_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">View:</label>
+                  <select
+                    value={currentView}
+                    onChange={(e) => setCurrentView(e.target.value as View)}
+                    className="border rounded-md px-3 py-1 text-sm"
+                  >
+                    <option value="month">Month</option>
+                    <option value="week">Week</option>
+                    <option value="day">Day</option>
+                  </select>
+                </div>
+
             </div>
 
             <div className="overflow-auto">
               <Calendar
                 localizer={localizer}
-                events={calendarType === 'availability' ? availabilityEvents : orderEvents}
+                events={
+                  calendarType === 'availability'
+                    ? selectedDriverId === 'all'
+                      ? availabilityEvents
+                      : availabilityEvents.filter(event => event.driverId === selectedDriverId)
+                    : orderEvents
+                }
+
                 startAccessor={(event) => event.start}
                 endAccessor={(event) => event.end}
                 view={currentView}
