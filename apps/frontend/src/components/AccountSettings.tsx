@@ -11,6 +11,42 @@ import Cropper from 'react-easy-crop';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getCroppedImg } from '@/lib/utils';
 
+// Custom styles for the zoom slider
+const sliderStyles = `
+  .slider::-webkit-slider-thumb {
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #f97316;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  
+  .slider::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #f97316;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  
+  .slider::-webkit-slider-track {
+    background: #e5e7eb;
+    border-radius: 8px;
+    height: 8px;
+  }
+  
+  .slider::-moz-range-track {
+    background: #e5e7eb;
+    border-radius: 8px;
+    height: 8px;
+  }
+`;
+
 const sidebarLinks = [
   { label: 'Profile', key: 'profile' },
   { label: 'Account', key: 'account' },
@@ -27,6 +63,19 @@ export default function AccountSettings() {
   const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  
+  // Separate state for sidebar display (saved data)
+  const [savedFirstName, setSavedFirstName] = useState('');
+  const [savedLastName, setSavedLastName] = useState('');
+  const [savedProfilePic, setSavedProfilePic] = useState<string | null>(null);
+  
+  // Check if changes have been made
+  const hasChanges = () => {
+    const nameChanged = firstName !== savedFirstName || lastName !== savedLastName;
+    const pictureChanged = previewUrl !== savedProfilePic;
+    return nameChanged || pictureChanged;
+  };
+  
   // Remove userId state
   // const [userId, setUserId] = useState<string | null>(null);
 
@@ -66,8 +115,12 @@ export default function AccountSettings() {
     // Reset all user-specific state on user change
     setFirstName('');
     setLastName('');
+    setSavedFirstName('');
+    setSavedLastName('');
+    setSavedProfilePic(null);
     setProfilePicFile(null);
     setPreviewUrl(null);
+    setOriginalImageUrl(null);
     setProfileLoading(false);
     setEmail(user?.email || '');
     setNewEmail('');
@@ -81,6 +134,8 @@ export default function AccountSettings() {
     setZoom(1);
     setCroppedAreaPixels(null);
     setCroppedImage(null);
+    setOriginalImageUrl(null);
+    setSavedProfilePic(null);
     
     // Fetch the profile data
     const fetchProfile = async () => {
@@ -93,6 +148,9 @@ export default function AccountSettings() {
       if (!error && data) {
         setFirstName(data.first_name || '');
         setLastName(data.last_name || '');
+        setSavedFirstName(data.first_name || '');
+        setSavedLastName(data.last_name || '');
+        setSavedProfilePic(data.profile_pic || null);
         setPreviewUrl(data.profile_pic || null);
       }
       setEmail(user?.email || '');
@@ -121,7 +179,9 @@ export default function AccountSettings() {
     const file = e.target.files?.[0];
     if (file) {
       setProfilePicFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
+      setOriginalImageUrl(objectUrl);
       setShowCropModal(true);
     }
   };
@@ -147,9 +207,16 @@ export default function AccountSettings() {
     setCroppedAreaPixels(croppedAreaPixels);
   };
 
+  const onCropChange = (crop: { x: number; y: number }) => {
+    // Allow full movement within the image boundaries
+    // The cropper should handle boundaries automatically with restrictPosition=false
+    setCrop(crop);
+  };
+
   const handleCropSave = async () => {
-    if (!previewUrl || !croppedAreaPixels) return;
-    const cropped = await getCroppedImg(previewUrl, croppedAreaPixels);
+    const imageToCrop = originalImageUrl || previewUrl;
+    if (!imageToCrop || !croppedAreaPixels) return;
+    const cropped = await getCroppedImg(imageToCrop, croppedAreaPixels);
     setCroppedImage(cropped);
     setPreviewUrl(cropped);
     setShowCropModal(false);
@@ -167,6 +234,8 @@ export default function AccountSettings() {
     }
     setProfileLoading(true);
     let uploadedImageUrl: string | null = previewUrl;
+    
+    // Handle profile picture update/removal
     if (profilePicFile && (croppedImage || previewUrl)) {
       // Convert croppedImage (base64) to File for upload
       const fileToUpload = croppedImage
@@ -178,7 +247,11 @@ export default function AccountSettings() {
         setProfileLoading(false);
         return;
       }
+    } else if (previewUrl === null && savedProfilePic !== null) {
+      // Profile picture is being removed
+      uploadedImageUrl = null;
     }
+    
     const { error: dbError } = await supabase
       .from('profiles')
       .update({
@@ -191,7 +264,10 @@ export default function AccountSettings() {
     if (dbError) {
       toast.error('❌ Failed to save profile.');
     } else {
-      toast.success('✅ Profile updated!');
+      toast.success('✅ Profile updated successfully!');
+      setSavedFirstName(firstName);
+      setSavedLastName(lastName);
+      setSavedProfilePic(uploadedImageUrl);
       setProfilePicFile(null);
       setCroppedImage(null);
       if (auth && typeof auth.refresh === 'function') {
@@ -205,21 +281,27 @@ export default function AccountSettings() {
     setShowPhotoMenu(false);
     fileInputRef.current?.click();
   };
+  
+  const handleRecropClick = () => {
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setShowCropModal(true);
+  };
+  
+  // Store the original uploaded image for recropping
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
 
-  const handleRemovePhoto = async () => {
+  const handleRemovePhoto = () => {
     setShowPhotoMenu(false);
-    setProfileLoading(true);
-    if (!user?.id) {
-      toast.error('User not authenticated.');
-      setProfileLoading(false);
-      return;
+    setPreviewUrl(null);
+    setCroppedImage(null);
+    setProfilePicFile(null);
+    // Clear the file input so user can select the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-    const { error } = await supabase
-      .from('profiles')
-      .update({ profile_pic: null })
-      .eq('id', user.id);
-    setProfileLoading(false);
-    if (!error) setPreviewUrl(null);
+    // Don't clear originalImageUrl so user can still upload new photos
   };
 
   // Account logic
@@ -290,6 +372,12 @@ export default function AccountSettings() {
   const profilePic = user?.user_metadata?.profile_pic || '';
   const initial = firstNameDisplay.charAt(0).toUpperCase();
 
+  // Format role for display
+  const formatRole = (role: string | null | undefined) => {
+    if (!role) return 'User';
+    return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
   if (auth?.loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -299,22 +387,24 @@ export default function AccountSettings() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <>
+      <style dangerouslySetInnerHTML={{ __html: sliderStyles }} />
+      <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-gray-200 flex flex-col items-center py-8 px-4">
         <div className="flex flex-row items-center mb-8 w-full gap-4">
           {/* Profile Picture Column */}
           <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-300 flex items-center justify-center bg-gray-200">
-            {previewUrl ? (
-              <Image src={previewUrl} alt="Profile" width={64} height={64} className="object-cover w-full h-full" />
+            {savedProfilePic ? (
+              <Image src={savedProfilePic} alt="Profile" width={64} height={64} className="object-cover w-full h-full" />
             ) : (
-              <span className="w-full h-full flex items-center justify-center text-2xl font-bold text-white bg-orange-500">{firstName.charAt(0).toUpperCase()}</span>
+              <span className="w-full h-full flex items-center justify-center text-2xl font-bold text-white bg-orange-500">{savedFirstName.charAt(0).toUpperCase()}</span>
             )}
           </div>
           {/* Name and Role Column */}
           <div className="flex flex-col flex-1 min-w-0">
-            <div className="text-lg font-semibold text-gray-900 truncate">{firstName} {lastName}</div>
-            <div className="text-xs text-gray-500 capitalize mt-1 truncate">{role || 'User'}</div>
+            <div className="text-lg font-semibold text-gray-900 truncate">{savedFirstName} {savedLastName}</div>
+            <div className="text-xs text-gray-500 capitalize mt-1 truncate">{formatRole(role)}</div>
           </div>
         </div>
         <nav className="w-full flex flex-col gap-2">
@@ -345,8 +435,16 @@ export default function AccountSettings() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                 <input className="w-full p-3 border rounded-xl" value={lastName} onChange={e => setLastName(e.target.value)} />
               </div>
-              <Button onClick={handleProfileUpdate} disabled={profileLoading} className="w-full bg-orange-500 hover:bg-orange-600 text-white mt-2">
-                {profileLoading ? 'Saving...' : 'Save Profile'}
+              <Button 
+                onClick={handleProfileUpdate} 
+                disabled={profileLoading || !hasChanges()} 
+                className={`w-full mt-2 ${
+                  hasChanges() 
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {profileLoading ? 'Saving...' : hasChanges() ? 'Save Profile' : 'No Changes'}
               </Button>
             </div>
             {/* Right column: 40% */}
@@ -361,7 +459,7 @@ export default function AccountSettings() {
                   )}
                 </div>
                 {/* Edit button below the picture */}
-                <div className="flex justify-center mt-4">
+                <div className="flex justify-center mt-4 gap-2">
                   <button
                     type="button"
                     className="bg-white border border-gray-300 rounded-full px-4 py-2 shadow hover:bg-gray-50 flex items-center gap-1"
@@ -370,6 +468,16 @@ export default function AccountSettings() {
                     <Pencil className="w-4 h-4 mr-1" />
                     <span className="text-xs font-medium">Edit</span>
                   </button>
+                  {croppedImage && (
+                    <button
+                      type="button"
+                      className="bg-orange-500 hover:bg-orange-600 text-white rounded-full px-4 py-2 shadow hover:shadow-md flex items-center gap-1 transition-colors"
+                      onClick={handleRecropClick}
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      <span className="text-xs font-medium">Recrop</span>
+                    </button>
+                  )}
                 </div>
                 {showPhotoMenu && (
                   <div className="absolute z-10 left-1/2 -translate-x-1/2 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-2 flex flex-col text-sm">
@@ -573,16 +681,54 @@ export default function AccountSettings() {
             {/* Suppress TS error for Cropper JSX usage */}
             {/* @ts-ignore */}
             <Cropper
-              image={previewUrl || undefined}
+              image={originalImageUrl || previewUrl || undefined}
               crop={crop}
               zoom={zoom}
               aspect={1}
               cropShape="round"
               showGrid={false}
-              onCropChange={setCrop}
+              onCropChange={onCropChange}
               onZoomChange={setZoom}
               onCropComplete={onCropComplete}
+              minZoom={1}
+              maxZoom={3}
+              zoomSpeed={0.1}
+              restrictPosition={true}
+              objectFit="contain"
             />
+          </div>
+          {/* Zoom Controls */}
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setZoom(Math.max(1, zoom - 0.02))}
+              disabled={zoom <= 1}
+            >
+              Zoom Out
+            </Button>
+            <div className="flex items-center gap-2 min-w-[200px]">
+              <input
+                type="range"
+                min="1"
+                max="3"
+                step="0.02"
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+              />
+              <span className="text-sm text-gray-600 min-w-[60px] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setZoom(Math.min(3, zoom + 0.02))}
+              disabled={zoom >= 3}
+            >
+              Zoom In
+            </Button>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowCropModal(false)}>Cancel</Button>
@@ -590,6 +736,7 @@ export default function AccountSettings() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </>
   );
 } 
