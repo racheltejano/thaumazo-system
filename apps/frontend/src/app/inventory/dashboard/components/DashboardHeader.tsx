@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { Plus, FolderOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -26,13 +26,22 @@ export default function DashboardHeader() {
         <h1 className="text-3xl font-bold">Inventory Dashboard</h1>
         <p className="mt-2 text-gray-700">Manage your inventory items and track stock levels</p>
       </div>
-      <button
-        onClick={() => router.push('/inventory/add')}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-      >
-        <Plus className="h-4 w-4" />
-        Add New Item
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={() => router.push('/inventory/categories')}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+        >
+          <FolderOpen className="h-4 w-4" />
+          Categories
+        </button>
+        <button
+          onClick={() => router.push('/inventory/add')}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add New Item
+        </button>
+      </div>
     </div>
   );
 } 

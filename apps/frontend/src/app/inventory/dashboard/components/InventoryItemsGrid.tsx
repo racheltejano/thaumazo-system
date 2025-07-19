@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import InventoryItemCard from './InventoryItemCard';
+import { useInventory } from '@/hooks/useInventory';
 
 // Sample data for demonstration
 const sampleItems = [
@@ -63,12 +65,48 @@ const sampleItems = [
 
 export default function InventoryItemsGrid() {
   const [isVisible, setIsVisible] = useState(false);
+  const { inventoryItems, loading } = useInventory();
+  const router = useRouter();
 
   useEffect(() => {
     // Trigger animation after component mounts
     const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
+
+  const getStockStatus = (totalStock: number): 'in_stock' | 'low_stock' | 'out_of_stock' => {
+    if (totalStock === 0) return 'out_of_stock';
+    if (totalStock <= 10) return 'low_stock';
+    return 'in_stock';
+  };
+
+  const calculateAveragePrice = (item: any): string => {
+    const variants = item.inventory_items_variants || [];
+    if (variants.length === 0) return '$0.00';
+    
+    const totalPrice = variants.reduce((sum: number, variant: any) => 
+      sum + (variant.selling_price || 0), 0
+    );
+    const avgPrice = totalPrice / variants.length;
+    return `$${avgPrice.toFixed(2)}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-gray-500 text-lg">Loading inventory items...</div>
+      </div>
+    );
+  }
+
+  if (inventoryItems.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-gray-500 text-lg">No inventory items found</div>
+        <p className="text-gray-400 mt-2">Create your first item to get started.</p>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -79,9 +117,19 @@ export default function InventoryItemsGrid() {
       }`}
     >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sampleItems.map((item, index) => (
-          <div key={index}>
-            <InventoryItemCard item={item} />
+        {inventoryItems.map((item) => (
+          <div key={item.id}>
+            <InventoryItemCard 
+              item={{
+                name: item.name,
+                description: item.description || 'No description available',
+                stockStatus: getStockStatus(item.totalStock || 0),
+                category: item.category?.name || 'Uncategorized',
+                totalStock: item.totalStock || 0,
+                variants: item.variantsCount || 0,
+                avgPrice: calculateAveragePrice(item),
+              }} 
+            />
           </div>
         ))}
       </div>

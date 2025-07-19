@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { NewInventoryItem, NewInventoryVariant } from '@/types/inventory.types';
 import { Plus, Trash2, ArrowLeft, AlertCircle, Save } from 'lucide-react';
+import CategorySelector from '@/components/inventory/CategorySelector';
 
 export default function AddInventoryPage() {
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(false);
   const [newItem, setNewItem] = useState<NewInventoryItem>({ 
     name: '', 
-    category: '', 
+    category_id: null, 
     description: '' 
   });
   const [variants, setVariants] = useState<NewInventoryVariant[]>([{
@@ -109,7 +110,7 @@ export default function AddInventoryPage() {
         .from('inventory_items')
         .insert([{
           name: newItem.name,
-          category: newItem.category,
+          category_id: newItem.category_id,
           description: newItem.description
         }])
         .select()
@@ -168,7 +169,7 @@ export default function AddInventoryPage() {
       }
 
       setMessage('✅ Item created successfully!');
-      setNewItem({ name: '', category: '', description: '' });
+      setNewItem({ name: '', category_id: null, description: '' });
       setVariants([{
         item_id: '',
         supplier_name: '',
@@ -262,12 +263,10 @@ export default function AddInventoryPage() {
               <label className="block text-sm font-bold text-gray-700 mb-2">
                 Category
               </label>
-              <input
-                type="text"
-                value={newItem.category}
-                onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="Enter category"
+              <CategorySelector
+                value={newItem.category_id}
+                onChange={(category_id) => setNewItem({ ...newItem, category_id })}
+                placeholder="Select or create category"
               />
             </div>
           </div>

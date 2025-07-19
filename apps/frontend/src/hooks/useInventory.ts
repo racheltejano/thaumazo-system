@@ -57,11 +57,16 @@ export const useInventory = () => {
   }, [router, auth])
 
   const fetchInventoryData = async () => {
-    // Fetch inventory items with variant summaries
+    // Fetch inventory items with variant summaries and category info
     const { data: itemsData, error: itemsError } = await supabase
       .from('inventory_items')
       .select(`
         *,
+        inventory_items_categories (
+          id,
+          name,
+          description
+        ),
         inventory_items_variants (
           id,
           cost_price,
@@ -109,7 +114,7 @@ export const useInventory = () => {
         inventory_items (
           id,
           name,
-          category,
+          category_id,
           description
         )
       `)

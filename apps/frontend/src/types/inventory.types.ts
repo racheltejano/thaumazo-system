@@ -1,7 +1,12 @@
 export interface InventoryItem {
   id: string
   name: string
-  category: string | null
+  category_id: string | null
+  category?: {
+    id: string
+    name: string
+    description: string | null
+  }
   description: string | null
   created_at: string
   variantsCount?: number
@@ -39,7 +44,7 @@ export interface InventoryMovement {
 
 export interface NewInventoryItem {
   name: string
-  category: string
+  category_id: string | null
   description: string
 }
 

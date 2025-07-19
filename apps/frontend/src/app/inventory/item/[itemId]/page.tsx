@@ -39,10 +39,17 @@ export default function ItemProfilePage() {
     setError('');
 
     try {
-      // Fetch item details
+      // Fetch item details with category
       const { data: itemData, error: itemError } = await supabase
         .from('inventory_items')
-        .select('*')
+        .select(`
+          *,
+          inventory_items_categories (
+            id,
+            name,
+            description
+          )
+        `)
         .eq('id', itemId)
         .single();
 
@@ -213,7 +220,7 @@ export default function ItemProfilePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{item.name}</h1>
-            <p className="text-gray-600 mt-1">{item.category || 'No category'}</p>
+            <p className="text-gray-600 mt-1">{item.category?.name || 'No category'}</p>
           </div>
           <button
             onClick={() => setShowAddVariant(true)}
@@ -239,7 +246,7 @@ export default function ItemProfilePage() {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Category</label>
-              <p className="text-gray-900">{item.category || 'N/A'}</p>
+              <p className="text-gray-900">{item.category?.name || 'N/A'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Description</label>
