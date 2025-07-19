@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { startOfWeek, addDays, format, isToday, isPast } from 'date-fns'
-import DashboardLayout from '@/components/DashboardLayout'
 
 type AvailabilityEntry = {
   id: string
@@ -134,20 +133,17 @@ export default function DriverAvailabilityView() {
 
   if (loading) {
     return (
-      <DashboardLayout role="driver" userName="Driver">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading availability...</p>
-          </div>
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading availability...</p>
         </div>
-      </DashboardLayout>
+      </div>
     )
   }
 
   return (
-    <DashboardLayout role="driver" userName="Driver">
-      <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-black">📋 My Availability</h1>
           <p className="text-sm text-gray-500">
@@ -267,6 +263,5 @@ export default function DriverAvailabilityView() {
           </a>
         </div> */}
       </div>
-    </DashboardLayout>
-  )
+    )
 }

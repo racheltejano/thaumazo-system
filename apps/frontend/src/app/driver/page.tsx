@@ -558,17 +558,6 @@ export default function DriverCalendarPage() {
     )
   }
 
-  if (loading) {
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading your calendar...</p>
-      </div>
-    </div>
-  )
-}
-
 return (
   <div className="max-w-7xl mx-auto px-4 py-8">
 

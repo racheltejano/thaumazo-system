@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { addDays, startOfWeek, format } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
-import DashboardLayout from '@/components/DashboardLayout'
 
 const SHIFT_PRESETS = {
   morning: { label: 'Morning (8AM–12PM)', start: '08:00', end: '12:00', hours: 4 },
@@ -119,8 +118,7 @@ export default function DriverAvailabilityForm() {
   }
 
   return (
-    <DashboardLayout role="driver" userName="Driver">
-      <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-black">📅 Driver Availability</h1>
           <p className="text-sm text-gray-500">
@@ -219,6 +217,5 @@ export default function DriverAvailabilityForm() {
           </button>
         </div>
       </div>
-    </DashboardLayout>
-  )
+    )
 }
