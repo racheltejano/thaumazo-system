@@ -108,7 +108,7 @@ const { data: rawOrder, error: orderError } = await supabase
     estimated_total_duration
   `)
   .eq('client_id', clientData.id)
-  .order('created_at', { ascending: false }) // fallback if multiple orders per client
+  .order('created_at', { ascending: false })
   .limit(1)
   .single()
 

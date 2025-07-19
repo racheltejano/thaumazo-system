@@ -248,6 +248,118 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     return null
   }
 
+  // Enhanced function to calculate and store travel time data
+  const calculateAndStoreTravelTimes = async (orderId: string, pickupCoords: {lat: number, lon: number}, dropoffsList: Dropoff[]) => {
+    addDebugInfo('🕒 Calculating and storing travel times...')
+
+    const allCoordsValid = [
+      pickupCoords.lat,
+      pickupCoords.lon,
+      ...dropoffsList.flatMap(d => [d.latitude, d.longitude])
+    ].every(Boolean)
+
+    if (!allCoordsValid) {
+      addDebugInfo('❌ Skipping duration estimation — missing coordinates')
+      return { success: false, reason: 'missing_coordinates' }
+    }
+
+    try {
+      const allPoints = [
+        [pickupCoords.lon, pickupCoords.lat],
+        ...dropoffsList.map(d => [d.longitude!, d.latitude!]),
+      ]
+
+      const waypoints = allPoints.map(([lon, lat]) => `${lon},${lat}`).join(';')
+
+      const res = await axios.get(
+        `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}`,
+        {
+          params: {
+            access_token: mapboxToken,
+            geometries: 'geojson',
+            overview: 'full',
+            annotations: 'duration',
+          },
+        }
+      )
+
+      const route = res.data.routes[0]
+      const durationSeconds = route.duration
+      const estimatedTotalDuration = Math.round(durationSeconds / 60)
+      
+      // Calculate estimated end time based on pickup date and time
+      const pickupDateTime = dayjs(`${form.pickup_date} ${form.pickup_time || '09:00:00'}`)
+      const estimatedEndTime = pickupDateTime.add(estimatedTotalDuration, 'minute').format('HH:mm:ss')
+
+      addDebugInfo(`📊 Total estimated duration: ${estimatedTotalDuration} mins`)
+      addDebugInfo(`⏰ Estimated end time: ${estimatedEndTime}`)
+
+      // Update order with travel time information
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          estimated_total_duration: estimatedTotalDuration,
+          estimated_end_time: estimatedEndTime,
+        })
+        .eq('id', orderId)
+
+      if (orderUpdateError) {
+        addDebugInfo(`❌ Failed to update order with travel times: ${orderUpdateError.message}`)
+        return { success: false, reason: 'order_update_failed' }
+      }
+
+      // Calculate individual leg durations
+      const legs = route.legs || []
+      const dropoffDurations = legs.map((leg: { duration: number }) => Math.round(leg.duration / 60))
+
+      // Store individual dropoff durations with sequence numbers
+      const dropoffUpdates = await Promise.all(
+        dropoffsList.map(async (dropoff, i) => {
+          const duration = dropoffDurations[i] || null
+          const cumulativeDuration = dropoffDurations.slice(0, i + 1).reduce((sum, dur) => sum + dur, 0)
+          
+          const { error } = await supabase
+            .from('order_dropoffs')
+            .update({ 
+              estimated_duration_mins: duration,
+              sequence: i + 1, // Add sequence for proper ordering
+            })
+            .match({
+              order_id: orderId,
+              dropoff_address: dropoff.address,
+            })
+
+          if (error) {
+            addDebugInfo(`❌ Failed to update dropoff #${i + 1} duration: ${error.message}`)
+            return false
+          }
+
+          addDebugInfo(`✅ Updated dropoff #${i + 1}: ${duration} mins (cumulative: ${cumulativeDuration} mins)`)
+          return true
+        })
+      )
+
+      const allDropoffUpdatesSuccessful = dropoffUpdates.every(Boolean)
+      
+      if (!allDropoffUpdatesSuccessful) {
+        addDebugInfo('⚠️ Some dropoff duration updates failed')
+      }
+
+      addDebugInfo('✅ Travel time calculation and storage completed successfully!')
+      return { 
+        success: true, 
+        totalDuration: estimatedTotalDuration,
+        endTime: estimatedEndTime,
+        dropoffDurations 
+      }
+
+    } catch (error) {
+      console.warn('❌ Failed to fetch Mapbox directions:', error)
+      addDebugInfo(`❌ Failed to calculate directions from Mapbox: ${error.message}`)
+      return { success: false, reason: 'mapbox_api_failed' }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -295,8 +407,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     const pickupCoords = {
-      lat: form.pickup_latitude,
-      lon: form.pickup_longitude,
+      lat: form.pickup_latitude!,
+      lon: form.pickup_longitude!,
     }
     addDebugInfo(`Pickup coordinates: ${JSON.stringify(pickupCoords)}`)
 
@@ -353,6 +465,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     addDebugInfo(`Client saved with ID: ${client.id}`)
     const defaultPickupTime = '09:00:00'
     const pickupTime = defaultPickupTime
+    
     // Step 2: Create order
     addDebugInfo('Creating order...')
     const orderData = {
@@ -365,8 +478,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       estimated_cost: form.estimated_cost,
       status: 'order_placed',
       tracking_id: trackingId,
-      estimated_total_duration: null,
-      estimated_end_time: null,
+      estimated_total_duration: null, // Will be calculated and updated
+      estimated_end_time: null, // Will be calculated and updated
     }
 
     addDebugInfo(`Order data: ${JSON.stringify(orderData)}`)
@@ -449,13 +562,17 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       }
     }
 
-    // Step 4: Create dropoffs
-    addDebugInfo('Creating dropoffs...')
+    // Step 4: Create dropoffs with coordinates
+    addDebugInfo('Creating dropoffs with coordinates...')
     const dropoffEntries = await Promise.all(
-      dropoffs.filter(d => d.address.trim()).map(async d => {
+      dropoffs.filter(d => d.address.trim()).map(async (d, index) => {
         const coords = d.latitude && d.longitude
           ? { lat: d.latitude, lon: d.longitude }
           : await geocodeAddress(d.address)
+
+        if (!coords) {
+          addDebugInfo(`⚠️ No coordinates found for dropoff: ${d.address}`)
+        }
 
         return {
           order_id: order.id,
@@ -465,6 +582,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
           dropoff_phone: d.phone,
           latitude: coords?.lat,
           longitude: coords?.lon,
+          sequence: index + 1, // Add sequence number
+          estimated_duration_mins: null, // Will be updated by travel time calculation
         }
       })
     )
@@ -476,78 +595,23 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
 
       if (dropoffError) {
         addDebugInfo(`Dropoff error: ${JSON.stringify(dropoffError)}`)
+        setError(`❌ Failed to create dropoffs: ${dropoffError.message}`)
+        return
       } else {
         addDebugInfo(`${dropoffEntries.length} dropoffs created`)
       }
     }
 
-    // Step 5: Estimate delivery durations
-    addDebugInfo('Estimating delivery durations...')
-
-    const allCoordsValid = [
-      form.pickup_latitude,
-      form.pickup_longitude,
-      ...dropoffs.flatMap(d => [d.latitude, d.longitude])
-    ].every(Boolean)
-
-    if (!allCoordsValid) {
-      addDebugInfo('❌ Skipping duration estimation — missing coordinates')
-      setSubmitted(true)
-      return
-    }
-
-    try {
-      const allPoints = [
-        [form.pickup_longitude!, form.pickup_latitude!],
-        ...dropoffs.map(d => [d.longitude!, d.latitude!]),
-      ]
-
-      const waypoints = allPoints.map(([lon, lat]) => `${lon},${lat}`).join(';')
-
-      const res = await axios.get(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}`,
-        {
-          params: {
-            access_token: mapboxToken,
-            geometries: 'geojson',
-            overview: 'full',
-            annotations: 'duration',
-          },
-        }
-      )
-
-      const route = res.data.routes[0]
-      const durationSeconds = route.duration
-      const estimatedTotalDuration = Math.round(durationSeconds / 60)
-      const estimatedEndTime = dayjs().add(estimatedTotalDuration, 'minute').toISOString()
-
-      addDebugInfo(`Total estimated duration: ${estimatedTotalDuration} mins`)
-      addDebugInfo(`Estimated end time: ${estimatedEndTime}`)
-
-      await supabase.from('orders').update({
-        estimated_total_duration: estimatedTotalDuration,
-        estimated_end_time: estimatedEndTime,
-      }).eq('id', order.id)
-
-      const legs = route.legs || []
-      const dropoffDurations = legs.slice(1).map((leg: { duration: number }) => Math.round(leg.duration / 60))
-
-      await Promise.all(
-        dropoffs.map((dropoff, i) => {
-          const duration = dropoffDurations[i] || null
-          return supabase
-            .from('order_dropoffs')
-            .update({ estimated_duration_mins: duration })
-            .match({
-              order_id: order.id,
-              dropoff_address: dropoff.address,
-            })
-        })
-      )
-
-    } catch (error) {
-      console.warn('❌ Failed to fetch Mapbox directions:', error)
-      addDebugInfo('❌ Failed to calculate directions from Mapbox')
+    // Step 5: Calculate and store travel times
+    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
+    
+    if (travelTimeResult.success) {
+      addDebugInfo(`🎉 Order created successfully with travel time data!`)
+      addDebugInfo(`📊 Total travel time: ${travelTimeResult.totalDuration} minutes`)
+      addDebugInfo(`⏰ Estimated completion: ${travelTimeResult.endTime}`)
+    } else {
+      addDebugInfo(`⚠️ Order created but travel time calculation failed: ${travelTimeResult.reason}`)
+      // Note: We don't treat this as a fatal error since the order was created successfully
     }
 
     addDebugInfo('Order submission completed successfully!')
