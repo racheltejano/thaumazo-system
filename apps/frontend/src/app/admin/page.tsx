@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/AuthContext'
-import { Plus, Users, Package, ClipboardList, Settings, RefreshCw, Copy, Check, Mail } from 'lucide-react'
+import { Plus, Users, Package, ClipboardList, Settings, RefreshCw, Copy, Check, Mail, AlertCircle } from 'lucide-react'
 
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -32,6 +32,7 @@ export default function AdminDashboard() {
     totalOrders: null as number | null,
     activeDrivers: null as number | null,
     revenue: null as number | null,
+    pendingApprovals: null as number | null,
   });
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -55,27 +56,41 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       setStatsLoading(true);
-      // Get total orders
-      const { count: totalOrders } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true });
-      // Get active drivers
-      const { count: activeDrivers } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'driver')
-        .eq('can_login', true);
-      // Get revenue from delivered orders
-      const { data: deliveredOrders } = await supabase
-        .from('orders')
-        .select('estimated_cost')
-        .eq('status', 'delivered');
-      const revenue = deliveredOrders?.reduce((sum, order) => sum + Number(order.estimated_cost || 0), 0) || 0;
-      setDashboardStats({
-        totalOrders: totalOrders ?? 0,
-        activeDrivers: activeDrivers ?? 0,
-        revenue: revenue,
-      });
+      
+      try {
+        // Get total orders
+        const { count: totalOrders } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true });
+        
+        // Get active drivers
+        const { count: activeDrivers } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('role', 'driver')
+          .eq('can_login', true);
+        
+        // Get revenue from delivered orders
+        const { data: deliveredOrders } = await supabase
+          .from('orders')
+          .select('estimated_cost')
+          .eq('status', 'delivered');
+        const revenue = deliveredOrders?.reduce((sum, order) => sum + Number(order.estimated_cost || 0), 0) || 0;
+        
+        // Get pending approvals count
+        const { data: pendingApprovals, error: approvalsError } = await supabase.rpc('get_unapproved_users');
+        const pendingCount = pendingApprovals?.length || 0;
+        
+        setDashboardStats({
+          totalOrders: totalOrders ?? 0,
+          activeDrivers: activeDrivers ?? 0,
+          revenue: revenue,
+          pendingApprovals: pendingCount,
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      }
+      
       setStatsLoading(false);
     };
     fetchStats();
@@ -161,7 +176,7 @@ export default function AdminDashboard() {
           {/* Main Content - 3 columns */}
           <div className="lg:col-span-3 space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -212,6 +227,27 @@ export default function AdminDashboard() {
                   </div>
                   <div className="p-3 bg-purple-100 rounded-lg">
                     <Package className="h-6 w-6 text-purple-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className={`bg-white rounded-xl shadow-md p-6 border ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'border-red-200' : 'border-gray-100'}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Pending Approvals</p>
+                    <p className={`text-3xl font-bold ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {statsLoading ? (
+                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      ) : (
+                        dashboardStats.pendingApprovals?.toLocaleString() || '0'
+                      )}
+                    </p>
+                    {!statsLoading && dashboardStats.pendingApprovals === 0 && (
+                      <p className="text-xs text-green-600 mt-1">✓ All clear</p>
+                    )}
+                  </div>
+                  <div className={`p-3 rounded-lg ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'bg-red-100' : 'bg-green-100'}`}>
+                    <AlertCircle className={`h-6 w-6 ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'text-red-600' : 'text-green-600'}`} />
                   </div>
                 </div>
               </div>
@@ -371,6 +407,22 @@ export default function AdminDashboard() {
                 >
                   <Package className="h-4 w-4" />
                   Inventory Check
+                </button>
+                <button 
+                  onClick={() => router.push('/admin/approvals')}
+                  className={`w-full py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md ${
+                    dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                  }`}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  Review Approvals
+                  {dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 && (
+                    <span className="ml-auto bg-white text-red-600 px-2 py-1 rounded-full text-xs font-bold">
+                      {dashboardStats.pendingApprovals}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>

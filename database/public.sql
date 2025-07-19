@@ -39,9 +39,9 @@ CREATE TABLE public.driver_time_slots (
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
   CONSTRAINT driver_time_slots_pkey PRIMARY KEY (id),
-  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id),
   CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
+  CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id),
+  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id)
 );
 CREATE TABLE public.inventory (
   latitude double precision,
@@ -52,6 +52,40 @@ CREATE TABLE public.inventory (
   last_updated timestamp with time zone DEFAULT now(),
   CONSTRAINT inventory_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+CREATE TABLE public.inventory_items (
+  name text NOT NULL,
+  category text,
+  description text,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT inventory_items_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.inventory_items_movements (
+  variant_id uuid,
+  movement_type text NOT NULL CHECK (movement_type = ANY (ARRAY['stock_in'::text, 'stock_out'::text])),
+  quantity integer NOT NULL,
+  reference_type text,
+  reference_id uuid,
+  remarks text,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT inventory_items_movements_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_items_movements_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES public.inventory_items_variants(id)
+);
+CREATE TABLE public.inventory_items_variants (
+  item_id uuid,
+  supplier_name text NOT NULL,
+  packaging_type text,
+  cost_price numeric,
+  selling_price numeric,
+  sku text NOT NULL UNIQUE,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  is_fragile boolean DEFAULT false,
+  current_stock integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT inventory_items_variants_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_items_variants_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id)
 );
 CREATE TABLE public.order_dropoffs (
   order_id uuid,
@@ -90,8 +124,8 @@ CREATE TABLE public.order_products (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   product_id uuid,
   CONSTRAINT order_products_pkey PRIMARY KEY (id),
-  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
+  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.order_status_logs (
   order_id uuid,
