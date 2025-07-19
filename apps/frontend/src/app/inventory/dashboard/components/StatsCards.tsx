@@ -10,11 +10,10 @@ interface StatCardProps {
   iconBgColor: string;
   iconColor: string;
   valueColor: string;
-  delay: number;
   isVisible: boolean;
 }
 
-function StatCard({ title, value, icon: Icon, iconBgColor, iconColor, valueColor, delay, isVisible }: StatCardProps) {
+function StatCard({ title, value, icon: Icon, iconBgColor, iconColor, valueColor, isVisible }: StatCardProps) {
   return (
     <div 
       className={`bg-white rounded-xl shadow-md p-6 border border-gray-100 cursor-pointer transition-all duration-700 ease-out hover:scale-105 hover:shadow-lg ${
@@ -22,7 +21,7 @@ function StatCard({ title, value, icon: Icon, iconBgColor, iconColor, valueColor
           ? 'opacity-100 transform translate-y-0' 
           : 'opacity-0 transform translate-y-8'
       }`}
-      style={{ transitionDelay: `${delay}ms` }}
+
     >
       <div className="flex items-center justify-between">
         <div>
@@ -83,14 +82,13 @@ export default function StatsCards() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      {stats.map((stat, index) => (
-        <StatCard 
-          key={index} 
-          {...stat} 
-          delay={index * 100} 
-          isVisible={isVisible}
-        />
-      ))}
+              {stats.map((stat, index) => (
+          <StatCard 
+            key={index} 
+            {...stat} 
+            isVisible={isVisible}
+          />
+        ))}
     </div>
   );
 } 

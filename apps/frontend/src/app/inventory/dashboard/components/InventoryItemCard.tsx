@@ -29,13 +29,13 @@ export default function InventoryItemCard({ item }: InventoryItemCardProps) {
   const statusConfig = getStockStatusConfig(item.stockStatus);
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-all duration-300 ease-out hover:scale-105">
+    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-all duration-300 ease-out hover:scale-105 h-80">
       {/* Header with Name and Stock Status */}
       <div className="flex justify-between items-start mb-3">
-        <h3 className="text-lg font-semibold text-gray-900 flex-1 pr-4">
+        <h3 className="text-lg font-semibold text-gray-900 flex-1 pr-4 truncate">
           {item.name}
         </h3>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium text-white ${statusConfig.bg}`}>
+        <span className={`px-3 py-1 rounded-full text-xs font-medium text-white ${statusConfig.bg} flex-shrink-0`}>
           {statusConfig.text}
         </span>
       </div>

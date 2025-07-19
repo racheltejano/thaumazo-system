@@ -66,7 +66,7 @@ export default function InventoryItemsGrid() {
 
   useEffect(() => {
     // Trigger animation after component mounts
-    const timer = setTimeout(() => setIsVisible(true), 800);
+    const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
 
@@ -80,18 +80,7 @@ export default function InventoryItemsGrid() {
     >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {sampleItems.map((item, index) => (
-          <div
-            key={index}
-            style={{ 
-              transitionDelay: `${index * 100}ms`,
-              transition: 'all 0.7s ease-out'
-            }}
-            className={`${
-              isVisible 
-                ? 'opacity-100 transform translate-y-0' 
-                : 'opacity-0 transform translate-y-8'
-            }`}
-          >
+          <div key={index}>
             <InventoryItemCard item={item} />
           </div>
         ))}

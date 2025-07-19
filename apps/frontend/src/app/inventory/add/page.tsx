@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { NewInventoryItem, NewInventoryVariant } from '@/types/inventory.types';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, AlertCircle, Save } from 'lucide-react';
 
 export default function AddInventoryPage() {
   const router = useRouter();
+  const [isVisible, setIsVisible] = useState(false);
   const [newItem, setNewItem] = useState<NewInventoryItem>({ 
     name: '', 
     category: '', 
@@ -196,12 +197,33 @@ export default function AddInventoryPage() {
     handleCreateItem(false);
   };
 
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Add Inventory Item</h1>
-        <p className="text-gray-600">Create a new inventory item with optional variants. You can add more variants later from the item's profile page.</p>
-      </div>
+      <div 
+        className={`max-w-7xl mx-auto transition-all duration-700 ease-out ${
+          isVisible 
+            ? 'opacity-100 transform translate-y-0' 
+            : 'opacity-0 transform translate-y-8'
+        }`}
+      >
+        <div className="mb-8">
+          <div className="flex items-center gap-4 mb-2">
+            <button
+              onClick={() => router.push('/inventory/dashboard')}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900">Create New Item</h1>
+          </div>
+          <p className="text-gray-600 ml-14">Add a new item to your inventory</p>
+        </div>
 
       {message && (
         <div className={`mb-6 p-4 rounded-lg ${
@@ -213,204 +235,81 @@ export default function AddInventoryPage() {
         </div>
       )}
 
-      {/* Item Details Section */}
+      {/* Basic Information Section */}
       <div className="bg-white p-6 rounded-lg shadow-md border mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Item Details</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <Plus className="h-5 w-5 text-blue-600" />
+          <h2 className="text-xl font-semibold text-gray-900">Basic Information</h2>
+        </div>
         
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Item Name *
-            </label>
-            <input
-              type="text"
-              value={newItem.name}
-              onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter item name"
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Item Name {newItem.name.trim() === '' && <span className="text-red-500">*</span>}
+              </label>
+              <input
+                type="text"
+                value={newItem.name}
+                onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                placeholder="Enter item name"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Category
+              </label>
+              <input
+                type="text"
+                value={newItem.category}
+                onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                placeholder="Enter category"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Category
-            </label>
-            <input
-              type="text"
-              value={newItem.category}
-              onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter category"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-700 mb-2">
               Description
             </label>
             <textarea
               value={newItem.description}
               onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter description"
+              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              placeholder="Enter item description"
               rows={4}
             />
           </div>
         </div>
       </div>
 
-      {/* Variants Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md border mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Variants</h2>
-          <button
-            onClick={addVariant}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Variant
-          </button>
-        </div>
-        
-        <div className="space-y-6">
-          {variants.map((variant, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Variant {index + 1}</h3>
-                {variants.length > 1 && (
-                  <button
-                    onClick={() => removeVariant(index)}
-                    className="flex items-center gap-2 px-2 py-1 text-red-600 hover:text-red-800 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Remove
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supplier Name
-                  </label>
-                  <input
-                    type="text"
-                    value={variant.supplier_name}
-                    onChange={(e) => updateVariant(index, 'supplier_name', e.target.value)}
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter supplier name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    SKU
-                  </label>
-                  <input
-                    type="text"
-                    value={variant.sku}
-                    onChange={(e) => updateVariant(index, 'sku', e.target.value)}
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
-                    placeholder="Enter SKU"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Packaging Type
-                  </label>
-                  <input
-                    type="text"
-                    value={variant.packaging_type}
-                    onChange={(e) => updateVariant(index, 'packaging_type', e.target.value)}
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter packaging type"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Initial Stock
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={initialStocks[index]}
-                    onChange={(e) => updateInitialStock(index, parseInt(e.target.value) || 0)}
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cost Price
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={variant.cost_price}
-                    onChange={(e) => updateVariant(index, 'cost_price', parseFloat(e.target.value) || 0)}
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Selling Price
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={variant.selling_price}
-                    onChange={(e) => updateVariant(index, 'selling_price', parseFloat(e.target.value) || 0)}
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={variant.is_fragile}
-                      onChange={(e) => updateVariant(index, 'is_fragile', e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Mark as fragile</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Next Steps Section */}
+      <div className="bg-[#f2f8ff] p-6 rounded-lg shadow-md border mb-6">
+        <h3 className="text-base font-bold text-blue-500 mb-3">Next Steps</h3>
+        <p className="text-sm text-blue-500 leading-relaxed">
+          After creating this item, you'll be redirected to the inventory item page where you would be able to add variants with specific details like stock quantities, supplier information, cost prices, and selling prices. Each variant can represent different sizes, colors, or configurations of this item.
+        </p>
       </div>
 
       {/* Action Buttons */}
       <div className="flex gap-3">
         <button
-          onClick={() => handleCreateItem(true)}
-          disabled={loading || !newItem.name.trim() || !hasValidVariants()}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => router.push('/inventory/dashboard')}
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-800 font-medium rounded-lg transition-colors hover:bg-gray-50"
         >
-          {loading ? 'Creating...' : 'Create Item with Variants'}
+          Cancel
         </button>
         <button
           onClick={() => handleCreateItem(false)}
           disabled={loading || !newItem.name.trim()}
-          className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Creating...' : 'Create Item Only'}
-        </button>
-        <button
-          onClick={() => router.push('/inventory/table')}
-          className="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg transition-colors"
-        >
-          Cancel
+          <Save className="h-4 w-4" />
+          {loading ? 'Creating...' : 'Create Item'}
         </button>
       </div>
 
@@ -451,6 +350,7 @@ export default function AddInventoryPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 } 

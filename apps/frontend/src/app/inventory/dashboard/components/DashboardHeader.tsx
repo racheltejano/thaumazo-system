@@ -10,7 +10,7 @@ export default function DashboardHeader() {
 
   useEffect(() => {
     // Trigger animation after component mounts
-    const timer = setTimeout(() => setIsVisible(true), 100);
+    const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
 
@@ -23,7 +23,7 @@ export default function DashboardHeader() {
       }`}
     >
       <div>
-        <h1 className="text-2xl font-bold">Inventory Dashboard</h1>
+        <h1 className="text-3xl font-bold">Inventory Dashboard</h1>
         <p className="mt-2 text-gray-700">Manage your inventory items and track stock levels</p>
       </div>
       <button

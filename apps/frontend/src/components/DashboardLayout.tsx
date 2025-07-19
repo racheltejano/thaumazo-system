@@ -337,14 +337,14 @@ export default function DashboardLayout({
       <aside className={`flex flex-col justify-between bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${collapsed ? 'w-16' : 'w-48'} fixed left-0 top-0 bottom-0 z-30 shadow-sm`}>
         <nav className="flex-1 py-6 px-2 flex flex-col gap-2">
           {menus.map((item) => (
-            <a
+            <button
               key={item.label}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-700 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 ${collapsed ? 'justify-center' : ''} text-xs md:text-sm`}
+              onClick={() => router.push(item.href)}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-700 hover:bg-${config.hoverColor} hover:text-${config.primaryColor}-600 ${collapsed ? 'justify-center' : ''} text-xs md:text-sm w-full text-left`}
             >
               <span className="text-xl">{item.icon}</span>
               {!collapsed && <span className="font-medium">{item.label}</span>}
-            </a>
+            </button>
           ))}
         </nav>
         <button

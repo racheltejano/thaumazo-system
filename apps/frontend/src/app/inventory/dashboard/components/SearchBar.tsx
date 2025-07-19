@@ -9,7 +9,7 @@ export default function SearchBar() {
 
   useEffect(() => {
     // Trigger animation after component mounts
-    const timer = setTimeout(() => setIsVisible(true), 600);
+    const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
 
