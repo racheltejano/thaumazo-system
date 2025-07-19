@@ -1,6 +1,6 @@
 'use client';
 
-import { DriverStats } from '../hooks/useDrivers';
+import { DriverStats } from './useDrivers';
 import { Users, Truck, Package, Clock } from 'lucide-react';
 
 interface DriverOverviewCardsProps {

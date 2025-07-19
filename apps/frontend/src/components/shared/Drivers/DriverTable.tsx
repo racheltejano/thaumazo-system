@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { Settings, Truck, ChevronDown } from 'lucide-react';
-import { Driver } from '../hooks/useDrivers';
+import { Driver } from './useDrivers';
 import Link from 'next/link';
 
 interface DriverTableProps {
   drivers: Driver[];
   loading: boolean;
+  basePath?: string; // For routing - defaults to '/admin/drivers'
 }
 
 const sortOptions = [
@@ -31,7 +32,7 @@ const columnConfig = {
   lastLogin: { label: 'Last Login', key: 'lastLogin', defaultVisible: true },
 };
 
-export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
+export const DriverTable = ({ drivers, loading, basePath = '/admin/drivers' }: DriverTableProps) => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
@@ -238,7 +239,7 @@ export const DriverTable = ({ drivers, loading }: DriverTableProps) => {
                         </div>
                         <div className="ml-3">
                           <p className="text-sm font-medium text-gray-900">{driver.name}</p>
-                          <Link href={`/admin/drivers/${driver.id}`} className="text-xs text-blue-600 hover:underline">
+                          <Link href={`${basePath}/${driver.id}`} className="text-xs text-blue-600 hover:underline">
                             View Profile
                           </Link>
                         </div>
