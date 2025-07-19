@@ -1,36 +1,40 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { InventoryItem, EditQtyItem } from '@/types/inventory.types';
+import { InventoryItemVariant, EditStockItem } from '@/types/inventory.types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Settings, Search, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface InventoryTableProps {
-  inventory: InventoryItem[];
-  onEditQuantity: (item: EditQtyItem) => void;
-  onViewProduct: (item: InventoryItem) => void;
+  inventory: InventoryItemVariant[];
+  onEditQuantity: (item: EditStockItem) => void;
+  onViewProduct: (item: InventoryItemVariant) => void;
 }
 
 const sortOptions = [
   { label: 'Name A-Z', value: 'name-az' },
   { label: 'Name Z-A', value: 'name-za' },
-  { label: 'Quantity High-Low', value: 'qty-high' },
-  { label: 'Quantity Low-High', value: 'qty-low' },
-  { label: 'Weight High-Low', value: 'weight-high' },
-  { label: 'Weight Low-High', value: 'weight-low' },
+  { label: 'Stock High-Low', value: 'stock-high' },
+  { label: 'Stock Low-High', value: 'stock-low' },
+  { label: 'SKU A-Z', value: 'sku-az' },
+  { label: 'SKU Z-A', value: 'sku-za' },
+  { label: 'Price High-Low', value: 'price-high' },
+  { label: 'Price Low-High', value: 'price-low' },
 ];
 
 const pageSizeOptions = [10, 25, 50, 100];
 
 // Column configuration
 const columnConfig = {
-  name: { label: 'Product Name', key: 'name', defaultVisible: true },
-  quantity: { label: 'Quantity', key: 'quantity', defaultVisible: true },
-  actions: { label: 'Actions', key: 'actions', defaultVisible: true },
-  weight: { label: 'Weight (kg)', key: 'weight', defaultVisible: true },
-  volume: { label: 'Volume (m³)', key: 'volume', defaultVisible: true },
+  name: { label: 'Item Name', key: 'name', defaultVisible: true },
+  sku: { label: 'SKU', key: 'sku', defaultVisible: true },
+  stock: { label: 'Current Stock', key: 'stock', defaultVisible: true },
+  supplier: { label: 'Supplier', key: 'supplier', defaultVisible: true },
+  costPrice: { label: 'Cost Price', key: 'costPrice', defaultVisible: true },
+  sellingPrice: { label: 'Selling Price', key: 'sellingPrice', defaultVisible: true },
+  packaging: { label: 'Packaging', key: 'packaging', defaultVisible: true },
   fragile: { label: 'Fragile', key: 'fragile', defaultVisible: true },
-  location: { label: 'Location', key: 'location', defaultVisible: true },
+  actions: { label: 'Actions', key: 'actions', defaultVisible: true },
 };
 
 export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: InventoryTableProps) => {
@@ -48,35 +52,43 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
 
   const filtered = useMemo(() => {
     return inventory.filter((item) =>
-      item.products?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      item.products?.weight?.toString().includes(search) ||
-      item.products?.volume?.toString().includes(search) ||
-      item.quantity.toString().includes(search)
+      item.inventory_items?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.sku?.toLowerCase().includes(search.toLowerCase()) ||
+      item.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.current_stock?.toString().includes(search) ||
+      item.cost_price?.toString().includes(search) ||
+      item.selling_price?.toString().includes(search)
     );
   }, [inventory, search]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      const aName = (a.products?.name || '').toLowerCase();
-      const bName = (b.products?.name || '').toLowerCase();
-      const aQty = a.quantity || 0;
-      const bQty = b.quantity || 0;
-      const aWeight = parseFloat(a.products?.weight || '0') || 0;
-      const bWeight = parseFloat(b.products?.weight || '0') || 0;
+      const aName = (a.inventory_items?.name || '').toLowerCase();
+      const bName = (b.inventory_items?.name || '').toLowerCase();
+      const aStock = a.current_stock || 0;
+      const bStock = b.current_stock || 0;
+      const aSku = (a.sku || '').toLowerCase();
+      const bSku = (b.sku || '').toLowerCase();
+      const aCost = a.cost_price || 0;
+      const bCost = b.cost_price || 0;
 
       switch (sort) {
         case 'name-az':
           return aName.localeCompare(bName);
         case 'name-za':
           return bName.localeCompare(aName);
-        case 'qty-high':
-          return bQty - aQty;
-        case 'qty-low':
-          return aQty - bQty;
-        case 'weight-high':
-          return bWeight - aWeight;
-        case 'weight-low':
-          return aWeight - bWeight;
+        case 'stock-high':
+          return bStock - aStock;
+        case 'stock-low':
+          return aStock - bStock;
+        case 'sku-az':
+          return aSku.localeCompare(bSku);
+        case 'sku-za':
+          return bSku.localeCompare(aSku);
+        case 'price-high':
+          return bCost - aCost;
+        case 'price-low':
+          return aCost - bCost;
         default:
           return 0;
       }
@@ -90,12 +102,12 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
     return Object.values(visibleColumns).filter(Boolean).length;
   };
 
-  const getQuantityDisplay = (item: InventoryItem) => {
-    const isLowStock = item.quantity <= 3;
+  const getStockDisplay = (item: InventoryItemVariant) => {
+    const isLowStock = item.current_stock <= 3;
     return (
       <div className="flex items-center gap-2">
         <span className={`font-medium ${isLowStock ? 'text-red-600' : 'text-gray-900'}`}>
-          {item.quantity}
+          {item.current_stock}
         </span>
         {isLowStock && (
           <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
@@ -106,28 +118,30 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
     );
   };
 
-  const getActionsDisplay = (item: InventoryItem) => {
+  const getActionsDisplay = (item: InventoryItemVariant) => {
     return (
       <div className="flex items-center gap-1">
         <button
           onClick={() => onEditQuantity({
-            id: item.id,
-            currentQty: item.quantity,
+            variant_id: item.id,
+            currentStock: item.current_stock,
             mode: 'add',
+            quantity: 1,
           })}
           className="w-8 h-8 rounded-full bg-green-100 hover:bg-green-200 text-green-700 flex items-center justify-center text-sm font-bold transition-colors"
-          title="Add quantity"
+          title="Add stock"
         >
           +
         </button>
         <button
           onClick={() => onEditQuantity({
-            id: item.id,
-            currentQty: item.quantity,
+            variant_id: item.id,
+            currentStock: item.current_stock,
             mode: 'subtract',
+            quantity: 1,
           })}
           className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-200 text-red-700 flex items-center justify-center text-sm font-bold transition-colors"
-          title="Subtract quantity"
+          title="Subtract stock"
         >
           -
         </button>
@@ -138,8 +152,8 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
   if (inventory.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-gray-500 text-lg">No inventory found.</div>
-        <p className="text-gray-400 mt-2">Start by adding some inventory items.</p>
+        <div className="text-gray-500 text-lg">No inventory variants found.</div>
+        <p className="text-gray-400 mt-2">Start by adding some inventory items and variants.</p>
       </div>
     );
   }
@@ -149,7 +163,7 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
       {/* Header Controls */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h2 className="text-xl font-bold text-gray-900">Inventory Items</h2>
+          <h2 className="text-xl font-bold text-gray-900">Inventory Variants</h2>
           <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full md:w-auto">
             {/* Search */}
             <div className="relative">
@@ -238,27 +252,37 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
             <tr className="bg-gray-50 border-b border-gray-200">
               {visibleColumns.name && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Product Name
+                  Item Name
                 </th>
               )}
-                             {visibleColumns.quantity && (
-                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                   Quantity
-                 </th>
-               )}
-               {visibleColumns.actions && (
-                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                   Actions
-                 </th>
-               )}
-              {visibleColumns.weight && (
+              {visibleColumns.sku && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Weight (kg)
+                  SKU
                 </th>
               )}
-              {visibleColumns.volume && (
+              {visibleColumns.stock && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Volume (m³)
+                  Current Stock
+                </th>
+              )}
+              {visibleColumns.supplier && (
+                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
+                  Supplier
+                </th>
+              )}
+              {visibleColumns.costPrice && (
+                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
+                  Cost Price
+                </th>
+              )}
+              {visibleColumns.sellingPrice && (
+                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
+                  Selling Price
+                </th>
+              )}
+              {visibleColumns.packaging && (
+                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
+                  Packaging
                 </th>
               )}
               {visibleColumns.fragile && (
@@ -266,9 +290,9 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
                   Fragile
                 </th>
               )}
-              {visibleColumns.location && (
+              {visibleColumns.actions && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Location
+                  Actions
                 </th>
               )}
             </tr>
@@ -279,39 +303,49 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
                 key={item.id}
                 className="hover:bg-gray-50 transition-colors"
               >
-                                 {visibleColumns.name && (
-                   <td className="px-6 py-4">
-                     <button
-                       onClick={() => onViewProduct(item)}
-                       className="font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left"
-                     >
-                       {item.products?.name ?? 'Unknown'}
-                     </button>
-                   </td>
-                 )}
-                                 {visibleColumns.quantity && (
-                   <td className="px-6 py-4">
-                     {getQuantityDisplay(item)}
-                   </td>
-                 )}
-                 {visibleColumns.actions && (
-                   <td className="px-6 py-4">
-                     {getActionsDisplay(item)}
-                   </td>
-                 )}
-                {visibleColumns.weight && (
-                  <td className="px-6 py-4 text-gray-700">
-                    {item.products?.weight ? `${item.products.weight} kg` : '-'}
+                {visibleColumns.name && (
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => onViewProduct(item)}
+                      className="font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left"
+                    >
+                      {item.inventory_items?.name ?? 'Unknown'}
+                    </button>
                   </td>
                 )}
-                {visibleColumns.volume && (
+                {visibleColumns.sku && (
+                  <td className="px-6 py-4 text-gray-700 font-mono">
+                    {item.sku}
+                  </td>
+                )}
+                {visibleColumns.stock && (
+                  <td className="px-6 py-4">
+                    {getStockDisplay(item)}
+                  </td>
+                )}
+                {visibleColumns.supplier && (
                   <td className="px-6 py-4 text-gray-700">
-                    {item.products?.volume ? `${item.products.volume} m³` : '-'}
+                    {item.supplier_name}
+                  </td>
+                )}
+                {visibleColumns.costPrice && (
+                  <td className="px-6 py-4 text-gray-700">
+                    {item.cost_price ? `$${item.cost_price.toFixed(2)}` : '-'}
+                  </td>
+                )}
+                {visibleColumns.sellingPrice && (
+                  <td className="px-6 py-4 text-gray-700">
+                    {item.selling_price ? `$${item.selling_price.toFixed(2)}` : '-'}
+                  </td>
+                )}
+                {visibleColumns.packaging && (
+                  <td className="px-6 py-4 text-gray-700">
+                    {item.packaging_type || '-'}
                   </td>
                 )}
                 {visibleColumns.fragile && (
                   <td className="px-6 py-4">
-                    {item.products?.is_fragile ? (
+                    {item.is_fragile ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         Yes
                       </span>
@@ -322,9 +356,9 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
                     )}
                   </td>
                 )}
-                {visibleColumns.location && (
-                  <td className="px-6 py-4 text-gray-700 font-mono text-sm">
-                    {item.latitude?.toFixed(4)}, {item.longitude?.toFixed(4)}
+                {visibleColumns.actions && (
+                  <td className="px-6 py-4">
+                    {getActionsDisplay(item)}
                   </td>
                 )}
               </tr>
@@ -353,7 +387,7 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
             <button
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

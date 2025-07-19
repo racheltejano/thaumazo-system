@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { EditQtyItem } from '@/types/inventory.types';
+import { EditStockItem } from '@/types/inventory.types';
 import { X, Plus, Minus } from 'lucide-react';
 
 interface EditQuantityModalProps {
-  editQtyItem: EditQtyItem | null;
+  editQtyItem: EditStockItem | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -30,34 +30,57 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
       return;
     }
 
-    if (editQtyItem.mode === 'subtract' && parsed > editQtyItem.currentQty) {
-      setError('Cannot subtract more than current quantity.');
+    if (editQtyItem.mode === 'subtract' && parsed > editQtyItem.currentStock) {
+      setError('Cannot subtract more than current stock.');
       return;
     }
 
     setLoading(true);
     setError('');
 
-    const newQty =
-      editQtyItem.mode === 'add'
-        ? editQtyItem.currentQty + parsed
-        : editQtyItem.currentQty - parsed;
+    try {
+      // Calculate new stock level
+      const newStock =
+        editQtyItem.mode === 'add'
+          ? editQtyItem.currentStock + parsed
+          : editQtyItem.currentStock - parsed;
 
-    const { error: updateError } = await supabase
-      .from('inventory')
-      .update({ quantity: newQty })
-      .eq('id', editQtyItem.id);
+      // Update the variant's current_stock
+      const { error: updateError } = await supabase
+        .from('inventory_items_variants')
+        .update({ current_stock: newStock })
+        .eq('id', editQtyItem.variant_id);
 
-    if (updateError) {
-      setError('Error updating quantity. Please try again.');
+      if (updateError) {
+        setError('Error updating stock. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Record the movement
+      const { error: movementError } = await supabase
+        .from('inventory_items_movements')
+        .insert({
+          variant_id: editQtyItem.variant_id,
+          movement_type: editQtyItem.mode === 'add' ? 'stock_in' : 'stock_out',
+          quantity: parsed,
+          remarks: `Manual ${editQtyItem.mode === 'add' ? 'stock in' : 'stock out'} adjustment`
+        });
+
+      if (movementError) {
+        setError('Error recording movement. Stock was updated but movement log failed.');
+        setLoading(false);
+        return;
+      }
+
+      onSuccess();
+      onClose();
+      setEditQtyValue('');
       setLoading(false);
-      return;
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      setLoading(false);
     }
-
-    onSuccess();
-    onClose();
-    setEditQtyValue('');
-    setLoading(false);
   };
 
   const handleClose = () => {
@@ -87,10 +110,10 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                {editQtyItem.mode === 'add' ? 'Add Quantity' : 'Subtract Quantity'}
+                {editQtyItem.mode === 'add' ? 'Add Stock' : 'Subtract Stock'}
               </h2>
               <p className="text-sm text-gray-500">
-                Current quantity: {editQtyItem.currentQty}
+                Current stock: {editQtyItem.currentStock}
               </p>
             </div>
           </div>
@@ -117,7 +140,7 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
             <input
               type="number"
               min={1}
-              max={editQtyItem.mode === 'subtract' ? editQtyItem.currentQty : undefined}
+              max={editQtyItem.mode === 'subtract' ? editQtyItem.currentStock : undefined}
               value={editQtyValue}
               onChange={(e) => setEditQtyValue(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900 placeholder-gray-500"
@@ -126,7 +149,7 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
             />
             {editQtyItem.mode === 'subtract' && (
               <p className="text-xs text-gray-500 mt-1">
-                Maximum: {editQtyItem.currentQty}
+                Maximum: {editQtyItem.currentStock}
               </p>
             )}
           </div>
@@ -134,11 +157,11 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
           {editQtyValue && !isNaN(parseInt(editQtyValue)) && (
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600">
-                New quantity will be:{' '}
+                New stock level will be:{' '}
                 <span className="font-semibold text-gray-900">
                   {editQtyItem.mode === 'add' 
-                    ? editQtyItem.currentQty + parseInt(editQtyValue)
-                    : editQtyItem.currentQty - parseInt(editQtyValue)
+                    ? editQtyItem.currentStock + parseInt(editQtyValue)
+                    : editQtyItem.currentStock - parseInt(editQtyValue)
                   }
                 </span>
               </p>
@@ -163,7 +186,7 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
                 : 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
             } disabled:cursor-not-allowed`}
           >
-            {loading ? 'Updating...' : 'Update Quantity'}
+            {loading ? 'Updating...' : 'Update Stock'}
           </button>
         </div>
       </div>

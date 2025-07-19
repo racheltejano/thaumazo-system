@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { InventoryItem, Product } from '@/types/inventory.types';
-import { X, Edit, Save, Package, MapPin, Scale, Box, AlertTriangle } from 'lucide-react';
+import { InventoryItemVariant } from '@/types/inventory.types';
+import { X, Edit, Save, Package, Tag, DollarSign, Truck, AlertTriangle } from 'lucide-react';
 
 interface ProductDetailsModalProps {
-  product: InventoryItem | null;
+  product: InventoryItemVariant | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -19,25 +19,25 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
   
   // Form state for editing
   const [formData, setFormData] = useState({
-    name: '',
-    weight: '',
-    volume: '',
+    supplier_name: '',
+    packaging_type: '',
+    cost_price: '',
+    selling_price: '',
+    sku: '',
     is_fragile: false,
-    quantity: 0,
-    latitude: '',
-    longitude: '',
+    current_stock: 0,
   });
 
   useEffect(() => {
     if (product) {
       setFormData({
-        name: product.products?.name || '',
-        weight: product.products?.weight || '',
-        volume: product.products?.volume || '',
-        is_fragile: product.products?.is_fragile || false,
-        quantity: product.quantity || 0,
-        latitude: product.latitude?.toString() || '',
-        longitude: product.longitude?.toString() || '',
+        supplier_name: product.supplier_name || '',
+        packaging_type: product.packaging_type || '',
+        cost_price: product.cost_price?.toString() || '',
+        selling_price: product.selling_price?.toString() || '',
+        sku: product.sku || '',
+        is_fragile: product.is_fragile || false,
+        current_stock: product.current_stock || 0,
       });
       setError('');
       setSuccess('');
@@ -53,36 +53,27 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
     setSuccess('');
 
     try {
-      // Update product details
-      const { error: productError } = await supabase
-        .from('products')
+      // Update variant details
+      const { error: variantError } = await supabase
+        .from('inventory_items_variants')
         .update({
-          name: formData.name,
-          weight: formData.weight,
-          volume: formData.volume,
+          supplier_name: formData.supplier_name,
+          packaging_type: formData.packaging_type,
+          cost_price: formData.cost_price ? parseFloat(formData.cost_price) : null,
+          selling_price: formData.selling_price ? parseFloat(formData.selling_price) : null,
+          sku: formData.sku,
           is_fragile: formData.is_fragile,
-        })
-        .eq('id', product.products?.id);
-
-      if (productError) throw productError;
-
-      // Update inventory details
-      const { error: inventoryError } = await supabase
-        .from('inventory')
-        .update({
-          quantity: parseInt(formData.quantity.toString()),
-          latitude: parseFloat(formData.latitude),
-          longitude: parseFloat(formData.longitude),
+          current_stock: formData.current_stock,
         })
         .eq('id', product.id);
 
-      if (inventoryError) throw inventoryError;
+      if (variantError) throw variantError;
 
-      setSuccess('Product updated successfully!');
+      setSuccess('Variant updated successfully!');
       setIsEditing(false);
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Error updating product');
+      setError(err.message || 'Error updating variant');
     } finally {
       setLoading(false);
     }
@@ -97,7 +88,7 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
 
   if (!product) return null;
 
-  const isLowStock = product.quantity <= 3;
+  const isLowStock = product.current_stock <= 3;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -110,10 +101,10 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                Product Details
+                Variant Details
               </h2>
               <p className="text-sm text-gray-500">
-                {product.products?.name || 'Unknown Product'}
+                {product.inventory_items?.name || 'Unknown Item'} - {product.sku}
               </p>
             </div>
           </div>
@@ -122,7 +113,7 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
               <button
                 onClick={() => setIsEditing(true)}
                 className="w-8 h-8 rounded-full bg-orange-100 hover:bg-orange-200 flex items-center justify-center transition-colors"
-                title="Edit product"
+                title="Edit variant"
               >
                 <Edit className="w-4 h-4 text-orange-600" />
               </button>
@@ -151,63 +142,125 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Product Information */}
+            {/* Item Information */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Package className="w-5 h-5" />
-                Product Information
+                Item Information
               </h3>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Name
+                  Item Name
+                </label>
+                <p className="text-gray-900 font-medium">{product.inventory_items?.name || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category
+                </label>
+                <p className="text-gray-900">{product.inventory_items?.category || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <p className="text-gray-900">{product.inventory_items?.description || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                  <Tag className="w-4 h-4" />
+                  SKU
                 </label>
                 {isEditing ? (
                   <input
                     type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono"
+                  />
+                ) : (
+                  <p className="text-gray-900 font-mono">{product.sku}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Variant Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Truck className="w-5 h-5" />
+                Variant Information
+              </h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Supplier
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={formData.supplier_name}
+                    onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 ) : (
-                  <p className="text-gray-900 font-medium">{product.products?.name || 'N/A'}</p>
+                  <p className="text-gray-900">{product.supplier_name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Packaging Type
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={formData.packaging_type}
+                    onChange={(e) => setFormData({ ...formData, packaging_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  />
+                ) : (
+                  <p className="text-gray-900">{product.packaging_type || 'N/A'}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-                    <Scale className="w-4 h-4" />
-                    Weight (kg)
+                    <DollarSign className="w-4 h-4" />
+                    Cost Price
                   </label>
                   {isEditing ? (
                     <input
                       type="number"
                       step="0.01"
-                      value={formData.weight}
-                      onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                      value={formData.cost_price}
+                      onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                     />
                   ) : (
-                    <p className="text-gray-900">{product.products?.weight ? `${product.products.weight} kg` : 'N/A'}</p>
+                    <p className="text-gray-900">{product.cost_price ? `$${product.cost_price.toFixed(2)}` : 'N/A'}</p>
                   )}
                 </div>
 
                 <div>
-                                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-                     <Box className="w-4 h-4" />
-                     Volume (m³)
-                   </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    Selling Price
+                  </label>
                   {isEditing ? (
                     <input
                       type="number"
                       step="0.01"
-                      value={formData.volume}
-                      onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
+                      value={formData.selling_price}
+                      onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                     />
                   ) : (
-                    <p className="text-gray-900">{product.products?.volume ? `${product.products.volume} m³` : 'N/A'}</p>
+                    <p className="text-gray-900">{product.selling_price ? `$${product.selling_price.toFixed(2)}` : 'N/A'}</p>
                   )}
                 </div>
               </div>
@@ -228,39 +281,31 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
                   </label>
                 ) : (
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    product.products?.is_fragile 
+                    product.is_fragile 
                       ? 'bg-red-100 text-red-800' 
                       : 'bg-green-100 text-green-800'
                   }`}>
-                    {product.products?.is_fragile ? 'Yes' : 'No'}
+                    {product.is_fragile ? 'Yes' : 'No'}
                   </span>
                 )}
               </div>
-            </div>
 
-            {/* Inventory Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Inventory Information
-              </h3>
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Current Quantity
+                  Current Stock
                 </label>
                 {isEditing ? (
                   <input
                     type="number"
                     min="0"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+                    value={formData.current_stock}
+                    onChange={(e) => setFormData({ ...formData, current_stock: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 ) : (
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-semibold ${isLowStock ? 'text-red-600' : 'text-gray-900'}`}>
-                      {product.quantity}
+                      {product.current_stock}
                     </span>
                     {isLowStock && (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -274,43 +319,7 @@ export const ProductDetailsModal = ({ product, onClose, onSuccess }: ProductDeta
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Location Coordinates
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Latitude</label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="0.0001"
-                        value={formData.latitude}
-                        onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                      />
-                    ) : (
-                      <p className="text-gray-900 font-mono text-sm">{product.latitude?.toFixed(4) || 'N/A'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Longitude</label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="0.0001"
-                        value={formData.longitude}
-                        onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                      />
-                    ) : (
-                      <p className="text-gray-900 font-mono text-sm">{product.longitude?.toFixed(4) || 'N/A'}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Inventory ID
+                  Variant ID
                 </label>
                 <p className="text-gray-500 font-mono text-sm">{product.id}</p>
               </div>

@@ -6,7 +6,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { InventoryTable } from '@/components/inventory/InventoryTable';
 import { EditQuantityModal } from '@/components/inventory/EditQuantityModal';
 import { ProductDetailsModal } from '@/components/inventory/ProductDetailsModal';
-import { EditQtyItem, InventoryItem } from '@/types/inventory.types';
+import { EditStockItem, InventoryItemVariant } from '@/types/inventory.types';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -14,13 +14,13 @@ import { supabase } from '@/lib/supabase';
 export default function InventoryTablePage() {
   const {
     loading,
-    inventory,
+    inventoryVariants,
     inventoryError,
     refreshData,
   } = useInventory();
 
-  const [editQtyItem, setEditQtyItem] = useState<EditQtyItem | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const [editStockItem, setEditStockItem] = useState<EditStockItem | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<InventoryItemVariant | null>(null);
   const auth = useAuth();
   const router = useRouter();
 
@@ -46,7 +46,7 @@ export default function InventoryTablePage() {
           href="/inventory/add"
           className="inline-flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-semibold transition-colors"
         >
-          ➕ Add Inventory
+          ➕ Add Inventory Item
         </Link>
       </div>
 
@@ -55,21 +55,21 @@ export default function InventoryTablePage() {
       <div className="mt-6">
         <h2 className="text-xl font-semibold mb-2">📦 Current Inventory</h2>
         <InventoryTable 
-          inventory={inventory} 
-          onEditQuantity={setEditQtyItem}
-          onViewProduct={setSelectedProduct}
+          inventory={inventoryVariants} 
+          onEditQuantity={setEditStockItem}
+          onViewProduct={setSelectedVariant}
         />
       </div>
 
       <EditQuantityModal
-        editQtyItem={editQtyItem}
-        onClose={() => setEditQtyItem(null)}
+        editQtyItem={editStockItem}
+        onClose={() => setEditStockItem(null)}
         onSuccess={refreshData}
       />
 
       <ProductDetailsModal
-        product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
+        product={selectedVariant}
+        onClose={() => setSelectedVariant(null)}
         onSuccess={refreshData}
       />
     </div>
