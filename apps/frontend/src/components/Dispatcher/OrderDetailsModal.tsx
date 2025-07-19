@@ -20,6 +20,7 @@ export type Order = {
   status: string
   vehicle_type: string | null        
   tail_lift_required: boolean | null
+  estimated_total_duration: number | null // Use this instead of calculating
 }
 
 export type Client = {
@@ -44,6 +45,7 @@ type Dropoff = {
   sequence: number
   latitude: number | null
   longitude: number | null
+  estimated_duration_mins: number | null // Use stored duration
 }
 
 export default function OrderDetailsModal({
@@ -57,99 +59,66 @@ export default function OrderDetailsModal({
   const [client, setClient] = useState<Client | null>(null)
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
   const [products, setProducts] = useState<any[]>([])
-  const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
   const [showAssignDrawer, setShowAssignDrawer] = useState(false)
 
-  useEffect(() => {
-  const fetchClient = async () => {
-    if (!order.client_id) return
-    const { data, error } = await supabase
-      .from('clients')
-      .select(
-        'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
-      )
-      .eq('id', order.client_id)
-      .single()
-
-    if (error) console.error('❌ Failed to fetch client:', error)
-    else setClient(data)
+  // Get estimated time from stored data instead of calculating
+  const getEstimatedTime = (): string => {
+    if (order.estimated_total_duration) {
+      return `${order.estimated_total_duration} mins`
+    }
+    
+    // Fallback to sum of individual dropoff durations if available
+    const totalDropoffTime = dropoffs.reduce((sum, dropoff) => {
+      return sum + (dropoff.estimated_duration_mins || 0)
+    }, 0)
+    
+    if (totalDropoffTime > 0) {
+      return `${totalDropoffTime} mins`
+    }
+    
+    return 'Not calculated'
   }
-
-  const fetchDropoffs = async () => {
-    const { data, error } = await supabase
-      .from('order_dropoffs')
-      .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude')
-      .eq('order_id', order.id)
-      .order('sequence', { ascending: true })
-
-    if (error) console.error('❌ Failed to fetch dropoffs:', error)
-    else setDropoffs(data || [])
-  }
-
-  const fetchProducts = async () => {
-    const { data, error } = await supabase
-      .from('order_products')
-      .select('quantity, products(name)')
-      .eq('order_id', order.id)
-
-    if (error) console.error('❌ Failed to fetch products:', error)
-    else setProducts(data || [])
-  }
-
-  fetchClient()
-  fetchDropoffs()
-  fetchProducts()
-}, [order.id, order.client_id])
 
   useEffect(() => {
-  const fetchEstimatedTravelTime = async () => {
-    if (
-      !MAPBOX_TOKEN ||
-      !client?.pickup_latitude ||
-      !client?.pickup_longitude ||
-      dropoffs.length === 0
-    ) return
+    const fetchClient = async () => {
+      if (!order.client_id) return
+      const { data, error } = await supabase
+        .from('clients')
+        .select(
+          'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
+        )
+        .eq('id', order.client_id)
+        .single()
 
-    const filteredDropoffs = dropoffs.filter(d => d.latitude && d.longitude)
-    if (filteredDropoffs.length === 0) {
-      setEstimatedTime('Unavailable')
-      return
+      if (error) console.error('❌ Failed to fetch client:', error)
+      else setClient(data)
     }
 
-    const coordinates = [
-      `${client.pickup_longitude},${client.pickup_latitude}`,
-      ...filteredDropoffs.map(d => `${d.longitude},${d.latitude}`)
-    ]
+    const fetchDropoffs = async () => {
+      const { data, error } = await supabase
+        .from('order_dropoffs')
+        .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude, estimated_duration_mins')
+        .eq('order_id', order.id)
+        .order('sequence', { ascending: true })
 
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates.join(';')}?access_token=${MAPBOX_TOKEN}&overview=false&geometries=geojson`
-
-    try {
-      const res = await fetch(url)
-      const data = await res.json()
-
-      if (data.routes && data.routes[0]?.duration) {
-        const durationInMinutes = Math.round(data.routes[0].duration / 60)
-        setEstimatedTime(`${durationInMinutes} mins`)
-      } else {
-        console.warn('No valid route returned:', data)
-        setEstimatedTime('Unavailable')
-      }
-    } catch (err) {
-      console.error('❌ Error fetching travel time:', err)
-      setEstimatedTime('Unavailable')
+      if (error) console.error('❌ Failed to fetch dropoffs:', error)
+      else setDropoffs(data || [])
     }
-  }
 
-  if (
-  client?.pickup_latitude &&
-  client?.pickup_longitude &&
-  dropoffs.length > 0 &&
-  dropoffs.every(d => d.latitude && d.longitude)
-) {
-  fetchEstimatedTravelTime()
-}
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from('order_products')
+        .select('quantity, products(name)')
+        .eq('order_id', order.id)
 
-}, [client, dropoffs])
+      if (error) console.error('❌ Failed to fetch products:', error)
+      else setProducts(data || [])
+    }
+
+    fetchClient()
+    fetchDropoffs()
+    fetchProducts()
+  }, [order.id, order.client_id])
 
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/20 flex items-center justify-center">
@@ -205,7 +174,7 @@ export default function OrderDetailsModal({
             <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
             <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>
             <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✅ Yes' : '❌ No'}</p>
-            <p><strong>Estimated Travel Time:</strong> {estimatedTime || 'Loading...'}</p>
+            <p><strong>Estimated Travel Time:</strong> {getEstimatedTime()}</p>
 
             {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (
               <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
@@ -258,6 +227,11 @@ export default function OrderDetailsModal({
                     </a>
                   </p>
 
+                  {/* Show estimated duration for this dropoff if available */}
+                  {d.estimated_duration_mins && (
+                    <p><strong>⏱️ Est. Duration:</strong> {d.estimated_duration_mins} mins</p>
+                  )}
+
                   {MAPBOX_TOKEN && d.latitude && d.longitude && (
                     <div className="relative mt-2 aspect-[1/.5] w-full max-w-sm rounded-md border overflow-hidden">
                       <Image
@@ -280,7 +254,7 @@ export default function OrderDetailsModal({
       {showAssignDrawer && (
         <DriverAssignmentDrawer
           orderId={order.id}
-          estimatedDurationMins={parseInt(estimatedTime?.split(' ')[0] || '0')}
+          estimatedDurationMins={order.estimated_total_duration || 0}
           onClose={() => setShowAssignDrawer(false)}
         />
       )}
