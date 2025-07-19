@@ -5,14 +5,14 @@ import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import { generateGoogleMapsRoute } from '@/lib/maps' 
 import dynamic from 'next/dynamic'
+import { format, utcToZonedTime } from 'date-fns-tz'
 const DriverAssignmentDrawer = dynamic(() => import('@/components/Dispatcher/DriverAssignmentDrawer'), { ssr: false })
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
 export type Order = {
   id: string
-  pickup_date: string
-  pickup_time: string
+  pickup_timestamp: string
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
@@ -48,6 +48,8 @@ type Dropoff = {
   estimated_duration_mins: number | null // Use stored duration
 }
 
+const TIMEZONE = 'Asia/Manila'
+
 export default function OrderDetailsModal({
   order,
   onClose,
@@ -60,6 +62,12 @@ export default function OrderDetailsModal({
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [showAssignDrawer, setShowAssignDrawer] = useState(false)
+  const pickupDateTimeInManila = order.pickup_timestamp
+    ? utcToZonedTime(order.pickup_timestamp, TIMEZONE)
+    : null
+  const formattedPickupDateTime = pickupDateTimeInManila
+      ? format(pickupDateTimeInManila, 'PPpp', { timeZone: TIMEZONE })
+      : 'N/A'
 
   // Get estimated time from stored data instead of calculating
   const getEstimatedTime = (): string => {
@@ -168,8 +176,7 @@ export default function OrderDetailsModal({
               <span>📅</span> Order Info
             </h3>
 
-            <p><strong>Pickup Date:</strong> {order.pickup_date}</p>
-            <p><strong>Pickup Time:</strong> {order.pickup_time || 'N/A'}</p>
+            <p><strong>Pickup Date & Time:</strong> {formattedPickupDateTime}</p>
             <p><strong>Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
             <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
             <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>

@@ -9,14 +9,13 @@ import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
-import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import DraggableOrder from '@/components/Dispatcher/DraggableOrder'
 import OrderDetailsModal from '@/components/Dispatcher/OrderDetailsModal'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
+// Set default timezone for moment
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
-const DnDCalendar = withDragAndDrop<DriverEvent, object>(Calendar)
 
 type DriverEvent = {
   id?: string
@@ -31,8 +30,7 @@ type DriverEvent = {
 
 type Order = {
   id: string
-  pickup_date: string
-  pickup_time: string
+  pickup_timestamp: string 
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
@@ -76,8 +74,7 @@ type AvailabilityData = {
 
 type OrderData = {
   id: string
-  pickup_date: string
-  pickup_time: string
+  pickup_timestamp: string
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
@@ -123,7 +120,6 @@ export default function DispatcherCalendarPage() {
   const [orderEvents, setOrderEvents] = useState<DriverEvent[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
-  const [draggedOrder, setDraggedOrder] = useState<Order | null>(null)
   const [currentView, setCurrentView] = useState<View>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
@@ -170,15 +166,14 @@ export default function DispatcherCalendarPage() {
             first_name,
             last_name
           )
-        `) as { data: AvailabilityData[] | null, error: any }
+        `) as { data: AvailabilityData[] | null, error: Error | null }
 
       // Updated orders query with client data
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
           id,
-          pickup_date,
-          pickup_time,
+          pickup_timestamp,
           delivery_window_start,
           delivery_window_end,
           special_instructions,
@@ -198,7 +193,7 @@ export default function DispatcherCalendarPage() {
             business_name,
             contact_person
           )
-        `) as { data: OrderData[] | null, error: any }
+        `) as { data: OrderData[] | null, error: Error | null }
 
       // Fetch dropoff counts for each order
       const { data: dropoffData, error: dropoffError } = await supabase
@@ -216,28 +211,19 @@ export default function DispatcherCalendarPage() {
         return acc
       }, {} as Record<string, number>)
 
-      // Process availability events
+      // Process availability events - Convert UTC to Manila time
       const availEvents: DriverEvent[] = (availabilityData || []).map((e) => {
-        const driver = driversWithColors.find(d => d.id === e.driver_id)
         const driverName = e.profiles 
           ? `${e.profiles.first_name} ${e.profiles.last_name}`
           : 'Unknown Driver'
         
-        // Parse as local Manila time instead of UTC
-        const startTime = moment.tz(e.start_time, 'Asia/Manila').toDate()
-        const endTime = moment.tz(e.end_time, 'Asia/Manila').toDate()
+        // Parse as UTC first, then convert to Manila time
+        const startTime = moment.utc(e.start_time).tz('Asia/Manila').toDate()
+        const endTime = moment.utc(e.end_time).tz('Asia/Manila').toDate()
         
-        // Format times for display
-        const startTimeStr = startTime.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true 
-        })
-        const endTimeStr = endTime.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true 
-        })
+        // Format times for display in Manila time
+        const startTimeStr = moment.tz(startTime, 'Asia/Manila').format('h:mm A')
+        const endTimeStr = moment.tz(endTime, 'Asia/Manila').format('h:mm A')
         
         return {
           id: e.id,
@@ -250,22 +236,30 @@ export default function DispatcherCalendarPage() {
         }
       })
 
-      // Process order events with enhanced data
+      // Process order events with enhanced data - Convert UTC to Manila time
       const orderEventsData: DriverEvent[] = (orderData || []).map((o) => {
-        const driver = driversWithColors.find(d => d.id === o.driver_id)
         const clientTrackingId = o.clients?.tracking_id || o.tracking_id || 'N/A'
         let title = `${clientTrackingId}`
-        
+
         if (o.driver_id && o.profiles) {
           const driverName = `${o.profiles.first_name} ${o.profiles.last_name}`
           title = `${driverName} - ${clientTrackingId}`
         }
 
+        // Parse pickup timestamp as UTC and convert to Manila time
+        const pickupMoment = moment.utc(o.pickup_timestamp).tz('Asia/Manila')
+        
+        // Calculate end time based on estimated duration or default to 1 hour
+        const durationHours = o.estimated_total_duration 
+          ? Math.ceil(o.estimated_total_duration / 60) // Convert minutes to hours
+          : 1
+        const endMoment = pickupMoment.clone().add(durationHours, 'hours')
+
         return {
           id: o.id,
-          title: title,
-          start: new Date(`${o.pickup_date}T${o.pickup_time}`),
-          end: new Date(`${o.pickup_date}T${o.pickup_time}`),
+          title,
+          start: pickupMoment.toDate(),
+          end: endMoment.toDate(),
           type: 'order',
           status: o.status === 'order_placed' ? 'unassigned' : 'assigned',
           driverId: o.driver_id || undefined,

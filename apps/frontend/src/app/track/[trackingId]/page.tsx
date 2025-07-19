@@ -55,8 +55,7 @@ type Order = {
     pickup_area?: string
   } | null
   vehicle_type: string
-  pickup_date: string
-  pickup_time: string
+  pickup_timestamp: string // Combined timestamp
   priority_level: string
   special_instructions: string
   timeline: {
@@ -66,6 +65,32 @@ type Order = {
   dropoffs: OrderDropoff[]
   order_status_logs: OrderStatusLog[]
   mapUrl?: string
+}
+
+// Helper function to format timestamp in Asia/Manila timezone
+const formatTimestampInManila = (timestamp: string, options: Intl.DateTimeFormatOptions) => {
+  const date = new Date(timestamp)
+  return date.toLocaleString('en-US', {
+    timeZone: 'Asia/Manila',
+    ...options
+  })
+}
+
+// Helper function to get pickup date and time separately for display
+const getPickupDateAndTime = (pickup_timestamp: string) => {
+  const pickupDate = formatTimestampInManila(pickup_timestamp, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  })
+  
+  const pickupTime = formatTimestampInManila(pickup_timestamp, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+  
+  return { pickupDate, pickupTime }
 }
 
 export default function TrackingPage() {
@@ -96,12 +121,13 @@ export default function TrackingPage() {
           return;
         }
 
-        // STEP 2: Get latest order by that client
+        // STEP 2: Get latest order by that client - using pickup_timestamp instead of pickup_date/pickup_time
         const { data: rawOrder, error: orderError } = await supabase
           .from('orders')
           .select(`
             *,
-            estimated_total_duration
+            estimated_total_duration,
+            pickup_timestamp
           `)
           .eq('client_id', clientData.id)
           .order('created_at', { ascending: false })
@@ -153,17 +179,17 @@ export default function TrackingPage() {
           console.log('[TrackingPage] Logs fetched successfully:', rawLogs)
         }
 
-        // Build timeline
+        // Build timeline - using Asia/Manila timezone for consistency
         const groupedTimeline = rawLogs.reduce((acc, log) => {
-          const ts = new Date(log.timestamp)
-          const date = ts.toLocaleDateString('en-US', {
+          const date = formatTimestampInManila(log.timestamp, {
             month: 'long',
             day: 'numeric',
-            year: 'numeric',
+            year: 'numeric'
           })
-          const time = ts.toLocaleTimeString('en-US', {
+          const time = formatTimestampInManila(log.timestamp, {
             hour: 'numeric',
             minute: '2-digit',
+            hour12: true
           })
           const label = log.description || log.status.replace(/_/g, ' ').toUpperCase()
 
@@ -193,8 +219,7 @@ export default function TrackingPage() {
             : null,
           client: fullClientData.data || null,
           vehicle_type: rawOrder.vehicle_type,
-          pickup_date: rawOrder.pickup_date,
-          pickup_time: rawOrder.pickup_time,
+          pickup_timestamp: rawOrder.pickup_timestamp, // Use combined timestamp
           priority_level: rawOrder.priority_level,
           special_instructions: rawOrder.special_instructions,
           timeline,
@@ -256,6 +281,9 @@ export default function TrackingPage() {
 
   if (loading) return <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>;
   if (!order) return <p className="text-center py-10 text-red-500">Tracking information not found.</p>;
+
+  // Extract pickup date and time for display
+  const { pickupDate, pickupTime } = getPickupDateAndTime(order.pickup_timestamp)
 
   return (
     <div style={{ width: '80%', maxWidth: '1800px', margin: '0 auto' }}>
@@ -341,8 +369,8 @@ export default function TrackingPage() {
                 <h2 className="font-semibold text-lg mb-3">Order Details</h2>
                 <ul className="text-sm space-y-1">
                   <li><b>Vehicle Type:</b> {order.vehicle_type}</li>
-                  <li><b>Pickup Date:</b> {order.pickup_date}</li>
-                  <li><b>Pickup Time:</b> {order.pickup_time}</li>
+                  <li><b>Pickup Date:</b> {pickupDate}</li>
+                  <li><b>Pickup Time:</b> {pickupTime}</li>
                   <li><b>Instructions:</b> {order.special_instructions}</li>
                   <li>
                     <b>Estimated Travel Time:</b> {getFormattedTravelTime()}

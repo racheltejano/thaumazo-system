@@ -4,8 +4,14 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import Image from 'next/image'
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
 import { createSupabaseWithTracking } from '@/lib/supabase'
 import SuccessPopup  from '@/components/Client/SuccessPopup'
+
+// Initialize dayjs plugins
+dayjs.extend(utc)
+dayjs.extend(timezone)
 
 type Dropoff = {
   name: string
@@ -46,6 +52,7 @@ type ClientForm = {
   landmark?: string
   pickup_area?: string
   pickup_date?: string
+  pickup_time?: string
   truck_type?: string
   tail_lift_required?: boolean
   special_instructions?: string
@@ -67,6 +74,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     landmark: '',
     pickup_area: '',
     pickup_date: '',
+    pickup_time: '09:00',
     truck_type: '',
     tail_lift_required: false,
     special_instructions: '',
@@ -83,6 +91,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   const [debugInfo, setDebugInfo] = useState<string[]>([])
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const TIMEZONE = 'Asia/Manila'
 
   const getMapboxMapUrl = (lat: number, lon: number) =>
     `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${lon},${lat})/${lon},${lat},16/600x200?access_token=${mapboxToken}`
@@ -90,6 +99,28 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   const addDebugInfo = (info: string) => {
     setDebugInfo(prev => [...prev, `${new Date().toISOString()}: ${info}`])
     console.log(info)
+  }
+
+  // Helper function to create UTC timestamp from local date/time
+  const createPickupTimestamp = (date: string, time: string): string => {
+    if (!date || !time) return ''
+    
+    // Create datetime in Manila timezone
+    const manilaDateTime = dayjs.tz(`${date} ${time}`, TIMEZONE)
+    
+    // Convert to UTC and return ISO string
+    return manilaDateTime.utc().toISOString()
+  }
+
+  // Helper function to format UTC timestamp for display in Manila timezone
+  const formatPickupDateTime = (utcTimestamp: string): { date: string, time: string } => {
+    if (!utcTimestamp) return { date: '', time: '' }
+    
+    const manilaDateTime = dayjs(utcTimestamp).tz(TIMEZONE)
+    return {
+      date: manilaDateTime.format('YYYY-MM-DD'),
+      time: manilaDateTime.format('HH:mm')
+    }
   }
 
   useEffect(() => {
@@ -248,117 +279,120 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     return null
   }
 
-  // Enhanced function to calculate and store travel time data
-  const calculateAndStoreTravelTimes = async (orderId: string, pickupCoords: {lat: number, lon: number}, dropoffsList: Dropoff[]) => {
-    addDebugInfo('🕒 Calculating and storing travel times...')
-
-    const allCoordsValid = [
-      pickupCoords.lat,
-      pickupCoords.lon,
-      ...dropoffsList.flatMap(d => [d.latitude, d.longitude])
-    ].every(Boolean)
-
-    if (!allCoordsValid) {
-      addDebugInfo('❌ Skipping duration estimation — missing coordinates')
-      return { success: false, reason: 'missing_coordinates' }
-    }
-
-    try {
-      const allPoints = [
-        [pickupCoords.lon, pickupCoords.lat],
-        ...dropoffsList.map(d => [d.longitude!, d.latitude!]),
-      ]
-
-      const waypoints = allPoints.map(([lon, lat]) => `${lon},${lat}`).join(';')
-
-      const res = await axios.get(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}`,
-        {
-          params: {
-            access_token: mapboxToken,
-            geometries: 'geojson',
-            overview: 'full',
-            annotations: 'duration',
-          },
+  
+    const calculateAndStoreTravelTimes = async (orderId, pickupCoords, dropoffsList) => {
+      try {
+        // Validate pickup coordinates
+        if (!pickupCoords?.lat || !pickupCoords?.lon) {
+          console.log('Missing pickup coordinates')
+          return { success: false, reason: 'missing_pickup_coordinates' }
         }
-      )
 
-      const route = res.data.routes[0]
-      const durationSeconds = route.duration
-      const estimatedTotalDuration = Math.round(durationSeconds / 60)
-      
-      // Calculate estimated end time based on pickup date and time
-      const pickupDateTime = dayjs(`${form.pickup_date} ${form.pickup_time || '09:00:00'}`)
-      const estimatedEndTime = pickupDateTime.add(estimatedTotalDuration, 'minute').format('HH:mm:ss')
+        // Filter dropoffs with valid coordinates
+        const validDropoffs = dropoffsList.filter(d => d.latitude && d.longitude)
+        
+        if (validDropoffs.length === 0) {
+          console.log('No dropoffs with valid coordinates')
+          return { success: false, reason: 'no_valid_dropoff_coordinates' }
+        }
 
-      addDebugInfo(`📊 Total estimated duration: ${estimatedTotalDuration} mins`)
-      addDebugInfo(`⏰ Estimated end time: ${estimatedEndTime}`)
+        // Build waypoints: pickup + all valid dropoffs
+        const allPoints = [
+          [pickupCoords.lon, pickupCoords.lat], // Pickup point
+          ...validDropoffs.map(d => [d.longitude, d.latitude]) // Dropoffs
+        ]
 
-      // Update order with travel time information
-      const { error: orderUpdateError } = await supabase
-        .from('orders')
-        .update({
-          estimated_total_duration: estimatedTotalDuration,
-          estimated_end_time: estimatedEndTime,
-        })
-        .eq('id', orderId)
+        const waypoints = allPoints.map(([lon, lat]) => `${lon},${lat}`).join(';')
 
-      if (orderUpdateError) {
-        addDebugInfo(`❌ Failed to update order with travel times: ${orderUpdateError.message}`)
-        return { success: false, reason: 'order_update_failed' }
-      }
-
-      // Calculate individual leg durations
-      const legs = route.legs || []
-      const dropoffDurations = legs.map((leg: { duration: number }) => Math.round(leg.duration / 60))
-
-      // Store individual dropoff durations with sequence numbers
-      const dropoffUpdates = await Promise.all(
-        dropoffsList.map(async (dropoff, i) => {
-          const duration = dropoffDurations[i] || null
-          const cumulativeDuration = dropoffDurations.slice(0, i + 1).reduce((sum, dur) => sum + dur, 0)
-          
-          const { error } = await supabase
-            .from('order_dropoffs')
-            .update({ 
-              estimated_duration_mins: duration,
-              sequence: i + 1, // Add sequence for proper ordering
-            })
-            .match({
-              order_id: orderId,
-              dropoff_address: dropoff.address,
-            })
-
-          if (error) {
-            addDebugInfo(`❌ Failed to update dropoff #${i + 1} duration: ${error.message}`)
-            return false
+        // Call Mapbox Directions API
+        const response = await axios.get(
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}`,
+          {
+            params: {
+              access_token: mapboxToken,
+              geometries: 'geojson',
+              overview: 'full',
+              annotations: 'duration,distance',
+            },
           }
+        )
 
-          addDebugInfo(`✅ Updated dropoff #${i + 1}: ${duration} mins (cumulative: ${cumulativeDuration} mins)`)
-          return true
-        })
-      )
+        if (!response.data?.routes?.length) {
+          console.log('No routes returned from Mapbox')
+          return { success: false, reason: 'no_routes_found' }
+        }
 
-      const allDropoffUpdatesSuccessful = dropoffUpdates.every(Boolean)
-      
-      if (!allDropoffUpdatesSuccessful) {
-        addDebugInfo('⚠️ Some dropoff duration updates failed')
+        const route = response.data.routes[0]
+        
+        if (!route.duration) {
+          console.log('No duration in Mapbox response')
+          return { success: false, reason: 'no_duration_in_response' }
+        }
+
+        // Convert total duration from seconds to minutes (rounded up)
+        const estimatedTotalDuration = Math.ceil(route.duration / 60)
+
+        // Update order with total travel time
+        const { error: orderUpdateError } = await supabase
+          .from('orders')
+          .update({
+            estimated_total_duration: estimatedTotalDuration,
+          })
+          .eq('id', orderId)
+
+        if (orderUpdateError) {
+          console.error('Failed to update order with travel time:', orderUpdateError)
+          return { success: false, reason: 'order_update_failed', error: orderUpdateError }
+        }
+
+        // Calculate and store individual leg durations if we have route legs
+        if (route.legs?.length) {
+          const legs = route.legs
+          const dropoffDurations = legs.map(leg => Math.ceil(leg.duration / 60)) // Round up each leg
+
+          // Update dropoff records with individual durations
+          const dropoffUpdatePromises = validDropoffs.map(async (dropoff, i) => {
+            const duration = dropoffDurations[i] || null
+            
+            const { error } = await supabase
+              .from('order_dropoffs')
+              .update({ 
+                estimated_duration_mins: duration,
+                sequence: i + 1,
+              })
+              .match({
+                order_id: orderId,
+                dropoff_address: dropoff.address,
+              })
+
+            if (error) {
+              console.error(`Failed to update dropoff #${i + 1} duration:`, error)
+              return false
+            }
+
+            return true
+          })
+
+          await Promise.all(dropoffUpdatePromises)
+        }
+
+        console.log(`Successfully stored travel times - Total: ${estimatedTotalDuration} minutes`)
+        
+        return { 
+          success: true, 
+          totalDuration: estimatedTotalDuration,
+          dropoffDurations: route.legs?.map(leg => Math.ceil(leg.duration / 60)) || [],
+        }
+
+      } catch (error) {
+        console.error('Mapbox API error:', error)
+        return { 
+          success: false, 
+          reason: 'mapbox_api_failed', 
+          error: error.message 
+        }
       }
-
-      addDebugInfo('✅ Travel time calculation and storage completed successfully!')
-      return { 
-        success: true, 
-        totalDuration: estimatedTotalDuration,
-        endTime: estimatedEndTime,
-        dropoffDurations 
-      }
-
-    } catch (error) {
-      console.warn('❌ Failed to fetch Mapbox directions:', error)
-      addDebugInfo(`❌ Failed to calculate directions from Mapbox: ${error.message}`)
-      return { success: false, reason: 'mapbox_api_failed' }
     }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -384,10 +418,24 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       setError('Pickup date is required')
       return
     }
+    if (!form.pickup_time) {
+      setError('Pickup time is required')
+      return
+    }
     if (!form.truck_type) {
       setError('Truck type is required')
       return
     }
+
+    // Create pickup timestamp in UTC
+    const pickupTimestamp = createPickupTimestamp(form.pickup_date!, form.pickup_time!)
+    if (!pickupTimestamp) {
+      setError('Invalid pickup date or time')
+      return
+    }
+
+    addDebugInfo(`Pickup timestamp (UTC): ${pickupTimestamp}`)
+    addDebugInfo(`Pickup timestamp (Manila): ${dayjs(pickupTimestamp).tz(TIMEZONE).format('YYYY-MM-DD HH:mm:ss')}`)
 
     // Validate order products
     for (let i = 0; i < orderProducts.length; i++) {
@@ -463,15 +511,12 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     addDebugInfo(`Client saved with ID: ${client.id}`)
-    const defaultPickupTime = '09:00:00'
-    const pickupTime = defaultPickupTime
     
-    // Step 2: Create order
+    // Step 2: Create order with combined timestamp
     addDebugInfo('Creating order...')
     const orderData = {
       client_id: client.id,
-      pickup_date: form.pickup_date,
-      pickup_time: pickupTime,
+      pickup_timestamp: pickupTimestamp, // Store as single UTC timestamp
       vehicle_type: form.truck_type,
       tail_lift_required: form.tail_lift_required || false,
       special_instructions: form.special_instructions,
@@ -603,12 +648,12 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     // Step 5: Calculate and store travel times
-    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
+    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs, pickupTimestamp)
     
     if (travelTimeResult.success) {
       addDebugInfo(`🎉 Order created successfully with travel time data!`)
       addDebugInfo(`📊 Total travel time: ${travelTimeResult.totalDuration} minutes`)
-      addDebugInfo(`⏰ Estimated completion: ${travelTimeResult.endTime}`)
+      addDebugInfo(`⏰ Estimated completion: ${dayjs(travelTimeResult.endTimestamp).tz(TIMEZONE).format('YYYY-MM-DD HH:mm:ss')} (Manila)`)
     } else {
       addDebugInfo(`⚠️ Order created but travel time calculation failed: ${travelTimeResult.reason}`)
       // Note: We don't treat this as a fatal error since the order was created successfully
@@ -659,7 +704,41 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
           )}
           <input name="pickup_area" value={form.pickup_area || ''} onChange={handleChange} placeholder="Pickup Area" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
           <input name="landmark" value={form.landmark || ''} onChange={handleChange} placeholder="Landmark" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
-          <input type="date" name="pickup_date" value={form.pickup_date} onChange={handleChange} className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
+          
+          {/* Combined Date and Time inputs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date*</label>
+              <input 
+                type="date" 
+                name="pickup_date" 
+                value={form.pickup_date} 
+                onChange={handleChange} 
+                className="border border-gray-400 p-3 w-full rounded text-gray-900" 
+                required 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time* (Manila Time)</label>
+              <input 
+                type="time" 
+                name="pickup_time" 
+                value={form.pickup_time} 
+                onChange={handleChange} 
+                className="border border-gray-400 p-3 w-full rounded text-gray-900" 
+                required 
+              />
+            </div>
+          </div>
+          
+          {/* Display combined datetime preview */}
+          {form.pickup_date && form.pickup_time && (
+            <div className="bg-blue-50 p-3 rounded border border-blue-200">
+              <p className="text-sm text-blue-800">
+                <strong>Pickup scheduled for:</strong> {dayjs.tz(`${form.pickup_date} ${form.pickup_time}`, TIMEZONE).format('dddd, MMMM D, YYYY [at] h:mm A')} (Manila Time)
+              </p>
+            </div>
+          )}
         </fieldset>
 
         {/* Products */}

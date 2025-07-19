@@ -1,5 +1,6 @@
 'use client'
 import { useDrag } from 'react-dnd'
+import { format, utcToZonedTime } from 'date-fns-tz'
 
 type Client = {
   tracking_id: string
@@ -9,8 +10,7 @@ type Client = {
 
 type Order = {
   id: string
-  pickup_date: string
-  pickup_time: string
+  pickup_timestamp: string
   special_instructions: string
   vehicle_type: string | null
   tail_lift_required: boolean | null
@@ -19,6 +19,8 @@ type Order = {
   dropoff_count: number
   clients: Client | null
 }
+
+const TIMEZONE = 'Asia/Manila'
 
 export default function DraggableOrder({
   order,
@@ -34,6 +36,10 @@ export default function DraggableOrder({
       isDragging: monitor.isDragging(),
     }),
   }))
+
+  const formattedPickup = order.pickup_timestamp
+  ? format(utcToZonedTime(new Date(order.pickup_timestamp), TIMEZONE), 'MMM dd, yyyy hh:mm a')
+  : 'N/A'
 
   // Format estimated duration
   const formatDuration = (minutes: number | null) => {
@@ -86,10 +92,8 @@ export default function DraggableOrder({
 
       {/* Scheduled Pick-up Date */}
       <div className="mb-2">
-        <p className="text-xs text-gray-500">Scheduled Pick-up Date:</p>
-        <p className="text-sm font-medium text-gray-700">
-          🕒 {order.pickup_date} at {order.pickup_time}
-        </p>
+        <p className="text-xs text-gray-500">Scheduled Pick-up:</p>
+        <p className="text-sm font-medium text-gray-700">🕒 {formattedPickup}</p>
       </div>
 
       {/* Number of Dropoffs */}
