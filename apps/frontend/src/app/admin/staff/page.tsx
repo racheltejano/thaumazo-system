@@ -1,12 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStaff } from './hooks/useStaff';
 import { StaffOverviewCards } from './components/StaffOverviewCards';
 import { StaffTable } from './components/StaffTable';
 
 export default function StaffManagementPage() {
   const { staffs, stats, loading, error } = useStaff();
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (error) {
     return (
@@ -20,9 +27,16 @@ export default function StaffManagementPage() {
   }
 
   return (
-    <div className="px-6 py-8">
+    <div 
+      className={`px-6 py-8 transition-all duration-700 ease-out ${
+        isVisible 
+          ? 'opacity-100 transform translate-y-0' 
+          : 'opacity-0 transform translate-y-8'
+      }`}
+    >
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Staff Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Staff Management</h1>
+        <p className="text-gray-600 mt-2">Manage staff accounts, roles, and permissions across the platform</p>
       </div>
 
       <StaffOverviewCards stats={stats} loading={loading} />

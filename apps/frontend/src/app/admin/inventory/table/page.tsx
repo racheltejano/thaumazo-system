@@ -1,24 +1,31 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useInventory } from '@/hooks/useInventory';
 import { InventoryTable } from '@/components/inventory/InventoryTable';
 import { EditQuantityModal } from '@/components/inventory/EditQuantityModal';
 import { ProductDetailsModal } from '@/components/inventory/ProductDetailsModal';
-import { EditQtyItem, InventoryItem } from '@/types/inventory.types';
+import { EditStockItem, InventoryItemVariant } from '@/types/inventory.types';
 
 export default function AdminInventoryTablePage() {
   const {
     loading,
-    inventory,
+    inventoryItems,
     inventoryError,
     refreshData,
   } = useInventory();
 
-  const [editQtyItem, setEditQtyItem] = useState<EditQtyItem | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const [editQtyItem, setEditQtyItem] = useState<EditStockItem | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<InventoryItemVariant | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (loading) return (
     <div className="max-w-7xl mx-auto">
@@ -36,13 +43,19 @@ export default function AdminInventoryTablePage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div 
+      className={`max-w-7xl mx-auto transition-all duration-700 ease-out ${
+        isVisible 
+          ? 'opacity-100 transform translate-y-0' 
+          : 'opacity-0 transform translate-y-8'
+      }`}
+    >
       <div className="bg-white rounded-2xl shadow p-6 mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">📦 Inventory Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">📦 Inventory Management</h1>
             <p className="mt-2 text-gray-600">
-              Manage warehouse stock and track inventory levels across all locations.
+              Manage warehouse stock and track inventory levels across all locations
             </p>
           </div>
 
@@ -73,13 +86,13 @@ export default function AdminInventoryTablePage() {
           <div className="mb-4">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Current Inventory</h2>
             <p className="text-sm text-gray-600">
-              Total items: {inventory.length} | 
-              Total quantity: {inventory.reduce((sum, item) => sum + item.quantity, 0)}
+              Total items: {inventoryItems.length} | 
+              Total quantity: {inventoryItems.reduce((sum: number, item: any) => sum + (item.totalStock || 0), 0)}
             </p>
           </div>
           
           <InventoryTable 
-            inventory={inventory} 
+            inventory={inventoryItems} 
             onEditQuantity={setEditQtyItem}
             onViewProduct={setSelectedProduct}
           />

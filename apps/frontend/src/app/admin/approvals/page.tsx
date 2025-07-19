@@ -14,6 +14,13 @@ export default function AdminApprovalsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({})
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const checkAdminAndFetch = async () => {
@@ -78,9 +85,18 @@ export default function AdminApprovalsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div 
+      className={`max-w-5xl mx-auto transition-all duration-700 ease-out ${
+        isVisible 
+          ? 'opacity-100 transform translate-y-0' 
+          : 'opacity-0 transform translate-y-8'
+      }`}
+    >
       <div className="bg-white rounded-2xl shadow p-6 mb-6">
-        <h2 className="text-xl font-bold text-black mb-4">🧾 Pending User Approvals</h2>
+        <div className="mb-6">
+          <h2 className="text-3xl font-bold text-black mb-2">🧾 Pending User Approvals</h2>
+          <p className="text-gray-600">Review and approve new user registrations with appropriate roles</p>
+        </div>
 
         {loading ? (
           <p className="text-gray-500">Loading users...</p>

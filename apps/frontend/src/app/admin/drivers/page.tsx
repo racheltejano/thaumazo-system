@@ -6,6 +6,7 @@ export default function AdminDriversPage() {
   return (
     <DriversPage 
       title="Driver Management" 
+      description="Manage driver accounts, availability, and performance tracking"
       basePath="/admin/drivers" 
     />
   );

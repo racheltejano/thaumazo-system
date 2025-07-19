@@ -22,6 +22,7 @@ export default function AdminDashboard() {
   const [emailStatus, setEmailStatus] = useState('')
   const [recentTrackingIds, setRecentTrackingIds] = useState<string[]>([])
   const [showSuccess, setShowSuccess] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
   const auth = useAuth()
   const user = auth?.user
   const role = auth?.role
@@ -35,6 +36,12 @@ export default function AdminDashboard() {
     pendingApprovals: null as number | null,
   });
   const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!authLoading) {
@@ -165,7 +172,13 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-inter">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div 
+        className={`max-w-7xl mx-auto px-6 py-8 transition-all duration-700 ease-out ${
+          isVisible 
+            ? 'opacity-100 transform translate-y-0' 
+            : 'opacity-0 transform translate-y-8'
+        }`}
+      >
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
@@ -235,15 +248,14 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Pending Approvals</p>
-                    <p className={`text-3xl font-bold ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                      {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                      ) : (
-                        dashboardStats.pendingApprovals?.toLocaleString() || '0'
-                      )}
-                    </p>
-                    {!statsLoading && dashboardStats.pendingApprovals === 0 && (
-                      <p className="text-xs text-green-600 mt-1">✓ All clear</p>
+                    {statsLoading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    ) : dashboardStats.pendingApprovals === 0 ? (
+                      <p className="text-xs text-green-600">✓ All clear</p>
+                    ) : (
+                      <p className={`text-3xl font-bold text-red-600`}>
+                        {dashboardStats.pendingApprovals?.toLocaleString() || '0'}
+                      </p>
                     )}
                   </div>
                   <div className={`p-3 rounded-lg ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'bg-red-100' : 'bg-green-100'}`}>

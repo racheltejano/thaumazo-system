@@ -64,16 +64,6 @@ const sidebarMenus: SidebarMenus = {
       ),
       href: '/admin/approvals',
     },
-        {
-      label: 'Inventory Table',
-      icon: (
-        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <rect x="3" y="7" width="18" height="13" rx="2" />
-          <path d="M16 3v4M8 3v4" />
-        </svg>
-      ),
-      href: '/admin/inventory/table',
-    },
     {
       label: 'Add Inventory',
       icon: (
@@ -367,15 +357,18 @@ export default function DashboardLayout({
           style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.18)", position: "relative", zIndex: 10 }}
         >
           <div className="flex items-center select-none">
-            <Link href="/home">
+            <button
+              onClick={() => router.push('/home')}
+              className="cursor-pointer"
+            >
               <Image
                 src={DASHBOARD_LOGO_PATH}
                 alt="Thaumazo Text Logo"
                 width={140}
                 height={32}
-                style={{ objectFit: "contain", cursor: "pointer" }}
+                style={{ objectFit: "contain" }}
               />
-            </Link>
+            </button>
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden md:inline text-black">
@@ -448,29 +441,33 @@ export default function DashboardLayout({
                   {/* Menu Items */}
                   <div className="flex flex-col gap-1 px-2">
                     {/* Settings & Privacy */}
-                    <a
-                      href={config.profileMenuItems?.[0]?.href || '#'}
-                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-gray-800 font-medium text-base"
-                      onClick={() => setProfileMenuOpen(false)}
+                    <button
+                      onClick={() => {
+                        router.push(config.profileMenuItems?.[0]?.href || '/admin/settings');
+                        setProfileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-gray-800 font-medium text-base w-full text-left"
                     >
                       {/* Settings Icon in gray circle */}
                       <span className="bg-gray-200 w-8 h-8 flex items-center justify-center rounded-full">
                         <Image src="/settings-icon.svg" alt="Settings" width={20} height={20} />
                       </span>
                       <span>Settings & Privacy</span>
-                    </a>
+                    </button>
                     {/* Help & Support */}
-                    <a
-                      href="/help"
-                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-gray-800 font-medium text-base"
-                      onClick={() => setProfileMenuOpen(false)}
+                    <button
+                      onClick={() => {
+                        router.push('/help');
+                        setProfileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors text-gray-800 font-medium text-base w-full text-left"
                     >
                       {/* Help Icon in gray circle */}
                       <span className="bg-gray-200 w-8 h-8 flex items-center justify-center rounded-full">
                         <Image src="/help-icon.svg" alt="Help" width={20} height={20} />
                       </span>
                       <span>Help & Support</span>
-                    </a>
+                    </button>
                     {/* Logout */}
                     <button
                       onClick={() => {

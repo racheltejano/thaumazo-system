@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 import Image from 'next/image';
@@ -54,6 +55,7 @@ const sidebarLinks = [
 
 export default function AccountSettings() {
   const auth = useAuth();
+  const router = useRouter();
   const user = auth?.user;
   const role = auth?.role;
   const [activeTab, setActiveTab] = useState('profile');
@@ -346,7 +348,7 @@ export default function AccountSettings() {
       setConfirmPassword('');
       setTimeout(() => {
         supabase.auth.signOut();
-        window.location.href = '/login';
+        router.push('/login');
       }, 3000);
     }
   };

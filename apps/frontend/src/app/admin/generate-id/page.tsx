@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -11,6 +11,13 @@ export default function GenerateTrackingIdPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -43,8 +50,17 @@ export default function GenerateTrackingIdPage() {
   }
 
    return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">🎯 Generate Tracking ID</h1>
+    <main 
+      className={`p-6 transition-all duration-700 ease-out ${
+        isVisible 
+          ? 'opacity-100 transform translate-y-0' 
+          : 'opacity-0 transform translate-y-8'
+      }`}
+    >
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">🎯 Generate Tracking ID</h1>
+        <p className="text-gray-600">Create unique tracking IDs for new orders and client management</p>
+      </div>
       <button
         onClick={handleGenerate}
         disabled={loading}

@@ -22,6 +22,13 @@ export default function AdminAddInventoryPage() {
   const [showNewProductForm, setShowNewProductForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     fetchProducts();
@@ -155,11 +162,17 @@ export default function AdminAddInventoryPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div 
+      className={`max-w-7xl mx-auto transition-all duration-700 ease-out ${
+        isVisible 
+          ? 'opacity-100 transform translate-y-0' 
+          : 'opacity-0 transform translate-y-8'
+      }`}
+    >
       <div className="bg-white rounded-2xl shadow p-6 mb-6">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">📦 Add Inventory</h1>
-          <p className="text-gray-600">Manage your warehouse inventory and create new products.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">📦 Add Inventory</h1>
+          <p className="text-gray-600">Add new products and manage warehouse inventory across all locations</p>
         </div>
 
         {message && (
