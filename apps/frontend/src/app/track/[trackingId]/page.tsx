@@ -77,6 +77,7 @@ export default function TrackingPage() {
   const trackingId = (params as { trackingId: string })?.trackingId
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [dynamicEstimatedTime, setDynamicEstimatedTime] = useState<string | null>(null)
 
   useEffect(() => {
     if (!trackingId) return
@@ -243,6 +244,59 @@ const [driverData, fullClientData, dropoffs] = await Promise.all([
     window.open(routeUrl, '_blank')
   }
 
+  useEffect(() => {
+  const fetchEstimatedTravelTime = async () => {
+    if (
+      !MAPBOX_TOKEN ||
+      !order?.client?.pickup_latitude ||
+      !order?.client?.pickup_longitude ||
+      !order?.dropoffs?.length
+    ) {
+      setDynamicEstimatedTime('Unavailable')
+      return
+    }
+
+    const filteredDropoffs = order.dropoffs.filter(d => d.latitude && d.longitude)
+    if (filteredDropoffs.length === 0) {
+      setDynamicEstimatedTime('Unavailable')
+      return
+    }
+
+    const coordinates = [
+      `${order.client.pickup_longitude},${order.client.pickup_latitude}`,
+      ...filteredDropoffs.map(d => `${d.longitude},${d.latitude}`)
+    ]
+
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates.join(';')}?access_token=${MAPBOX_TOKEN}&overview=false&geometries=geojson`
+
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+
+      if (data.routes && data.routes[0]?.duration) {
+        const durationInMinutes = Math.round(data.routes[0].duration / 60)
+        setDynamicEstimatedTime(`${durationInMinutes} mins`)
+      } else {
+        console.warn('No valid route returned:', data)
+        setDynamicEstimatedTime('Unavailable')
+      }
+    } catch (err) {
+      console.error('❌ Error fetching travel time:', err)
+      setDynamicEstimatedTime('Unavailable')
+    }
+  }
+
+  // Only fetch if we have all required data
+  if (
+    order?.client?.pickup_latitude &&
+    order?.client?.pickup_longitude &&
+    order?.dropoffs?.length > 0 &&
+    order.dropoffs.some(d => d.latitude && d.longitude)
+  ) {
+    fetchEstimatedTravelTime()
+  }
+}, [order])
+
   if (loading) return <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>;
   if (!order) return <p className="text-center py-10 text-red-500">Tracking information not found.</p>;
 
@@ -329,9 +383,9 @@ const [driverData, fullClientData, dropoffs] = await Promise.all([
           <li><b>Instructions:</b> {order.special_instructions}</li>
           <li>
             <b>Estimated Travel Time:</b>{' '}
-            {order.estimated_total_duration != null
+            {dynamicEstimatedTime || (order.estimated_total_duration != null
               ? `${order.estimated_total_duration} mins`
-              : 'N/A'}
+              : 'N/A')}
           </li>
         </ul>
 
