@@ -1,21 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { InventoryItem, NewInventoryItem, NewInventoryVariant } from '@/types/inventory.types';
-import { NewProductForm } from '@/components/inventory/NewProductForm';
+import { NewInventoryItem, NewInventoryVariant } from '@/types/inventory.types';
+import { Plus, Trash2 } from 'lucide-react';
 
 export default function AddInventoryPage() {
   const router = useRouter();
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [selectedItemId, setSelectedItemId] = useState('');
   const [newItem, setNewItem] = useState<NewInventoryItem>({ 
     name: '', 
     category: '', 
     description: '' 
   });
-  const [newVariant, setNewVariant] = useState<NewInventoryVariant>({
+  const [variants, setVariants] = useState<NewInventoryVariant[]>([{
     item_id: '',
     supplier_name: '',
     packaging_type: '',
@@ -23,74 +21,81 @@ export default function AddInventoryPage() {
     selling_price: 0,
     sku: '',
     is_fragile: false
-  });
-  const [initialStock, setInitialStock] = useState(0);
-  const [showNewItemForm, setShowNewItemForm] = useState(false);
-  const [showNewVariantForm, setShowNewVariantForm] = useState(false);
+  }]);
+  const [initialStocks, setInitialStocks] = useState<number[]>([0]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [showVariantWarning, setShowVariantWarning] = useState(false);
 
-  useEffect(() => {
-    fetchInventoryItems();
-  }, []);
+  const addVariant = () => {
+    setVariants([...variants, {
+      item_id: '',
+      supplier_name: '',
+      packaging_type: '',
+      cost_price: 0,
+      selling_price: 0,
+      sku: '',
+      is_fragile: false
+    }]);
+    setInitialStocks([...initialStocks, 0]);
+  };
 
-  const fetchInventoryItems = async () => {
-    const { data, error } = await supabase
-      .from('inventory_items')
-      .select('*')
-      .order('name');
-    
-    if (error) {
-      console.error('Error fetching inventory items:', error);
-      setMessage('Error loading inventory items');
-    } else {
-      setInventoryItems(data || []);
+  const removeVariant = (index: number) => {
+    if (variants.length > 1) {
+      const newVariants = variants.filter((_, i) => i !== index);
+      const newStocks = initialStocks.filter((_, i) => i !== index);
+      setVariants(newVariants);
+      setInitialStocks(newStocks);
     }
   };
 
-  const handleCreateItem = async () => {
+  const updateVariant = (index: number, field: keyof NewInventoryVariant, value: any) => {
+    const newVariants = [...variants];
+    newVariants[index] = { ...newVariants[index], [field]: value };
+    setVariants(newVariants);
+  };
+
+  const updateInitialStock = (index: number, value: number) => {
+    const newStocks = [...initialStocks];
+    newStocks[index] = value;
+    setInitialStocks(newStocks);
+  };
+
+  const hasValidVariants = () => {
+    return variants.some(variant => 
+      variant.supplier_name.trim() !== '' && 
+      variant.sku.trim() !== '' && 
+      variant.cost_price > 0 && 
+      variant.selling_price > 0
+    );
+  };
+
+  const hasIncompleteVariants = () => {
+    return variants.some(variant => 
+      (variant.supplier_name.trim() !== '' || 
+       variant.sku.trim() !== '' || 
+       variant.cost_price > 0 || 
+       variant.selling_price > 0) &&
+      !(variant.supplier_name.trim() !== '' && 
+        variant.sku.trim() !== '' && 
+        variant.cost_price > 0 && 
+        variant.selling_price > 0)
+    );
+  };
+
+  const handleCreateItem = async (createWithVariants: boolean = false) => {
     if (newItem.name.trim() === '') {
       setMessage('Please provide a valid name for the new item.');
       return;
     }
 
-    setLoading(true);
-    setMessage('');
-
-    const { data: insertedItem, error } = await supabase
-      .from('inventory_items')
-      .insert([{
-        name: newItem.name,
-        category: newItem.category,
-        description: newItem.description
-      }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error adding item:', error);
-      setMessage(`Error adding item: ${error.message}`);
-      setLoading(false);
+    if (createWithVariants && !hasValidVariants()) {
+      setMessage('Please provide valid details for at least one variant.');
       return;
     }
 
-    setMessage('✅ Item created successfully!');
-    setNewItem({ name: '', category: '', description: '' });
-    setShowNewItemForm(false);
-    setSelectedItemId(insertedItem.id);
-    setNewVariant({ ...newVariant, item_id: insertedItem.id });
-    await fetchInventoryItems();
-    setLoading(false);
-  };
-
-  const handleCreateVariant = async () => {
-    if (
-      newVariant.supplier_name.trim() === '' ||
-      newVariant.sku.trim() === '' ||
-      newVariant.cost_price <= 0 ||
-      newVariant.selling_price <= 0
-    ) {
-      setMessage('Please provide valid supplier name, SKU, and pricing for the new variant.');
+    if (!createWithVariants && hasIncompleteVariants()) {
+      setShowVariantWarning(true);
       return;
     }
 
@@ -98,47 +103,72 @@ export default function AddInventoryPage() {
     setMessage('');
 
     try {
-      // Create the variant
-      const { data: insertedVariant, error: variantError } = await supabase
-        .from('inventory_items_variants')
+      // Create the item first
+      const { data: insertedItem, error } = await supabase
+        .from('inventory_items')
         .insert([{
-          item_id: newVariant.item_id,
-          supplier_name: newVariant.supplier_name,
-          packaging_type: newVariant.packaging_type,
-          cost_price: newVariant.cost_price,
-          selling_price: newVariant.selling_price,
-          sku: newVariant.sku,
-          is_fragile: newVariant.is_fragile,
-          current_stock: initialStock
+          name: newItem.name,
+          category: newItem.category,
+          description: newItem.description
         }])
         .select()
         .single();
 
-      if (variantError) {
-        setMessage(`Error creating variant: ${variantError.message}`);
+      if (error) {
+        console.error('Error adding item:', error);
+        setMessage(`Error adding item: ${error.message}`);
         setLoading(false);
         return;
       }
 
-      // If there's initial stock, record the movement
-      if (initialStock > 0) {
-        const { error: movementError } = await supabase
-          .from('inventory_items_movements')
-          .insert({
-            variant_id: insertedVariant.id,
-            movement_type: 'stock_in',
-            quantity: initialStock,
-            remarks: 'Initial stock'
-          });
+      // If creating with variants, process them
+      if (createWithVariants && hasValidVariants()) {
+        for (let i = 0; i < variants.length; i++) {
+          const variant = variants[i];
+          if (variant.supplier_name.trim() !== '' && 
+              variant.sku.trim() !== '' && 
+              variant.cost_price > 0 && 
+              variant.selling_price > 0) {
+            
+            // Create the variant
+            const { data: insertedVariant, error: variantError } = await supabase
+              .from('inventory_items_variants')
+              .insert([{
+                item_id: insertedItem.id,
+                supplier_name: variant.supplier_name,
+                packaging_type: variant.packaging_type,
+                cost_price: variant.cost_price,
+                selling_price: variant.selling_price,
+                sku: variant.sku,
+                is_fragile: variant.is_fragile,
+                current_stock: initialStocks[i] || 0
+              }])
+              .select()
+              .single();
 
-        if (movementError) {
-          console.error('Error recording initial stock movement:', movementError);
-          // Don't fail the whole operation, just log the error
+            if (variantError) {
+              console.error('Error creating variant:', variantError);
+              continue;
+            }
+
+            // Record initial stock movement if any
+            if (initialStocks[i] > 0) {
+              await supabase
+                .from('inventory_items_movements')
+                .insert({
+                  variant_id: insertedVariant.id,
+                  movement_type: 'stock_in',
+                  quantity: initialStocks[i],
+                  remarks: 'Initial stock'
+                });
+            }
+          }
         }
       }
 
-      setMessage('✅ Variant created successfully!');
-      setNewVariant({
+      setMessage('✅ Item created successfully!');
+      setNewItem({ name: '', category: '', description: '' });
+      setVariants([{
         item_id: '',
         supplier_name: '',
         packaging_type: '',
@@ -146,10 +176,14 @@ export default function AddInventoryPage() {
         selling_price: 0,
         sku: '',
         is_fragile: false
-      });
-      setInitialStock(0);
-      setShowNewVariantForm(false);
-      setSelectedItemId('');
+      }]);
+      setInitialStocks([0]);
+      
+      // Redirect to the items table after a short delay
+      setTimeout(() => {
+        router.push('/inventory/table');
+      }, 1500);
+      
       setLoading(false);
     } catch (err) {
       setMessage('An unexpected error occurred. Please try again.');
@@ -157,11 +191,16 @@ export default function AddInventoryPage() {
     }
   };
 
+  const handleCreateItemOnly = () => {
+    setShowVariantWarning(false);
+    handleCreateItem(false);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Add Inventory Item</h1>
-        <p className="text-gray-600">Create new inventory items and variants with stock tracking.</p>
+        <p className="text-gray-600">Create a new inventory item with optional variants. You can add more variants later from the item's profile page.</p>
       </div>
 
       {message && (
@@ -174,117 +213,91 @@ export default function AddInventoryPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Create New Item Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md border">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Create New Item</h2>
-          
-          {!showNewItemForm ? (
-            <button
-              onClick={() => setShowNewItemForm(true)}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              ➕ Create New Item
-            </button>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Item Name
-                </label>
-                <input
-                  type="text"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter item name"
-                />
-              </div>
+      {/* Item Details Section */}
+      <div className="bg-white p-6 rounded-lg shadow-md border mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Item Details</h2>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Item Name *
+            </label>
+            <input
+              type="text"
+              value={newItem.name}
+              onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter item name"
+              required
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category
-                </label>
-                <input
-                  type="text"
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter category"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category
+            </label>
+            <input
+              type="text"
+              value={newItem.category}
+              onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter category"
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={newItem.description}
-                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                  className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter description"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={handleCreateItem}
-                  disabled={loading}
-                  className="flex-1 py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {loading ? 'Creating...' : 'Create Item'}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowNewItemForm(false);
-                    setNewItem({ name: '', category: '', description: '' });
-                  }}
-                  className="flex-1 py-2 px-4 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              value={newItem.description}
+              onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+              className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter description"
+              rows={4}
+            />
+          </div>
         </div>
+      </div>
 
-        {/* Create New Variant Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md border">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Create New Variant</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Item
-              </label>
-              <select
-                value={selectedItemId}
-                onChange={(e) => {
-                  setSelectedItemId(e.target.value);
-                  setNewVariant({ ...newVariant, item_id: e.target.value });
-                }}
-                className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">-- Select an Item --</option>
-                {inventoryItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* Variants Section */}
+      <div className="bg-white p-6 rounded-lg shadow-md border mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Variants</h2>
+          <button
+            onClick={addVariant}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Variant
+          </button>
+        </div>
+        
+        <div className="space-y-6">
+          {variants.map((variant, index) => (
+            <div key={index} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Variant {index + 1}</h3>
+                {variants.length > 1 && (
+                  <button
+                    onClick={() => removeVariant(index)}
+                    className="flex items-center gap-2 px-2 py-1 text-red-600 hover:text-red-800 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Remove
+                  </button>
+                )}
+              </div>
 
-            {selectedItemId && (
-              <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Supplier Name
                   </label>
                   <input
                     type="text"
-                    value={newVariant.supplier_name}
-                    onChange={(e) => setNewVariant({ ...newVariant, supplier_name: e.target.value })}
+                    value={variant.supplier_name}
+                    onChange={(e) => updateVariant(index, 'supplier_name', e.target.value)}
                     className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter supplier name"
                   />
@@ -296,8 +309,8 @@ export default function AddInventoryPage() {
                   </label>
                   <input
                     type="text"
-                    value={newVariant.sku}
-                    onChange={(e) => setNewVariant({ ...newVariant, sku: e.target.value })}
+                    value={variant.sku}
+                    onChange={(e) => updateVariant(index, 'sku', e.target.value)}
                     className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
                     placeholder="Enter SKU"
                   />
@@ -309,43 +322,11 @@ export default function AddInventoryPage() {
                   </label>
                   <input
                     type="text"
-                    value={newVariant.packaging_type}
-                    onChange={(e) => setNewVariant({ ...newVariant, packaging_type: e.target.value })}
+                    value={variant.packaging_type}
+                    onChange={(e) => updateVariant(index, 'packaging_type', e.target.value)}
                     className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter packaging type"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cost Price
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newVariant.cost_price}
-                      onChange={(e) => setNewVariant({ ...newVariant, cost_price: parseFloat(e.target.value) || 0 })}
-                      className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selling Price
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newVariant.selling_price}
-                      onChange={(e) => setNewVariant({ ...newVariant, selling_price: parseFloat(e.target.value) || 0 })}
-                      className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="0.00"
-                    />
-                  </div>
                 </div>
 
                 <div>
@@ -355,46 +336,121 @@ export default function AddInventoryPage() {
                   <input
                     type="number"
                     min="0"
-                    value={initialStock}
-                    onChange={(e) => setInitialStock(parseInt(e.target.value) || 0)}
+                    value={initialStocks[index]}
+                    onChange={(e) => updateInitialStock(index, parseInt(e.target.value) || 0)}
                     className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="0"
                   />
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cost Price
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={variant.cost_price}
+                    onChange={(e) => updateVariant(index, 'cost_price', parseFloat(e.target.value) || 0)}
+                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Selling Price
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={variant.selling_price}
+                    onChange={(e) => updateVariant(index, 'selling_price', parseFloat(e.target.value) || 0)}
+                    className="w-full border border-gray-300 bg-white text-gray-900 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={newVariant.is_fragile}
-                      onChange={(e) => setNewVariant({ ...newVariant, is_fragile: e.target.checked })}
+                      checked={variant.is_fragile}
+                      onChange={(e) => updateVariant(index, 'is_fragile', e.target.checked)}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <span className="ml-2 text-sm text-gray-700">Mark as fragile</span>
                   </label>
                 </div>
-
-                <button
-                  onClick={handleCreateVariant}
-                  disabled={loading || !selectedItemId || !newVariant.supplier_name || !newVariant.sku}
-                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Creating...' : 'Create Variant'}
-                </button>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="mt-8 text-center">
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => handleCreateItem(true)}
+          disabled={loading || !newItem.name.trim() || !hasValidVariants()}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Creating...' : 'Create Item with Variants'}
+        </button>
+        <button
+          onClick={() => handleCreateItem(false)}
+          disabled={loading || !newItem.name.trim()}
+          className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Creating...' : 'Create Item Only'}
+        </button>
         <button
           onClick={() => router.push('/inventory/table')}
-          className="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+          className="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg transition-colors"
         >
-          ← Back to Inventory Table
+          Cancel
         </button>
       </div>
+
+      {/* Variant Warning Modal */}
+      {showVariantWarning && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Incomplete Variant Details</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                You have started filling in variant details but they are incomplete.
+              </p>
+            </div>
+
+            <div className="p-6">
+              <p className="text-gray-700 mb-4">
+                Creating this item without complete variant details will result in the loss of the partial variant information you've entered.
+              </p>
+              <p className="text-gray-700 mb-6">
+                Would you like to continue creating just the item, or would you prefer to complete the variant details first?
+              </p>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={handleCreateItemOnly}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                Create Item Only
+              </button>
+              <button
+                onClick={() => setShowVariantWarning(false)}
+                className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

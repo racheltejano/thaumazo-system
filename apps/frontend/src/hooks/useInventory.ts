@@ -57,10 +57,18 @@ export const useInventory = () => {
   }, [router, auth])
 
   const fetchInventoryData = async () => {
-    // Fetch inventory items
+    // Fetch inventory items with variant summaries
     const { data: itemsData, error: itemsError } = await supabase
       .from('inventory_items')
-      .select('*')
+      .select(`
+        *,
+        inventory_items_variants (
+          id,
+          cost_price,
+          selling_price,
+          current_stock
+        )
+      `)
       .order('name')
 
     if (itemsError) {
@@ -68,9 +76,32 @@ export const useInventory = () => {
       return
     }
 
-    setInventoryItems(itemsData || [])
+    // Transform the data to include summary information
+    const itemsWithSummaries = itemsData?.map(item => {
+      const variants = item.inventory_items_variants || []
+      const variantsCount = variants.length
+      const totalCost = variants.reduce((sum: number, variant: any) => 
+        sum + (variant.cost_price || 0) * (variant.current_stock || 0), 0
+      )
+      const totalStock = variants.reduce((sum: number, variant: any) => 
+        sum + (variant.current_stock || 0), 0
+      )
+      const totalValue = variants.reduce((sum: number, variant: any) => 
+        sum + (variant.selling_price || 0) * (variant.current_stock || 0), 0
+      )
 
-    // Fetch inventory variants with item details
+      return {
+        ...item,
+        variantsCount,
+        totalCost,
+        totalStock,
+        totalValue
+      }
+    }) || []
+
+    setInventoryItems(itemsWithSummaries)
+
+    // Fetch inventory variants with item details (for other uses)
     const { data: variantsData, error: variantsError } = await supabase
       .from('inventory_items_variants')
       .select(`

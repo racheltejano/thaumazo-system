@@ -1,25 +1,26 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { InventoryItemVariant, EditStockItem } from '@/types/inventory.types';
+import { InventoryItem } from '@/types/inventory.types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Settings, Search, ChevronUp, ChevronDown } from 'lucide-react';
+import Link from 'next/link';
 
 interface InventoryTableProps {
-  inventory: InventoryItemVariant[];
-  onEditQuantity: (item: EditStockItem) => void;
-  onViewProduct: (item: InventoryItemVariant) => void;
+  inventory: InventoryItem[];
+  onEditQuantity: (item: any) => void;
+  onViewProduct: (item: InventoryItem) => void;
 }
 
 const sortOptions = [
   { label: 'Name A-Z', value: 'name-az' },
   { label: 'Name Z-A', value: 'name-za' },
-  { label: 'Stock High-Low', value: 'stock-high' },
-  { label: 'Stock Low-High', value: 'stock-low' },
-  { label: 'SKU A-Z', value: 'sku-az' },
-  { label: 'SKU Z-A', value: 'sku-za' },
-  { label: 'Price High-Low', value: 'price-high' },
-  { label: 'Price Low-High', value: 'price-low' },
+  { label: 'Variants High-Low', value: 'variants-high' },
+  { label: 'Variants Low-High', value: 'variants-low' },
+  { label: 'Total Stock High-Low', value: 'stock-high' },
+  { label: 'Total Stock Low-High', value: 'stock-low' },
+  { label: 'Total Value High-Low', value: 'value-high' },
+  { label: 'Total Value Low-High', value: 'value-low' },
 ];
 
 const pageSizeOptions = [10, 25, 50, 100];
@@ -27,13 +28,11 @@ const pageSizeOptions = [10, 25, 50, 100];
 // Column configuration
 const columnConfig = {
   name: { label: 'Item Name', key: 'name', defaultVisible: true },
-  sku: { label: 'SKU', key: 'sku', defaultVisible: true },
-  stock: { label: 'Current Stock', key: 'stock', defaultVisible: true },
-  supplier: { label: 'Supplier', key: 'supplier', defaultVisible: true },
-  costPrice: { label: 'Cost Price', key: 'costPrice', defaultVisible: true },
-  sellingPrice: { label: 'Selling Price', key: 'sellingPrice', defaultVisible: true },
-  packaging: { label: 'Packaging', key: 'packaging', defaultVisible: true },
-  fragile: { label: 'Fragile', key: 'fragile', defaultVisible: true },
+  category: { label: 'Category', key: 'category', defaultVisible: true },
+  variants: { label: 'Variants', key: 'variants', defaultVisible: true },
+  totalStock: { label: 'Total Stock', key: 'totalStock', defaultVisible: true },
+  totalCost: { label: 'Total Cost', key: 'totalCost', defaultVisible: true },
+  totalValue: { label: 'Total Value', key: 'totalValue', defaultVisible: true },
   actions: { label: 'Actions', key: 'actions', defaultVisible: true },
 };
 
@@ -52,43 +51,42 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
 
   const filtered = useMemo(() => {
     return inventory.filter((item) =>
-      item.inventory_items?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      item.sku?.toLowerCase().includes(search.toLowerCase()) ||
-      item.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
-      item.current_stock?.toString().includes(search) ||
-      item.cost_price?.toString().includes(search) ||
-      item.selling_price?.toString().includes(search)
+      item.name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.category?.toLowerCase().includes(search.toLowerCase()) ||
+      item.description?.toLowerCase().includes(search.toLowerCase()) ||
+      (item.variantsCount || 0).toString().includes(search) ||
+      (item.totalStock || 0).toString().includes(search)
     );
   }, [inventory, search]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      const aName = (a.inventory_items?.name || '').toLowerCase();
-      const bName = (b.inventory_items?.name || '').toLowerCase();
-      const aStock = a.current_stock || 0;
-      const bStock = b.current_stock || 0;
-      const aSku = (a.sku || '').toLowerCase();
-      const bSku = (b.sku || '').toLowerCase();
-      const aCost = a.cost_price || 0;
-      const bCost = b.cost_price || 0;
+      const aName = (a.name || '').toLowerCase();
+      const bName = (b.name || '').toLowerCase();
+      const aVariants = a.variantsCount || 0;
+      const bVariants = b.variantsCount || 0;
+      const aStock = a.totalStock || 0;
+      const bStock = b.totalStock || 0;
+      const aValue = a.totalValue || 0;
+      const bValue = b.totalValue || 0;
 
       switch (sort) {
         case 'name-az':
           return aName.localeCompare(bName);
         case 'name-za':
           return bName.localeCompare(aName);
+        case 'variants-high':
+          return bVariants - aVariants;
+        case 'variants-low':
+          return aVariants - bVariants;
         case 'stock-high':
           return bStock - aStock;
         case 'stock-low':
           return aStock - bStock;
-        case 'sku-az':
-          return aSku.localeCompare(bSku);
-        case 'sku-za':
-          return bSku.localeCompare(aSku);
-        case 'price-high':
-          return bCost - aCost;
-        case 'price-low':
-          return aCost - bCost;
+        case 'value-high':
+          return bValue - aValue;
+        case 'value-low':
+          return aValue - bValue;
         default:
           return 0;
       }
@@ -102,14 +100,29 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
     return Object.values(visibleColumns).filter(Boolean).length;
   };
 
-  const getStockDisplay = (item: InventoryItemVariant) => {
-    const isLowStock = item.current_stock <= 3;
+  const getVariantsDisplay = (item: InventoryItem) => {
+    const count = item.variantsCount || 0;
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-medium text-gray-900">{count}</span>
+        {count === 0 && (
+          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+            No Variants
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const getStockDisplay = (item: InventoryItem) => {
+    const stock = item.totalStock || 0;
+    const isLowStock = stock <= 3;
     return (
       <div className="flex items-center gap-2">
         <span className={`font-medium ${isLowStock ? 'text-red-600' : 'text-gray-900'}`}>
-          {item.current_stock}
+          {stock}
         </span>
-        {isLowStock && (
+        {isLowStock && stock > 0 && (
           <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
             Low Stock
           </span>
@@ -118,32 +131,22 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
     );
   };
 
-  const getActionsDisplay = (item: InventoryItemVariant) => {
+  const getActionsDisplay = (item: InventoryItem) => {
     return (
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => onEditQuantity({
-            variant_id: item.id,
-            currentStock: item.current_stock,
-            mode: 'add',
-            quantity: 1,
-          })}
-          className="w-8 h-8 rounded-full bg-green-100 hover:bg-green-200 text-green-700 flex items-center justify-center text-sm font-bold transition-colors"
-          title="Add stock"
+        <Link
+          href={`/inventory/item/${item.id}`}
+          className="w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-700 flex items-center justify-center text-sm font-bold transition-colors"
+          title="View item details"
         >
-          +
-        </button>
+          👁️
+        </Link>
         <button
-          onClick={() => onEditQuantity({
-            variant_id: item.id,
-            currentStock: item.current_stock,
-            mode: 'subtract',
-            quantity: 1,
-          })}
-          className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-200 text-red-700 flex items-center justify-center text-sm font-bold transition-colors"
-          title="Subtract stock"
+          onClick={() => onViewProduct(item)}
+          className="w-8 h-8 rounded-full bg-orange-100 hover:bg-orange-200 text-orange-700 flex items-center justify-center text-sm font-bold transition-colors"
+          title="Edit item"
         >
-          -
+          ✏️
         </button>
       </div>
     );
@@ -152,8 +155,8 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
   if (inventory.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-gray-500 text-lg">No inventory variants found.</div>
-        <p className="text-gray-400 mt-2">Start by adding some inventory items and variants.</p>
+        <div className="text-gray-500 text-lg">No inventory items found.</div>
+        <p className="text-gray-400 mt-2">Start by adding some inventory items.</p>
       </div>
     );
   }
@@ -163,14 +166,14 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
       {/* Header Controls */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h2 className="text-xl font-bold text-gray-900">Inventory Variants</h2>
+          <h2 className="text-xl font-bold text-gray-900">Inventory Items</h2>
           <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full md:w-auto">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search inventory..."
+                placeholder="Search items..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -255,39 +258,29 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
                   Item Name
                 </th>
               )}
-              {visibleColumns.sku && (
+              {visibleColumns.category && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  SKU
+                  Category
                 </th>
               )}
-              {visibleColumns.stock && (
+              {visibleColumns.variants && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Current Stock
+                  Variants
                 </th>
               )}
-              {visibleColumns.supplier && (
+              {visibleColumns.totalStock && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Supplier
+                  Total Stock
                 </th>
               )}
-              {visibleColumns.costPrice && (
+              {visibleColumns.totalCost && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Cost Price
+                  Total Cost
                 </th>
               )}
-              {visibleColumns.sellingPrice && (
+              {visibleColumns.totalValue && (
                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Selling Price
-                </th>
-              )}
-              {visibleColumns.packaging && (
-                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Packaging
-                </th>
-              )}
-              {visibleColumns.fragile && (
-                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
-                  Fragile
+                  Total Value
                 </th>
               )}
               {visibleColumns.actions && (
@@ -309,51 +302,33 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
                       onClick={() => onViewProduct(item)}
                       className="font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left"
                     >
-                      {item.inventory_items?.name ?? 'Unknown'}
+                      {item.name || 'Unknown'}
                     </button>
                   </td>
                 )}
-                {visibleColumns.sku && (
-                  <td className="px-6 py-4 text-gray-700 font-mono">
-                    {item.sku}
+                {visibleColumns.category && (
+                  <td className="px-6 py-4 text-gray-700">
+                    {item.category || '-'}
                   </td>
                 )}
-                {visibleColumns.stock && (
+                {visibleColumns.variants && (
+                  <td className="px-6 py-4">
+                    {getVariantsDisplay(item)}
+                  </td>
+                )}
+                {visibleColumns.totalStock && (
                   <td className="px-6 py-4">
                     {getStockDisplay(item)}
                   </td>
                 )}
-                {visibleColumns.supplier && (
+                {visibleColumns.totalCost && (
                   <td className="px-6 py-4 text-gray-700">
-                    {item.supplier_name}
+                    ${(item.totalCost || 0).toFixed(2)}
                   </td>
                 )}
-                {visibleColumns.costPrice && (
+                {visibleColumns.totalValue && (
                   <td className="px-6 py-4 text-gray-700">
-                    {item.cost_price ? `$${item.cost_price.toFixed(2)}` : '-'}
-                  </td>
-                )}
-                {visibleColumns.sellingPrice && (
-                  <td className="px-6 py-4 text-gray-700">
-                    {item.selling_price ? `$${item.selling_price.toFixed(2)}` : '-'}
-                  </td>
-                )}
-                {visibleColumns.packaging && (
-                  <td className="px-6 py-4 text-gray-700">
-                    {item.packaging_type || '-'}
-                  </td>
-                )}
-                {visibleColumns.fragile && (
-                  <td className="px-6 py-4">
-                    {item.is_fragile ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        Yes
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        No
-                      </span>
-                    )}
+                    ${(item.totalValue || 0).toFixed(2)}
                   </td>
                 )}
                 {visibleColumns.actions && (

@@ -4,6 +4,11 @@ export interface InventoryItem {
   category: string | null
   description: string | null
   created_at: string
+  variantsCount?: number
+  totalCost?: number
+  totalStock?: number
+  totalValue?: number
+  inventory_items_variants?: InventoryItemVariant[]
 }
 
 export interface InventoryItemVariant {
