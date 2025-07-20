@@ -21,6 +21,21 @@ type DayEntry = {
   unavailableReason?: string
 }
 
+// Helper function to create UTC date from PH time (proper timezone conversion)
+function createUTCFromPHTime(dateString: string, timeString: string): Date {
+  // Parse the time string
+  const [hours, minutes] = timeString.split(':').map(Number)
+  
+  // Parse the date string
+  const [year, month, day] = dateString.split('-').map(Number)
+  
+  // Create UTC date by subtracting 8 hours from PH time
+  // When it's 8:00 AM in PH (UTC+8), it's 00:00 AM in UTC
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hours - 8, minutes, 0, 0))
+  
+  return utcDate
+}
+
 export default function DriverAvailabilityForm() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [weekData, setWeekData] = useState<DayEntry[]>([])
@@ -97,15 +112,39 @@ export default function DriverAvailabilityForm() {
 
     const entries = weekData.map(d => {
       const shift = SHIFT_PRESETS[d.shift as keyof typeof SHIFT_PRESETS]
+      
+      let startTime: Date
+      let endTime: Date
+      
+      if (d.available && shift) {
+        // Convert PH time to UTC for available shifts
+        startTime = createUTCFromPHTime(d.day, shift.start)
+        
+        // Handle midnight end time (night shift)
+        if (shift.end === '00:00') {
+          // For night shifts ending at midnight, add one day
+          const nextDay = new Date(d.day)
+          nextDay.setDate(nextDay.getDate() + 1)
+          endTime = createUTCFromPHTime(nextDay.toISOString().split('T')[0], shift.end)
+        } else {
+          endTime = createUTCFromPHTime(d.day, shift.end)
+        }
+      } else {
+        // For unavailable days, set both start and end to start of day in UTC
+        startTime = createUTCFromPHTime(d.day, '00:00')
+        endTime = createUTCFromPHTime(d.day, '00:00')
+      }
+      
       return {
         id: uuidv4(),
         driver_id: user.id,
         title: d.available ? shift?.label || '' : `Unavailable - ${d.unavailableReason?.toUpperCase()}`,
-        start_time: new Date(`${d.day}T${d.available ? shift?.start : '00:00'}:00+08:00`),
-        end_time: new Date(`${d.day}T${d.available ? shift?.end : '00:00'}:00+08:00`),
-
+        start_time: startTime,
+        end_time: endTime,
       }
     })
+
+    console.log('Entries being submitted:', entries) // Debug log
 
     const { error: insertError } = await supabase.from('driver_availability').insert(entries)
     if (insertError) {
@@ -123,6 +162,8 @@ export default function DriverAvailabilityForm() {
           <h1 className="text-2xl font-bold text-black">📅 Driver Availability</h1>
           <p className="text-sm text-gray-500">
             Please schedule at least <span className="font-semibold">20 hours</span> this week.
+            <br />
+            <span className="text-xs text-gray-400">Times are in Philippine Time (UTC+8)</span>
           </p>
         </div>
 
