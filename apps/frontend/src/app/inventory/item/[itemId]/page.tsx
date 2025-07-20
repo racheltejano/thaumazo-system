@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItem, InventoryItemVariant, NewInventoryVariant, InventoryMovement } from '@/types/inventory.types';
-import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye, Calendar, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye, Calendar, HelpCircle, Search, Filter, ChevronDown } from 'lucide-react';
 import ItemMovementsList from '@/components/inventory/ItemMovementsList';
 
 export default function ItemProfilePage() {
@@ -18,6 +18,14 @@ export default function ItemProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(false);
+  
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterValue, setFilterValue] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     // Trigger animation after component mounts
@@ -167,6 +175,83 @@ export default function ItemProfilePage() {
   
   const lowStockCount = variants.filter(variant => (variant.current_stock || 0) <= 10).length;
 
+  // Filter and sort variants
+  const filteredAndSortedVariants = variants
+    .filter(variant => {
+      // Search filter
+      const searchMatch = searchTerm === '' || 
+        variant.variant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        variant.sku?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if (!searchMatch) return false;
+      
+      // Additional filters
+      if (filterType === 'stock' && filterValue) {
+        const stockValue = parseInt(filterValue);
+        if (isNaN(stockValue)) return true;
+        return variant.current_stock <= stockValue;
+      }
+      
+      if (filterType === 'margin' && filterValue) {
+        const marginValue = parseFloat(filterValue);
+        if (isNaN(marginValue)) return true;
+        const margin = (variant.selling_price || 0) - (variant.cost_price || 0);
+        const marginPercentage = variant.cost_price ? (margin / variant.cost_price) * 100 : 0;
+        return marginPercentage <= marginValue;
+      }
+      
+      if (filterType === 'cost' && filterValue) {
+        const costValue = parseFloat(filterValue);
+        if (isNaN(costValue)) return true;
+        return (variant.cost_price || 0) <= costValue;
+      }
+      
+      return true;
+    })
+    .sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortBy) {
+        case 'name':
+          aValue = a.variant_name?.toLowerCase() || '';
+          bValue = b.variant_name?.toLowerCase() || '';
+          break;
+        case 'supplier':
+          aValue = a.supplier_name?.toLowerCase() || '';
+          bValue = b.supplier_name?.toLowerCase() || '';
+          break;
+        case 'stock':
+          aValue = a.current_stock || 0;
+          bValue = b.current_stock || 0;
+          break;
+        case 'margin':
+          const marginA = (a.selling_price || 0) - (a.cost_price || 0);
+          const marginPercentageA = a.cost_price ? (marginA / a.cost_price) * 100 : 0;
+          const marginB = (b.selling_price || 0) - (b.cost_price || 0);
+          const marginPercentageB = b.cost_price ? (marginB / b.cost_price) * 100 : 0;
+          aValue = marginPercentageA;
+          bValue = marginPercentageB;
+          break;
+        case 'cost':
+          aValue = a.cost_price || 0;
+          bValue = b.cost_price || 0;
+          break;
+        case 'selling':
+          aValue = a.selling_price || 0;
+          bValue = b.selling_price || 0;
+          break;
+        default:
+          aValue = a.variant_name?.toLowerCase() || '';
+          bValue = b.variant_name?.toLowerCase() || '';
+      }
+      
+      if (sortOrder === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+
   return (
     <div className="p-6">
       <div 
@@ -298,7 +383,7 @@ export default function ItemProfilePage() {
       {/* Variants Table */}
       <div id="variants-section" className="bg-white rounded-lg shadow-md border mb-8">
         <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
               <Truck className="w-6 h-6" />
               Variants
@@ -311,6 +396,100 @@ export default function ItemProfilePage() {
               Add Variant
             </button>
           </div>
+          
+          {/* Search and Filter Bar */}
+          <div className="flex flex-col gap-4">
+            {/* Search Bar and Controls Row */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by variant name or SKU..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              {/* Filter and Sort Controls */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+              >
+                <Filter className="w-4 h-4" />
+                Filters
+                <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
+              
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="name">Sort by Name</option>
+                <option value="supplier">Sort by Supplier</option>
+                <option value="stock">Sort by Stock</option>
+                <option value="margin">Sort by Margin</option>
+                <option value="cost">Sort by Cost Price</option>
+                <option value="selling">Sort by Selling Price</option>
+              </select>
+              
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+            
+            {/* Filter Options */}
+            {showFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Stock</label>
+                  <input
+                    type="number"
+                    placeholder="Max stock level"
+                    value={filterType === 'stock' ? filterValue : ''}
+                    onChange={(e) => {
+                      setFilterType('stock');
+                      setFilterValue(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Margin (%)</label>
+                  <input
+                    type="number"
+                    placeholder="Max margin %"
+                    value={filterType === 'margin' ? filterValue : ''}
+                    onChange={(e) => {
+                      setFilterType('margin');
+                      setFilterValue(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Cost Price</label>
+                  <input
+                    type="number"
+                    placeholder="Max cost price"
+                    value={filterType === 'cost' ? filterValue : ''}
+                    onChange={(e) => {
+                      setFilterType('cost');
+                      setFilterValue(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {variants.length === 0 ? (
@@ -320,7 +499,7 @@ export default function ItemProfilePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-            {variants.map((variant) => {
+            {filteredAndSortedVariants.map((variant) => {
               const margin = (variant.selling_price || 0) - (variant.cost_price || 0);
               const marginPercentage = variant.cost_price ? (margin / variant.cost_price) * 100 : 0;
               
