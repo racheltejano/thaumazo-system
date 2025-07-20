@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { InventoryItem, InventoryItemVariant, NewInventoryVariant } from '@/types/inventory.types';
-import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye } from 'lucide-react';
+import { InventoryItem, InventoryItemVariant, NewInventoryVariant, InventoryMovement } from '@/types/inventory.types';
+import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye, Calendar } from 'lucide-react';
+import ItemMovementsList from '@/components/inventory/ItemMovementsList';
 
 export default function ItemProfilePage() {
   const params = useParams();
@@ -13,6 +14,7 @@ export default function ItemProfilePage() {
   
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [variants, setVariants] = useState<InventoryItemVariant[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(false);
@@ -71,6 +73,31 @@ export default function ItemProfilePage() {
       }
 
       setVariants(variantsData || []);
+
+      // Fetch movements for all variants of this item
+      if (variantsData && variantsData.length > 0) {
+        const variantIds = variantsData.map(v => v.id);
+        const { data: movementsData, error: movementsError } = await supabase
+          .from('inventory_items_movements')
+          .select(`
+            *,
+            inventory_items_variants (
+              id,
+              variant_name,
+              sku,
+              current_stock
+            )
+          `)
+          .in('variant_id', variantIds)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (movementsError) {
+          console.error('Error loading movements:', movementsError);
+        } else {
+          setMovements(movementsData || []);
+        }
+      }
     } catch (err) {
       setError('An unexpected error occurred');
     } finally {
@@ -174,13 +201,35 @@ export default function ItemProfilePage() {
             </div>
           </div>
           
-          <button
-            onClick={() => router.push(`/inventory/item/${itemId}/edit`)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-            Edit Item
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const variantsSection = document.getElementById('variants-section');
+                variantsSection?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            >
+              <Truck className="w-4 h-4" />
+              Variants
+            </button>
+            <button
+              onClick={() => {
+                const recentActivitySection = document.getElementById('recent-activity-section');
+                recentActivitySection?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            >
+              <Calendar className="w-4 h-4" />
+              Recent Activity
+            </button>
+            <button
+              onClick={() => router.push(`/inventory/item/${itemId}/edit`)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+              Edit Item
+            </button>
+          </div>
         </div>
       </div>
 
@@ -247,7 +296,7 @@ export default function ItemProfilePage() {
       </div>
 
       {/* Variants Table */}
-      <div className="bg-white rounded-lg shadow-md border">
+      <div id="variants-section" className="bg-white rounded-lg shadow-md border mb-8">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
@@ -379,6 +428,16 @@ export default function ItemProfilePage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Recent Activity */}
+      <div id="recent-activity-section">
+        <ItemMovementsList 
+          movements={movements} 
+          title="Recent Activity"
+          emptyMessage="No activity yet"
+          emptyDescription="Activity will appear here when you add or remove stock from any variant."
+        />
       </div>
       </div>
     </div>
