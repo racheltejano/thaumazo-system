@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItem, InventoryItemVariant, NewInventoryVariant, InventoryMovement } from '@/types/inventory.types';
-import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye, Calendar } from 'lucide-react';
+import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye, Calendar, HelpCircle } from 'lucide-react';
 import ItemMovementsList from '@/components/inventory/ItemMovementsList';
 
 export default function ItemProfilePage() {
@@ -348,8 +348,8 @@ export default function ItemProfilePage() {
                     </div>
                   </div>
 
-                  {/* Stock, Cost Price, Margin Row */}
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                  {/* Stock, Cost Price, Selling Price, Margin Row */}
+                  <div className="grid grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Stock</p>
                       <p className={`font-semibold ${variant.current_stock <= 3 ? 'text-red-600' : 'text-gray-900'}`}>
@@ -363,9 +363,24 @@ export default function ItemProfilePage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Margin</p>
+                      <p className="text-xs text-gray-500 mb-1">Selling Price</p>
+                      <p className="font-semibold text-gray-900">
+                        ₱{variant.selling_price?.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <p className="text-xs text-gray-500">Margin</p>
+                        <div className="group relative">
+                          <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                            Profit margin: the percentage difference between cost and selling price
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        </div>
+                      </div>
                       <p className={`font-semibold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ₱{margin.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({marginPercentage.toFixed(1)}%)
+                        {marginPercentage.toFixed(1)}%
                       </p>
                     </div>
                   </div>
