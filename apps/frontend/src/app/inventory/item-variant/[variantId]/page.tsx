@@ -117,10 +117,10 @@ export default function ItemVariantPage() {
         <div className="text-center py-12">
           <div className="text-red-500 text-lg">Error: {error}</div>
           <button
-            onClick={() => router.push('/inventory/dashboard')}
+            onClick={() => router.back()}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
           >
-            Back to Inventory
+            Go Back
           </button>
         </div>
       </div>
@@ -133,10 +133,10 @@ export default function ItemVariantPage() {
         <div className="text-center py-12">
           <div className="text-gray-500 text-lg">Variant not found</div>
           <button
-            onClick={() => router.push('/inventory/dashboard')}
+            onClick={() => router.back()}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
           >
-            Back to Inventory
+            Go Back
           </button>
         </div>
       </div>
@@ -145,6 +145,24 @@ export default function ItemVariantPage() {
 
   const margin = (variant.selling_price || 0) - (variant.cost_price || 0);
   const marginPercentage = variant.cost_price ? (margin / variant.cost_price) * 100 : 0;
+
+  // Dynamic back button handler
+  const handleBackNavigation = () => {
+    // Check if we have a stored referrer from activity logs
+    const lastActivityLogsPage = sessionStorage.getItem('lastActivityLogsPage');
+    
+    if (lastActivityLogsPage) {
+      // Clear the stored referrer and navigate back
+      sessionStorage.removeItem('lastActivityLogsPage');
+      router.push(lastActivityLogsPage);
+    } else if (window.history.length > 1) {
+      // Check if we can go back in history
+      router.back();
+    } else {
+      // Fallback to item page
+      router.push(`/inventory/item/${item.id}`);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -160,7 +178,7 @@ export default function ItemVariantPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => router.push(`/inventory/item/${item.id}`)}
+                onClick={handleBackNavigation}
                 className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-105"
               >
                 <ArrowLeft className="w-5 h-5" />

@@ -147,14 +147,17 @@ export default function MovementsList({
                                                    <div className="flex items-center gap-2">
                            <span className="text-sm font-medium text-gray-600">Change:</span>
                            <span className="text-sm">
-                             {movement.movement_type === 'stock_in' ? 
-                               `From ${movement.inventory_items_variants?.current_stock ? movement.inventory_items_variants.current_stock - movement.quantity : 0} to ${movement.inventory_items_variants?.current_stock || 0}` : 
-                               `From ${movement.inventory_items_variants?.current_stock ? movement.inventory_items_variants.current_stock + movement.quantity : 0} to ${movement.inventory_items_variants?.current_stock || 0}`
-                             } units
+                             From {movement.inventory_items_variants?.current_stock ? 
+                               (movement.movement_type === 'stock_in' ? 
+                                 movement.inventory_items_variants.current_stock - movement.quantity : 
+                                 movement.inventory_items_variants.current_stock + movement.quantity
+                               ) : 0} units to {movement.inventory_items_variants?.current_stock || 0} units
                            </span>
                          </div>
                          <div className="flex items-center gap-2">
-                           <span className="text-sm font-medium text-gray-600">Cost:</span>
+                           <span className="text-sm font-medium text-gray-600">
+                             {movement.movement_type === 'stock_in' ? 'Cost:' : 'Earnings:'}
+                           </span>
                            <span className={`text-sm font-semibold ${movement.movement_type === 'stock_in' ? 'text-red-600' : 'text-green-600'}`}>
                              {movement.movement_type === 'stock_in' 
                                ? `₱${((movement.inventory_items_variants?.cost_price || 0) * movement.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
