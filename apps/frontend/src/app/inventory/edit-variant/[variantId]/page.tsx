@@ -1,0 +1,492 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { InventoryItemVariant } from '@/types/inventory.types';
+import { 
+  ArrowLeft, 
+  Save, 
+  Package, 
+  Tag, 
+  DollarSign, 
+  Truck, 
+  User,
+  Mail,
+  Phone,
+  AlertTriangle
+} from 'lucide-react';
+
+export default function EditVariantPage() {
+  const params = useParams();
+  const router = useRouter();
+  const variantId = params.variantId as string;
+  
+  const [variant, setVariant] = useState<InventoryItemVariant | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [isVisible, setIsVisible] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    variant_name: '',
+    sku: '',
+    cost_price: '',
+    selling_price: '',
+    current_stock: '',
+    packaging_type: '',
+    is_fragile: false,
+    supplier_name: '',
+    supplier_email: '',
+    supplier_number: ''
+  });
+
+  useEffect(() => {
+    if (variantId) {
+      fetchVariant();
+    }
+  }, [variantId]);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const fetchVariant = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase
+        .from('inventory_items_variants')
+        .select(`
+          *,
+          inventory_items (
+            id,
+            name,
+            category_id,
+            description,
+            created_at,
+            inventory_items_categories (
+              id,
+              name,
+              description
+            )
+          )
+        `)
+        .eq('id', variantId)
+        .single();
+
+      if (error) {
+        setError('Error loading variant details');
+        setLoading(false);
+        return;
+      }
+
+      setVariant(data);
+      
+      // Populate form with existing data
+      setFormData({
+        variant_name: data.variant_name || '',
+        sku: data.sku || '',
+        cost_price: data.cost_price?.toString() || '',
+        selling_price: data.selling_price?.toString() || '',
+        current_stock: data.current_stock?.toString() || '',
+        packaging_type: data.packaging_type || '',
+        is_fragile: data.is_fragile || false,
+        supplier_name: data.supplier_name || '',
+        supplier_email: data.supplier_email || '',
+        supplier_number: data.supplier_number || ''
+      });
+
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setHasChanges(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+
+    try {
+      const updateData = {
+        variant_name: formData.variant_name,
+        sku: formData.sku,
+        cost_price: formData.cost_price ? parseFloat(formData.cost_price) : null,
+        selling_price: formData.selling_price ? parseFloat(formData.selling_price) : null,
+        current_stock: formData.current_stock ? parseInt(formData.current_stock) : 0,
+        packaging_type: formData.packaging_type,
+        is_fragile: formData.is_fragile,
+        supplier_name: formData.supplier_name,
+        supplier_email: formData.supplier_email,
+        supplier_number: formData.supplier_number,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('inventory_items_variants')
+        .update(updateData)
+        .eq('id', variantId);
+
+      if (error) {
+        setError('Error updating variant');
+        setSaving(false);
+        return;
+      }
+
+      // Navigate back to the item details page
+      router.push(`/inventory/item/${variant?.inventory_items?.id}`);
+      
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const generateSKU = () => {
+    if (!variant?.inventory_items?.name) return;
+    
+    const itemName = variant.inventory_items.name;
+    const prefix = itemName.substring(0, 3).toUpperCase();
+    const timestamp = Date.now().toString().slice(-6);
+    const sku = `${prefix}-${timestamp}`;
+    
+    setFormData(prev => ({
+      ...prev,
+      sku: sku
+    }));
+    setHasChanges(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="text-gray-500 text-lg">Loading variant details...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !variant) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="text-red-500 text-lg">Error: {error}</div>
+          <button
+            onClick={() => router.push('/inventory/dashboard')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            Back to Inventory
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!variant) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="text-gray-500 text-lg">Variant not found</div>
+          <button
+            onClick={() => router.push('/inventory/dashboard')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            Back to Inventory
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div 
+        className={`w-full transition-all duration-700 ease-out ${
+          isVisible 
+            ? 'opacity-100 transform translate-y-0' 
+            : 'opacity-0 transform translate-y-8'
+        }`}
+      >
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push(`/inventory/item/${variant.inventory_items?.id}`)}
+                className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-105"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Edit Variant</h1>
+                <div className="flex items-center gap-4 mt-1 text-gray-600">
+                  <span>{variant.inventory_items?.name}</span>
+                  <span>•</span>
+                  <span>{variant.inventory_items?.inventory_items_categories?.name || 'No category'}</span>
+                  <span>•</span>
+                  <span>{variant.variant_name}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSubmit}
+                disabled={saving || !hasChanges}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+                  saving || !hasChanges
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <span className="text-red-700 font-medium">Error</span>
+            </div>
+            <p className="text-red-600 mt-1">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Basic Information */}
+          <div className="bg-white rounded-lg shadow-md border">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                <Package className="w-6 h-6" />
+                Basic Information
+              </h2>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Variant Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.variant_name}
+                    onChange={(e) => handleInputChange('variant_name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    SKU
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.sku}
+                      onChange={(e) => handleInputChange('sku', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Auto-generated"
+                    />
+                    <button
+                      type="button"
+                      onClick={generateSKU}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Packaging Type
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.packaging_type}
+                    onChange={(e) => handleInputChange('packaging_type', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Box, Bottle, Bag"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fragile Item
+                  </label>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_fragile}
+                      onChange={(e) => handleInputChange('is_fragile', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Mark as fragile</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing Information */}
+          <div className="bg-white rounded-lg shadow-md border">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                <Tag className="w-6 h-6" />
+                Pricing Information
+              </h2>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cost Price (₱)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.cost_price}
+                    onChange={(e) => handleInputChange('cost_price', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Selling Price (₱)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.selling_price}
+                    onChange={(e) => handleInputChange('selling_price', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Stock
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.current_stock}
+                    onChange={(e) => handleInputChange('current_stock', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              {/* Margin Calculation */}
+              {formData.cost_price && formData.selling_price && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="text-sm text-gray-600">Cost Price</div>
+                      <div className="text-lg font-semibold">₱{parseFloat(formData.cost_price).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Selling Price</div>
+                      <div className="text-lg font-semibold">₱{parseFloat(formData.selling_price).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Margin</div>
+                      <div className={`text-lg font-semibold ${parseFloat(formData.selling_price) - parseFloat(formData.cost_price) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ₱{(parseFloat(formData.selling_price) - parseFloat(formData.cost_price)).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                        ({(parseFloat(formData.selling_price) - parseFloat(formData.cost_price)) / parseFloat(formData.cost_price) * 100}%)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Supplier Information */}
+          <div className="bg-white rounded-lg shadow-md border">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                <Truck className="w-6 h-6" />
+                Supplier Information
+              </h2>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Supplier Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.supplier_name}
+                    onChange={(e) => handleInputChange('supplier_name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Supplier company name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Supplier Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.supplier_email}
+                    onChange={(e) => handleInputChange('supplier_email', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="supplier@example.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Supplier Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.supplier_number}
+                    onChange={(e) => handleInputChange('supplier_number', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="+63 912 345 6789"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+} 

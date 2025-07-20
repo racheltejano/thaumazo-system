@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItem, InventoryItemVariant, NewInventoryVariant } from '@/types/inventory.types';
-import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box } from 'lucide-react';
+import { ArrowLeft, Plus, Package, Tag, DollarSign, Truck, AlertTriangle, Edit, MoreVertical, Move, Settings, Box, Eye } from 'lucide-react';
 
 export default function ItemProfilePage() {
   const params = useParams();
@@ -223,7 +223,7 @@ export default function ItemProfilePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Average Margin</p>
-              <p className="text-2xl font-bold text-gray-900">${averageMargin.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">₱{averageMargin.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <div className="p-3 bg-yellow-100 rounded-lg">
               <DollarSign className="w-6 h-6 text-yellow-600" />
@@ -286,10 +286,16 @@ export default function ItemProfilePage() {
                         SKU: {variant.sku}
                       </p>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      <span className={`px-2 py-1 rounded-full ${variant.current_stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded-full text-xs ${variant.current_stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {variant.current_stock > 0 ? 'In Stock' : 'Out of Stock'}
                       </span>
+                      <button
+                        onClick={() => router.push(`/inventory/edit-variant/${variant.id}`)}
+                        className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-600 transition-all duration-200 hover:scale-105"
+                      >
+                        <Edit className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
 
@@ -304,13 +310,13 @@ export default function ItemProfilePage() {
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Cost Price</p>
                       <p className="font-semibold text-gray-900">
-                        ${variant.cost_price?.toFixed(2) || '0.00'}
+                        ₱{variant.cost_price?.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Margin</p>
                       <p className={`font-semibold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ${margin.toFixed(2)} ({marginPercentage.toFixed(1)}%)
+                        ₱{margin.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({marginPercentage.toFixed(1)}%)
                       </p>
                     </div>
                   </div>
@@ -341,18 +347,18 @@ export default function ItemProfilePage() {
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-center gap-3">
                       <button
-                        onClick={() => router.push(`/inventory/item/${itemId}/variant/${variant.id}/move-stock`)}
+                        onClick={() => router.push(`/inventory/item-variant/${variant.id}`)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => router.push(`/inventory/move-variant-stock/${variant.id}`)}
                         className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
                         <Box className="w-4 h-4" />
                         Move Stock
-                      </button>
-                      <button
-                        onClick={() => router.push(`/inventory/item/${itemId}/variant/${variant.id}/edit`)}
-                        className="flex items-center gap-2 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                        Edit Variant
                       </button>
                     </div>
                   </div>
