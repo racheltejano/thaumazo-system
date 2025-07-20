@@ -41,9 +41,9 @@ CREATE TABLE public.driver_time_slots (
   start_time_tz timestamp with time zone,
   end_time_tz timestamp with time zone,
   CONSTRAINT driver_time_slots_pkey PRIMARY KEY (id),
-  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id),
-  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id)
+  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id),
+  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.inventory (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -80,6 +80,9 @@ CREATE TABLE public.inventory_items_movements (
   created_at timestamp with time zone DEFAULT now(),
   movement_type USER-DEFINED,
   reference_type USER-DEFINED,
+  old_stock integer NOT NULL DEFAULT 0,
+  new_stock integer NOT NULL DEFAULT 0,
+  price_at_movement numeric,
   CONSTRAINT inventory_items_movements_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_movements_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES public.inventory_items_variants(id)
 );
@@ -97,6 +100,8 @@ CREATE TABLE public.inventory_items_variants (
   variant_name text,
   supplier_email text,
   supplier_number text,
+  color text,
+  size text,
   CONSTRAINT inventory_items_variants_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_variants_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id)
 );

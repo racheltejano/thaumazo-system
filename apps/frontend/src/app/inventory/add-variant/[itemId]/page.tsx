@@ -175,12 +175,14 @@ export default function AddVariantPage() {
           supplier_name: supplierInfo.supplierName,
           supplier_email: supplierInfo.supplierEmail || null,
           supplier_number: supplierInfo.supplierNumber || null,
-          packaging_type: variantDetails.packagingType || `${variantDetails.color} ${variantDetails.size}`.trim() || null,
+          packaging_type: variantDetails.packagingType || null,
           cost_price: costPrice,
           selling_price: sellingPrice,
           sku: variantDetails.sku,
           is_fragile: variantDetails.isFragile,
-          current_stock: stockQuantity
+          current_stock: stockQuantity,
+          color: variantDetails.color || null,
+          size: variantDetails.size || null
         }])
         .select()
         .single();
@@ -332,9 +334,29 @@ export default function AddVariantPage() {
                   href={`/inventory/item/${itemId}`}
                   className="text-green-800 underline hover:text-green-900 font-medium"
                 >
-                  view the item
+                  You can now view the item
                 </a>
-                {' '}or continue adding more variants.
+                {' '}or{' '}
+                <button
+                  onClick={() => {
+                    setShowSuccessMessage(false);
+                    setCreatedVariantId(null);
+                    // Reset only specific fields while keeping others
+                    setVariantDetails({
+                      ...variantDetails,
+                      variantName: '',
+                      sku: ''
+                    });
+                    setInventoryPricing({
+                      ...inventoryPricing,
+                      stockQuantity: ''
+                    });
+                  }}
+                  className="text-green-800 underline hover:text-green-900 font-medium hover:no-underline"
+                >
+                  continue adding more variants
+                </button>
+                .
               </p>
             </div>
           </div>
@@ -586,7 +608,7 @@ export default function AddVariantPage() {
                     stockQuantity: ''
                   });
                 }}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 hover:border-gray-400 transition-all duration-200"
               >
                 Add Another Variant
               </button>
@@ -601,7 +623,7 @@ export default function AddVariantPage() {
             <>
               <button
                 onClick={() => router.push(`/inventory/item/${itemId}`)}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 hover:border-gray-400 transition-all duration-200"
               >
                 Cancel
               </button>

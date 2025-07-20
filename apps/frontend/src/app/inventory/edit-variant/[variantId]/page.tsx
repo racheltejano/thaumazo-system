@@ -67,7 +67,8 @@ export default function EditVariantPage() {
     supplier_name: '',
     supplier_email: '',
     supplier_number: '',
-    color: ''
+    color: '',
+    size: ''
   });
 
   useEffect(() => {
@@ -127,7 +128,8 @@ export default function EditVariantPage() {
         supplier_name: data.supplier_name || '',
         supplier_email: data.supplier_email || '',
         supplier_number: data.supplier_number || '',
-        color: data.color || ''
+        color: data.color || '',
+        size: data.size || ''
       });
 
     } catch (err) {
@@ -163,6 +165,7 @@ export default function EditVariantPage() {
         supplier_email: formData.supplier_email,
         supplier_number: formData.supplier_number,
         color: formData.color,
+        size: formData.size,
         updated_at: new Date().toISOString()
       };
 
@@ -293,7 +296,7 @@ export default function EditVariantPage() {
   return (
     <div className="p-6">
       <div 
-        className={`w-full transition-all duration-700 ease-out ${
+        className={`max-w-4xl mx-auto transition-all duration-700 ease-out ${
           isVisible 
             ? 'opacity-100 transform translate-y-0' 
             : 'opacity-0 transform translate-y-8'
@@ -372,28 +375,6 @@ export default function EditVariantPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    SKU
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formData.sku}
-                      onChange={(e) => handleInputChange('sku', e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Auto-generated"
-                    />
-                    <button
-                      type="button"
-                      onClick={generateSKU}
-                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-                    >
-                      Generate
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Packaging Type
                   </label>
                   <input
@@ -415,6 +396,19 @@ export default function EditVariantPage() {
                     onChange={(e) => handleInputChange('color', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="e.g., Red, Blue, Black"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Size
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.size}
+                    onChange={(e) => handleInputChange('size', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Small, Medium, Large"
                   />
                 </div>
 
@@ -545,6 +539,40 @@ export default function EditVariantPage() {
                     placeholder="+63 912 345 6789"
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SKU Configuration */}
+          <div className="bg-white rounded-lg shadow-md border">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">SKU Configuration</h2>
+            </div>
+            
+            <div className="p-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  SKU {formData.sku.trim() === '' && <span className="text-red-500">*</span>}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formData.sku}
+                    onChange={(e) => handleInputChange('sku', e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., RED-LARGE-001"
+                  />
+                  <button
+                    type="button"
+                    onClick={generateSKU}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  SKU will be auto-generated based on variant details, or you can enter a custom SKU.
+                </p>
               </div>
             </div>
           </div>
