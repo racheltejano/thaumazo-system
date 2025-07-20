@@ -27,7 +27,18 @@ type ExistingTimeSlot = {
   order_id: string | null
 }
 
+type TimeSlotOption = {
+  id: string
+  start_time: string
+  end_time: string
+  display: string
+  availabilityBlockId: string
+}
+
 const TIMEZONE = 'Asia/Manila'
+const SLOT_INTERVAL_MINUTES = 30 // Generate slots every 30 minutes
+const BUFFER_MINUTES = 10 // Buffer time between bookings
+const ROUND_UP_TO_MINUTES = 10 // Round up durations to nearest 10 minutes
 
 export default function DriverAssignmentDrawer({
   orderId,
@@ -43,29 +54,35 @@ export default function DriverAssignmentDrawer({
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   const [availableBlocks, setAvailableBlocks] = useState<AvailabilityBlock[]>([])
   const [existingTimeSlots, setExistingTimeSlots] = useState<ExistingTimeSlot[]>([])
+  const [timeSlotOptions, setTimeSlotOptions] = useState<TimeSlotOption[]>([])
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('')
   const [pickupDate, setPickupDate] = useState<Date | null>(null)
-  const [startTime, setStartTime] = useState<string>('')
-  const [endTime, setEndTime] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [showErrorPopup, setShowErrorPopup] = useState(false)
   const [popupMessage, setPopupMessage] = useState('')
   const [isAssigning, setIsAssigning] = useState(false)
+  const [actualEstimatedDuration, setActualEstimatedDuration] = useState(estimatedDurationMins)
 
   useEffect(() => {
     const fetchOrderAndDrivers = async () => {
       const { data: orderData } = await supabase
       .from('orders')
-      .select('pickup_timestamp')
+      .select('pickup_timestamp, estimated_total_duration')
       .eq('id', orderId)
       .single()
 
-    if (orderData?.pickup_timestamp) {
-      // Convert UTC pickup timestamp to PH time
-      const pickupUtc = new Date(orderData.pickup_timestamp)
-      const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
-      setPickupDate(pickupPH)
-    }
+      if (orderData?.pickup_timestamp) {
+        // Convert UTC pickup timestamp to PH time
+        const pickupUtc = new Date(orderData.pickup_timestamp)
+        const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
+        setPickupDate(pickupPH)
+      }
+
+      // Use the estimated_total_duration from the database if available
+      if (orderData?.estimated_total_duration) {
+        setActualEstimatedDuration(orderData.estimated_total_duration)
+      }
 
       const { data: driversData } = await supabase
         .from('profiles')
@@ -85,6 +102,7 @@ export default function DriverAssignmentDrawer({
       const pickupDateStr = formatDate(pickupDate, 'yyyy-MM-dd')
       const dayStart = zonedTimeToUtc(`${pickupDateStr}T00:00:00`, TIMEZONE)
       const dayEnd = zonedTimeToUtc(`${pickupDateStr}T23:59:59`, TIMEZONE)
+      
       const { data: availabilities, error } = await supabase
         .from('driver_availability')
         .select('id, start_time, end_time')
@@ -102,14 +120,13 @@ export default function DriverAssignmentDrawer({
         .from('driver_time_slots')
         .select('id, start_time, end_time, status, order_id')
         .eq('driver_id', selectedDriverId)
-        .gte('start_time', dayStart.toISOString())
-        .lt('start_time', dayEnd.toISOString())
+        .lte('start_time', dayEnd.toISOString())
+        .gte('end_time', dayStart.toISOString())
         .neq('status', 'cancelled')
 
       if (timeSlots) {
         setExistingTimeSlots(timeSlots)
       }
-
 
       const blocks = (availabilities || [])
         .map((block) => {
@@ -135,123 +152,132 @@ export default function DriverAssignmentDrawer({
     fetchAvailabilityAndTimeSlots()
   }, [selectedDriverId, pickupDate])
 
-  const phTimeStringToUtc = (timeString: string, date: Date): Date => {
-    const dateStr = formatDate(date, 'yyyy-MM-dd')
-    return zonedTimeToUtc(`${dateStr}T${timeString}`, TIMEZONE)
+  // Helper function to round up duration to nearest 10 minutes
+  const roundUpDuration = (minutes: number): number => {
+    return Math.ceil(minutes / ROUND_UP_TO_MINUTES) * ROUND_UP_TO_MINUTES
   }
 
-  const checkTimeSlotIntersection = (start: Date, end: Date): string | null => {
-    for (const slot of existingTimeSlots) {
-      const slotStart = new Date(slot.start_time)
-      const slotEnd = new Date(slot.end_time)
- 
-      if (start < slotEnd && end > slotStart) {
-        return `Time slot intersects with existing ${slot.order_id ? 'order' : 'slot'} from ${tzFormat(utcToZonedTime(slotStart, TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })} to ${tzFormat(utcToZonedTime(slotEnd, TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })}`
-      }
-    }
-    return null
-  }
-
-  const checkTimeWithinAvailability = (start: Date, end: Date): boolean => {
-  return availableBlocks.some(block => {
-    const blockStart = new Date(block.start_time + 'Z')
-    const blockEnd = new Date(block.end_time + 'Z')
-    if (!pickupDate) return false
-    
-    const pickupDateStr = formatDate(pickupDate, 'yyyy-MM-dd')
-    const dayStart = zonedTimeToUtc(`${pickupDateStr}T00:00:00`, TIMEZONE)
-    const dayEnd = zonedTimeToUtc(`${pickupDateStr}T23:59:59`, TIMEZONE)
-    const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))
-    const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEnd.getTime()))
-    
-    return effectiveStart < effectiveEnd && start >= effectiveStart && end <= effectiveEnd
-  })
-}
-  const validateTimeSlot = (): string | null => {
-    if (!startTime || !endTime) {
-      return 'Please select both start and end times'
-    }
-
-    if (!pickupDate) {
-      return 'Pickup date not available'
-    }
-
-
-    const startDateTime = phTimeStringToUtc(startTime, pickupDate)
-    const endDateTime = phTimeStringToUtc(endTime, pickupDate)
-
-    if (startDateTime >= endDateTime) {
-      return 'End time must be after start time'
-    }
-
-    const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
-    if (durationMins < estimatedDurationMins) {
-      return `Time slot too short. Minimum ${estimatedDurationMins} minutes required`
-    }
-
-    if (!checkTimeWithinAvailability(startDateTime, endDateTime)) {
-      return 'Selected time is outside driver availability hours'
-    }
-
-    const intersectionError = checkTimeSlotIntersection(startDateTime, endDateTime)
-    if (intersectionError) {
-      return intersectionError
-    }
-
-    return null
-  }
-
-  const handleTimeChange = () => {
-    setError('')
-    if (startTime && endTime) {
-      const validationError = validateTimeSlot()
-      if (validationError) {
-        setError(validationError)
-      }
-    }
-  }
-
+  // Generate available time slot options with buffer logic
   useEffect(() => {
-    handleTimeChange()
-  }, [startTime, endTime, existingTimeSlots, availableBlocks])
+    const generateTimeSlotOptions = () => {
+      if (!pickupDate || availableBlocks.length === 0) {
+        setTimeSlotOptions([])
+        return
+      }
+
+      const pickupDateStr = formatDate(pickupDate, 'yyyy-MM-dd')
+      const dayStart = zonedTimeToUtc(`${pickupDateStr}T00:00:00`, TIMEZONE)
+      const dayEnd = zonedTimeToUtc(`${pickupDateStr}T23:59:59`, TIMEZONE)
+      
+      // Round up the estimated duration to nearest 10 minutes
+      const roundedDuration = roundUpDuration(actualEstimatedDuration)
+      const durationMs = roundedDuration * 60 * 1000
+      const bufferMs = BUFFER_MINUTES * 60 * 1000
+
+      const options: TimeSlotOption[] = []
+
+      // Create buffered time slots from existing bookings
+      const bufferedExistingSlots = existingTimeSlots.map(slot => {
+        const existingStartStr = slot.start_time.endsWith('Z') ? slot.start_time : slot.start_time + 'Z'
+        const existingEndStr = slot.end_time.endsWith('Z') ? slot.end_time : slot.end_time + 'Z'
+        
+        const existingStart = new Date(existingStartStr)
+        const existingEnd = new Date(existingEndStr)
+        
+        // Add buffer before and after existing slots
+        return {
+          ...slot,
+          bufferedStart: new Date(existingStart.getTime() - bufferMs),
+          bufferedEnd: new Date(existingEnd.getTime() + bufferMs),
+          originalStart: existingStart,
+          originalEnd: existingEnd
+        }
+      })
+
+      availableBlocks.forEach(block => {
+        const blockStart = new Date(block.start_time + 'Z')
+        const blockEnd = new Date(block.end_time + 'Z')
+        
+        // Calculate effective window for this day
+        const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))
+        const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEnd.getTime()))
+        
+        if (effectiveStart >= effectiveEnd) return
+
+        // Generate slots at SLOT_INTERVAL_MINUTES intervals
+        let currentSlotStart = new Date(effectiveStart)
+        
+        // Round up to the nearest slot interval
+        const startMinutes = currentSlotStart.getMinutes()
+        const remainder = startMinutes % SLOT_INTERVAL_MINUTES
+        if (remainder !== 0) {
+          currentSlotStart.setMinutes(startMinutes + (SLOT_INTERVAL_MINUTES - remainder), 0, 0)
+        }
+
+        while (currentSlotStart < effectiveEnd) {
+          const slotEnd = new Date(currentSlotStart.getTime() + durationMs)
+          
+          // Check if slot fits within the availability block
+          if (slotEnd <= effectiveEnd) {
+            // Check for conflicts with buffered existing time slots
+            const hasConflict = bufferedExistingSlots.some(existingSlot => {
+              // Check overlap with the buffered time range
+              return currentSlotStart < existingSlot.bufferedEnd && existingSlot.bufferedStart < slotEnd
+            })
+
+            if (!hasConflict) {
+              const startPH = utcToZonedTime(currentSlotStart, TIMEZONE)
+              const endPH = utcToZonedTime(slotEnd, TIMEZONE)
+              
+              const displayText = `${formatDate(startPH, 'h:mm a')} - ${formatDate(endPH, 'h:mm a')} (${roundedDuration} min)`
+              
+              options.push({
+                id: `${currentSlotStart.getTime()}_${slotEnd.getTime()}`,
+                start_time: currentSlotStart.toISOString(),
+                end_time: slotEnd.toISOString(),
+                display: displayText,
+                availabilityBlockId: block.id
+              })
+            }
+          }
+          
+          // Move to next slot interval
+          currentSlotStart = new Date(currentSlotStart.getTime() + (SLOT_INTERVAL_MINUTES * 60 * 1000))
+        }
+      })
+
+      // Sort options by start time
+      options.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+      
+      setTimeSlotOptions(options)
+    }
+
+    generateTimeSlotOptions()
+  }, [availableBlocks, existingTimeSlots, pickupDate, actualEstimatedDuration])
 
   const handleAssign = async () => {
-    if (!selectedDriverId || !startTime || !endTime || !pickupDate) return
+    if (!selectedDriverId || !selectedTimeSlot || !pickupDate) return
     
-    const validationError = validateTimeSlot()
-    if (validationError) {
-      setError(validationError)
+    const selectedOption = timeSlotOptions.find(option => option.id === selectedTimeSlot)
+    if (!selectedOption) {
+      setError('Please select a valid time slot')
       return
     }
 
     setIsAssigning(true)
 
-    const startDateTime = phTimeStringToUtc(startTime, pickupDate)
-    const endDateTime = phTimeStringToUtc(endTime, pickupDate)
+    const startDateTime = new Date(selectedOption.start_time)
+    const endDateTime = new Date(selectedOption.end_time)
     const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
-
- 
-    const availabilityBlock = availableBlocks.find(block => {
-      // ✅ FIXED: Add 'Z' to ensure UTC treatment
-      const blockStart = new Date(block.start_time + 'Z')
-      const blockEnd = new Date(block.end_time + 'Z')
-      return startDateTime >= blockStart && endDateTime <= blockEnd
-    })
-
-    if (!availabilityBlock) {
-      setError('Selected time is not within any availability block')
-      setIsAssigning(false)
-      return
-    }
 
     try {
       const { data: orderUpdate, error: orderError } = await supabase
       .from('orders')
       .update({
         driver_id: selectedDriverId,
-        pickup_timestamp: startDateTime.toISOString(), // Store as UTC
+        pickup_timestamp: startDateTime.toISOString(),
         estimated_total_duration: durationMins,
-        estimated_end_timestamp: endDateTime.toISOString(), // Store as UTC
+        estimated_end_timestamp: endDateTime.toISOString(),
         status: 'driver_assigned',
         updated_at: new Date().toISOString(),
       })
@@ -266,10 +292,10 @@ export default function DriverAssignmentDrawer({
         .from('driver_time_slots')
         .insert({
           driver_id: selectedDriverId,
-          driver_availability_id: availabilityBlock.id,
+          driver_availability_id: selectedOption.availabilityBlockId,
           order_id: orderId,
-          start_time: startDateTime.toISOString(), // Store as UTC
-          end_time: endDateTime.toISOString(), // Store as UTC
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
           status: 'scheduled',
         })
 
@@ -314,8 +340,7 @@ export default function DriverAssignmentDrawer({
             value={selectedDriverId || ''}
             onChange={(e) => {
               setSelectedDriverId(e.target.value)
-              setStartTime('')
-              setEndTime('')
+              setSelectedTimeSlot('')
               setError('')
             }}
             disabled={isAssigning}
@@ -332,17 +357,51 @@ export default function DriverAssignmentDrawer({
               <span className="font-medium text-blue-800">
                 Pickup Date: {formatDate(pickupDate, 'MMMM dd, yyyy (EEEE)')} (PH Time)
               </span>
+              <br />
+              <span className="text-sm text-blue-600">
+                Estimated Duration: {actualEstimatedDuration} minutes → Scheduled Duration: {roundUpDuration(actualEstimatedDuration)} minutes
+              </span>
+              <br />
+              <span className="text-xs text-blue-500">
+                (Includes {BUFFER_MINUTES}-minute buffer between bookings)
+              </span>
             </div>
           )}
 
           {selectedDriverId && availableBlocks.length > 0 && (
             <>
               <div className="mb-4">
-                <label className="block mb-2 font-medium">Available Hours (PH Time)</label>
-                <div className="text-sm text-gray-600 mb-2">
+                <label className="block mb-2 font-medium">Available Time Slots (PH Time)</label>
+                <select
+                  className="w-full border p-2 rounded"
+                  value={selectedTimeSlot}
+                  onChange={(e) => {
+                    setSelectedTimeSlot(e.target.value)
+                    setError('')
+                  }}
+                  disabled={isAssigning}
+                >
+                  <option value="">-- Choose Time Slot --</option>
+                  {timeSlotOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.display}
+                    </option>
+                  ))}
+                </select>
+                {timeSlotOptions.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    No available time slots for the selected driver on this date.
+                  </p>
+                )}
+              </div>
+
+              {/* Show driver's availability blocks for reference */}
+              <div className="mb-4">
+                <label className="block mb-2 font-medium text-gray-600">Driver's Available Hours</label>
+                <div className="text-sm text-gray-500 space-y-1">
                   {availableBlocks.map((block) => {
-                    const utcStart = new Date(block.start_time + 'Z') // Ensure it's treated as UTC
-                    const utcEnd = new Date(block.end_time + 'Z')     // Ensure it's treated as UTC
+                    const utcStart = new Date(block.start_time + 'Z')
+                    const utcEnd = new Date(block.end_time + 'Z')
                     
                     const phStart = utcToZonedTime(utcStart, TIMEZONE)
                     const phEnd = utcToZonedTime(utcEnd, TIMEZONE)
@@ -359,44 +418,30 @@ export default function DriverAssignmentDrawer({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block mb-2 font-medium">Start Time (PH Time)</label>
-                  <input
-                    type="time"
-                    className="w-full border p-2 rounded"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    disabled={isAssigning}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-2 font-medium">End Time (PH Time)</label>
-                  <input
-                    type="time"
-                    className="w-full border p-2 rounded"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    disabled={isAssigning}
-                  />
-                </div>
-              </div>
-
               {existingTimeSlots.length > 0 && (
                 <div className="mb-4">
-                  <label className="block mb-2 font-medium text-orange-600">Existing Time Slots (PH Time)</label>
+                  <label className="block mb-2 font-medium text-orange-600">Existing Bookings</label>
                   <div className="text-sm text-gray-600 space-y-1">
-                    {existingTimeSlots.map((slot) => (
-                      <div key={slot.id} className="flex justify-between">
-                        <span>
-                          {tzFormat(utcToZonedTime(new Date(slot.start_time), TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })} – 
-                          {tzFormat(utcToZonedTime(new Date(slot.end_time), TIMEZONE), 'hh:mm a', { timeZone: TIMEZONE })}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {slot.order_id ? 'Order' : 'Slot'} ({slot.status})
-                        </span>
-                      </div>
-                    ))}
+                    {existingTimeSlots.map((slot) => {
+                      const slotStartStr = slot.start_time.endsWith('Z') ? slot.start_time : slot.start_time + 'Z'
+                      const slotEndStr = slot.end_time.endsWith('Z') ? slot.end_time : slot.end_time + 'Z'
+                      
+                      const slotStartUTC = new Date(slotStartStr)
+                      const slotEndUTC = new Date(slotEndStr)
+                      const slotStartPH = utcToZonedTime(slotStartUTC, TIMEZONE)
+                      const slotEndPH = utcToZonedTime(slotEndUTC, TIMEZONE)
+                      
+                      return (
+                        <div key={slot.id} className="flex justify-between bg-red-50 p-2 rounded">
+                          <span>
+                            {formatDate(slotStartPH, 'h:mm a')} – {formatDate(slotEndPH, 'h:mm a')}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {slot.order_id ? 'Order' : 'Slot'} ({slot.status})
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -418,11 +463,11 @@ export default function DriverAssignmentDrawer({
           <button
             onClick={handleAssign}
             className={`w-full py-2 rounded text-white ${
-              selectedDriverId && startTime && endTime && !error && !isAssigning
+              selectedDriverId && selectedTimeSlot && !isAssigning
                 ? 'bg-blue-600 hover:bg-blue-700'
                 : 'bg-gray-400 cursor-not-allowed'
             }`}
-            disabled={!selectedDriverId || !startTime || !endTime || !!error || isAssigning}
+            disabled={!selectedDriverId || !selectedTimeSlot || isAssigning}
           >
             {isAssigning ? '🔄 Assigning...' : '🚚 Assign Driver'}
           </button>

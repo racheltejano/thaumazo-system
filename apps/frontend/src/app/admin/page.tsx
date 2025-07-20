@@ -192,16 +192,14 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Total Orders</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-gray-900">
                       {statsLoading ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         dashboardStats.totalOrders?.toLocaleString() || '0'
                       )}
-                    </p>
-                  </div>
+                    </div>
+
                   <div className="p-3 bg-blue-100 rounded-lg">
                     <Package className="h-6 w-6 text-blue-600" />
                   </div>
