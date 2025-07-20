@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItem } from '@/types/inventory.types';
-import { ArrowLeft, Save } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft, Save, Trash2, X } from 'lucide-react';
 import CategorySelector from '@/components/inventory/CategorySelector';
 
 export default function EditItemPage() {
@@ -15,9 +16,14 @@ export default function EditItemPage() {
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteCountdown, setDeleteCountdown] = useState(10);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [isVisible, setIsVisible] = useState(false);
+  const [variantsCount, setVariantsCount] = useState(0);
+  const [totalStock, setTotalStock] = useState(0);
 
   const [editItem, setEditItem] = useState({
     name: '',
@@ -76,6 +82,18 @@ export default function EditItemPage() {
       };
       setEditItem(itemDataForEdit);
       setOriginalItem(itemDataForEdit);
+
+      // Fetch variants and stock information
+      const { data: variantsData, error: variantsError } = await supabase
+        .from('inventory_items_variants')
+        .select('id, current_stock')
+        .eq('item_id', itemId);
+
+      if (!variantsError && variantsData) {
+        setVariantsCount(variantsData.length);
+        const total = variantsData.reduce((sum, variant) => sum + (variant.current_stock || 0), 0);
+        setTotalStock(total);
+      }
     } catch (err) {
       setError('An unexpected error occurred');
     } finally {
@@ -131,6 +149,51 @@ export default function EditItemPage() {
     }
   };
 
+  const handleDeleteItem = async () => {
+    setDeleting(true);
+    setError('');
+
+    try {
+      const { error } = await supabase
+        .from('inventory_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) {
+        setError(`Error deleting item: ${error.message}`);
+        setDeleting(false);
+        return;
+      }
+
+      // Navigate back to inventory dashboard
+      router.push('/inventory/dashboard');
+      
+    } catch (err) {
+      setError('An unexpected error occurred');
+      setDeleting(false);
+    }
+  };
+
+  const handleShowDeleteConfirm = () => {
+    setShowDeleteConfirm(true);
+    setDeleteCountdown(10);
+  };
+
+  const handleCloseModal = () => {
+    setShowDeleteConfirm(false);
+    setDeleteCountdown(10);
+  };
+
+  // Countdown effect
+  useEffect(() => {
+    if (showDeleteConfirm && deleteCountdown > 0) {
+      const timer = setTimeout(() => {
+        setDeleteCountdown(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [showDeleteConfirm, deleteCountdown]);
+
   if (loading) {
     return (
       <div className="p-6">
@@ -176,21 +239,32 @@ export default function EditItemPage() {
   return (
     <div className="p-6">
       <div 
-        className={`max-w-7xl mx-auto transition-all duration-700 ease-out ${
+        className={`max-w-2xl mx-auto transition-all duration-700 ease-out ${
           isVisible 
             ? 'opacity-100 transform translate-y-0' 
             : 'opacity-0 transform translate-y-8'
         }`}
       >
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-2">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push(`/inventory/item/${itemId}`)}
+                className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-700 transition-all duration-200 hover:scale-105"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">Edit Item</h1>
+            </div>
+            
             <button
-              onClick={() => router.push(`/inventory/item/${itemId}`)}
-              className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-700 transition-all duration-200 hover:scale-105"
+              onClick={handleShowDeleteConfirm}
+              disabled={deleting}
+              className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <Trash2 className="w-4 h-4" />
+              {deleting ? 'Deleting...' : 'Delete Item'}
             </button>
-            <h1 className="text-3xl font-bold text-gray-900">Edit Item</h1>
           </div>
           <p className="text-gray-600 ml-14">Update information for "{item?.name}"</p>
         </div>
@@ -263,6 +337,66 @@ export default function EditItemPage() {
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && createPortal(
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999]"
+            onClick={handleCloseModal}
+          >
+            <div 
+              className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                onClick={handleCloseModal}
+                className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Item</h3>
+              </div>
+              
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete "{item?.name}"? This action cannot be undone.
+                <span className="block mt-2 text-red-600 font-medium">
+                  ⚠️ This item has {variantsCount} variant{variantsCount !== 1 ? 's' : ''} with {totalStock} total stock units. {totalStock > 0 ? 'This item has stock that will be deleted. ' : ''}Deleting this item will remove all variants and inventory movements record related to this item.
+                </span>
+                <span className="block mt-2 text-sm text-gray-500 text-center">
+                  {deleteCountdown > 0 ? (
+                    <span>Delete button available in {deleteCountdown} seconds</span>
+                  ) : (
+                    <span className="text-green-600 font-medium">Ready to delete</span>
+                  )}
+                </span>
+              </p>
+              
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={handleCloseModal}
+                  disabled={deleting}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteItem}
+                  disabled={deleting || deleteCountdown > 0}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
+                >
+                  {deleting ? 'Deleting...' : 'Delete Item'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );

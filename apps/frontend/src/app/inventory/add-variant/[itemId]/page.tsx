@@ -27,9 +27,9 @@ export default function AddVariantPage() {
   });
   
   const [inventoryPricing, setInventoryPricing] = useState({
-    stockQuantity: 0,
-    costPrice: 0,
-    sellingPrice: 0
+    stockQuantity: '',
+    costPrice: '',
+    sellingPrice: ''
   });
   
   const [supplierInfo, setSupplierInfo] = useState({
@@ -130,7 +130,10 @@ export default function AddVariantPage() {
       return;
     }
 
-    if (inventoryPricing.costPrice <= 0 || inventoryPricing.sellingPrice <= 0) {
+    const costPrice = parseFloat(inventoryPricing.costPrice);
+    const sellingPrice = parseFloat(inventoryPricing.sellingPrice);
+    
+    if (isNaN(costPrice) || costPrice <= 0 || isNaN(sellingPrice) || sellingPrice <= 0) {
       setError('Cost Price and Selling Price must be greater than 0');
       return;
     }
@@ -143,7 +146,9 @@ export default function AddVariantPage() {
     setSaving(true);
     setError('');
 
-    try {
+        try {
+      const stockQuantity = parseInt(inventoryPricing.stockQuantity) || 0;
+      
       // Create the variant
       const { data: insertedVariant, error: variantError } = await supabase
         .from('inventory_items_variants')
@@ -154,11 +159,11 @@ export default function AddVariantPage() {
           supplier_email: supplierInfo.supplierEmail || null,
           supplier_number: supplierInfo.supplierNumber || null,
           packaging_type: variantDetails.packagingType || `${variantDetails.color} ${variantDetails.size}`.trim() || null,
-          cost_price: inventoryPricing.costPrice,
-          selling_price: inventoryPricing.sellingPrice,
+          cost_price: costPrice,
+          selling_price: sellingPrice,
           sku: variantDetails.sku,
           is_fragile: variantDetails.isFragile,
-          current_stock: inventoryPricing.stockQuantity
+          current_stock: stockQuantity
         }])
         .select()
         .single();
@@ -170,15 +175,15 @@ export default function AddVariantPage() {
       }
 
       // If there's initial stock, record the movement
-      if (inventoryPricing.stockQuantity > 0) {
-        const { error: movementError } = await supabase
-          .from('inventory_items_movements')
-          .insert({
-            variant_id: insertedVariant.id,
-            movement_type: 'stock_in',
-            quantity: inventoryPricing.stockQuantity,
-            remarks: 'Initial stock'
-          });
+      if (stockQuantity > 0) {
+      const { error: movementError } = await supabase
+        .from('inventory_items_movements')
+        .insert({
+          variant_id: insertedVariant.id,
+          movement_type: 'stock_in',
+          quantity: stockQuantity,
+          remarks: 'Initial stock'
+        });
 
         if (movementError) {
           console.error('Error recording initial stock movement:', movementError);
@@ -299,28 +304,6 @@ export default function AddVariantPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  SKU *
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={variantDetails.sku}
-                    onChange={(e) => setVariantDetails({ ...variantDetails, sku: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., RED-LARGE-001"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleGenerateSku}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-                  >
-                    Generate
-                  </button>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Color
                 </label>
                 <input
@@ -376,10 +359,22 @@ export default function AddVariantPage() {
         {/* Inventory & Pricing Section */}
         <div className="bg-white rounded-lg shadow-md border mt-6">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Inventory & Pricing</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Inventory & Pricing</h2>
+              <div className="text-right">
+                {inventoryPricing.costPrice && inventoryPricing.sellingPrice && parseFloat(inventoryPricing.costPrice) > 0 && parseFloat(inventoryPricing.sellingPrice) > 0 ? (
+                  <div className={`text-lg font-semibold ${parseFloat(inventoryPricing.sellingPrice) > parseFloat(inventoryPricing.costPrice) ? 'text-green-600' : 'text-red-600'}`}>
+                    ₱{(parseFloat(inventoryPricing.sellingPrice) - parseFloat(inventoryPricing.costPrice)).toFixed(2)} 
+                    ({(((parseFloat(inventoryPricing.sellingPrice) - parseFloat(inventoryPricing.costPrice)) / parseFloat(inventoryPricing.costPrice)) * 100).toFixed(1)}%)
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">Enter prices to see margin</div>
+                )}
+              </div>
+            </div>
           </div>
           
-          <div className="p-6 space-y-6">
+          <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -388,7 +383,7 @@ export default function AddVariantPage() {
                 <input
                   type="number"
                   value={inventoryPricing.stockQuantity}
-                  onChange={(e) => setInventoryPricing({ ...inventoryPricing, stockQuantity: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setInventoryPricing({ ...inventoryPricing, stockQuantity: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0"
                   min="0"
@@ -402,7 +397,7 @@ export default function AddVariantPage() {
                 <input
                   type="number"
                   value={inventoryPricing.costPrice}
-                  onChange={(e) => setInventoryPricing({ ...inventoryPricing, costPrice: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setInventoryPricing({ ...inventoryPricing, costPrice: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0.00"
                   min="0"
@@ -417,7 +412,7 @@ export default function AddVariantPage() {
                 <input
                   type="number"
                   value={inventoryPricing.sellingPrice}
-                  onChange={(e) => setInventoryPricing({ ...inventoryPricing, sellingPrice: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setInventoryPricing({ ...inventoryPricing, sellingPrice: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0.00"
                   min="0"
@@ -425,19 +420,6 @@ export default function AddVariantPage() {
                 />
               </div>
             </div>
-            
-            {/* Margin Display */}
-            {inventoryPricing.costPrice > 0 && inventoryPricing.sellingPrice > 0 && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Estimated Margin:</span>
-                  <span className={`text-lg font-semibold ${inventoryPricing.sellingPrice > inventoryPricing.costPrice ? 'text-green-600' : 'text-red-600'}`}>
-                    ₱{(inventoryPricing.sellingPrice - inventoryPricing.costPrice).toFixed(2)} 
-                    ({(((inventoryPricing.sellingPrice - inventoryPricing.costPrice) / inventoryPricing.costPrice) * 100).toFixed(1)}%)
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -487,6 +469,40 @@ export default function AddVariantPage() {
                   placeholder="+63 912 345 6789"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SKU Section */}
+        <div className="bg-white rounded-lg shadow-md border mt-6">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">SKU Configuration</h2>
+          </div>
+          
+          <div className="p-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                SKU *
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={variantDetails.sku}
+                  onChange={(e) => setVariantDetails({ ...variantDetails, sku: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., RED-LARGE-001"
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateSku}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                >
+                  Generate
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                SKU will be auto-generated based on variant details, or you can enter a custom SKU.
+              </p>
             </div>
           </div>
         </div>

@@ -503,6 +503,17 @@ export default function ItemProfilePage() {
               const margin = (variant.selling_price || 0) - (variant.cost_price || 0);
               const marginPercentage = variant.cost_price ? (margin / variant.cost_price) * 100 : 0;
               
+              // Helper function to get supplier contact display
+              const getSupplierContact = () => {
+                if (variant.supplier_email) {
+                  return variant.supplier_email;
+                } else if (variant.supplier_number) {
+                  return variant.supplier_number;
+                } else {
+                  return variant.supplier_name || 'not set';
+                }
+              };
+              
               return (
                 <div key={variant.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-start mb-4">
@@ -519,7 +530,11 @@ export default function ItemProfilePage() {
                         {variant.current_stock > 0 ? 'In Stock' : 'Out of Stock'}
                       </span>
                       <button
-                        onClick={() => router.push(`/inventory/edit-variant/${variant.id}`)}
+                        onClick={() => {
+                  // Store current page as referrer for edit-variant back navigation
+                  sessionStorage.setItem('editVariantReferrer', window.location.pathname);
+                  router.push(`/inventory/edit-variant/${variant.id}`);
+                }}
                         className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-600 transition-all duration-200 hover:scale-105"
                       >
                         <Edit className="w-3 h-3" />
@@ -565,23 +580,17 @@ export default function ItemProfilePage() {
                   </div>
 
                   {/* Supplier Information Row */}
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Supplier</p>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-gray-900 truncate" title={variant.supplier_name || 'not set'}>
                         {variant.supplier_name || 'not set'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Email</p>
-                      <p className="font-medium text-gray-500">
-                        {variant.supplier_email || 'not set'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Contact Number</p>
-                      <p className="font-medium text-gray-500">
-                        {variant.supplier_number || 'not set'}
+                      <p className="text-xs text-gray-500 mb-1">Contact</p>
+                      <p className="font-medium text-gray-500 truncate" title={getSupplierContact()}>
+                        {getSupplierContact()}
                       </p>
                     </div>
                   </div>

@@ -202,7 +202,11 @@ export default function ItemVariantPage() {
 
             <div className="flex items-center gap-3">
               <button
-                onClick={() => router.push(`/inventory/edit-variant/${variant.id}`)}
+                onClick={() => {
+                  // Store current page as referrer for edit-variant back navigation
+                  sessionStorage.setItem('editVariantReferrer', window.location.pathname);
+                  router.push(`/inventory/edit-variant/${variant.id}`);
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
                 <Edit className="w-4 h-4" />

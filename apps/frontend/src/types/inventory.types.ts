@@ -29,6 +29,7 @@ export interface InventoryItemVariant {
   sku: string
   is_fragile: boolean
   current_stock: number
+  color: string | null
   created_at: string
   inventory_items?: InventoryItem
 }

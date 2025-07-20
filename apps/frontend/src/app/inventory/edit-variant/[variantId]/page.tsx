@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItemVariant } from '@/types/inventory.types';
+import { createPortal } from 'react-dom';
 import { 
   ArrowLeft, 
   Save, 
@@ -14,7 +15,9 @@ import {
   User,
   Mail,
   Phone,
-  AlertTriangle
+  AlertTriangle,
+  Trash2,
+  X
 } from 'lucide-react';
 
 export default function EditVariantPage() {
@@ -25,9 +28,32 @@ export default function EditVariantPage() {
   const [variant, setVariant] = useState<InventoryItemVariant | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteCountdown, setDeleteCountdown] = useState(10);
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Dynamic back navigation
+  const handleBackNavigation = () => {
+    // Check if we have a referrer stored in sessionStorage
+    const referrer = sessionStorage.getItem('editVariantReferrer');
+    
+    if (referrer) {
+      // Clear the stored referrer
+      sessionStorage.removeItem('editVariantReferrer');
+      router.push(referrer);
+    } else {
+      // Fallback to browser history
+      if (window.history.length > 1) {
+        router.back();
+      } else {
+        // Default fallback
+        router.push(`/inventory/item/${variant?.inventory_items?.id}`);
+      }
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -40,7 +66,8 @@ export default function EditVariantPage() {
     is_fragile: false,
     supplier_name: '',
     supplier_email: '',
-    supplier_number: ''
+    supplier_number: '',
+    color: ''
   });
 
   useEffect(() => {
@@ -99,7 +126,8 @@ export default function EditVariantPage() {
         is_fragile: data.is_fragile || false,
         supplier_name: data.supplier_name || '',
         supplier_email: data.supplier_email || '',
-        supplier_number: data.supplier_number || ''
+        supplier_number: data.supplier_number || '',
+        color: data.color || ''
       });
 
     } catch (err) {
@@ -134,6 +162,7 @@ export default function EditVariantPage() {
         supplier_name: formData.supplier_name,
         supplier_email: formData.supplier_email,
         supplier_number: formData.supplier_number,
+        color: formData.color,
         updated_at: new Date().toISOString()
       };
 
@@ -172,6 +201,52 @@ export default function EditVariantPage() {
     }));
     setHasChanges(true);
   };
+
+  const handleDeleteVariant = async () => {
+    setDeleting(true);
+    setError('');
+
+    try {
+      const { error } = await supabase
+        .from('inventory_items_variants')
+        .delete()
+        .eq('id', variantId);
+
+      if (error) {
+        setError(`Error deleting variant: ${error.message}`);
+        setDeleting(false);
+        return;
+      }
+
+      // Navigate back to the item details page
+      router.push(`/inventory/item/${variant?.inventory_items?.id}`);
+      
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleShowDeleteConfirm = () => {
+    setShowDeleteConfirm(true);
+    setDeleteCountdown(10);
+  };
+
+  const handleCloseModal = () => {
+    setShowDeleteConfirm(false);
+    setDeleteCountdown(10);
+  };
+
+  // Countdown effect
+  useEffect(() => {
+    if (showDeleteConfirm && deleteCountdown > 0) {
+      const timer = setTimeout(() => {
+        setDeleteCountdown(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [showDeleteConfirm, deleteCountdown]);
 
   if (loading) {
     return (
@@ -229,7 +304,7 @@ export default function EditVariantPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => router.push(`/inventory/item/${variant.inventory_items?.id}`)}
+                onClick={handleBackNavigation}
                 className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-105"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -249,16 +324,12 @@ export default function EditVariantPage() {
 
             <div className="flex items-center gap-3">
               <button
-                onClick={handleSubmit}
-                disabled={saving || !hasChanges}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                  saving || !hasChanges
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
+                onClick={handleShowDeleteConfirm}
+                disabled={deleting}
+                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
               >
-                <Save className="w-4 h-4" />
-                {saving ? 'Saving...' : 'Save Changes'}
+                <Trash2 className="w-4 h-4" />
+                {deleting ? 'Deleting...' : 'Delete Variant'}
               </button>
             </div>
           </div>
@@ -336,6 +407,19 @@ export default function EditVariantPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Color
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.color}
+                    onChange={(e) => handleInputChange('color', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Red, Blue, Black"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Fragile Item
                   </label>
                   <div className="flex items-center">
@@ -408,28 +492,7 @@ export default function EditVariantPage() {
                 </div>
               </div>
 
-              {/* Margin Calculation */}
-              {formData.cost_price && formData.selling_price && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="text-sm text-gray-600">Cost Price</div>
-                      <div className="text-lg font-semibold">₱{parseFloat(formData.cost_price).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Selling Price</div>
-                      <div className="text-lg font-semibold">₱{parseFloat(formData.selling_price).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Margin</div>
-                      <div className={`text-lg font-semibold ${parseFloat(formData.selling_price) - parseFloat(formData.cost_price) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ₱{(parseFloat(formData.selling_price) - parseFloat(formData.cost_price)).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
-                        ({(parseFloat(formData.selling_price) - parseFloat(formData.cost_price)) / parseFloat(formData.cost_price) * 100}%)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+
             </div>
           </div>
 
@@ -485,8 +548,94 @@ export default function EditVariantPage() {
               </div>
             </div>
           </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-between items-center pt-6 border-t border-gray-200">
+            <button
+              onClick={() => router.push(`/inventory/item/${variant?.inventory_items?.id}`)}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            
+            <button
+              onClick={handleSubmit}
+              disabled={saving || !hasChanges}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+                saving || !hasChanges
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </form>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && createPortal(
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999]"
+            onClick={handleCloseModal}
+          >
+            <div 
+              className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                onClick={handleCloseModal}
+                className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Variant</h3>
+              </div>
+              
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete "{variant?.variant_name}"? This action cannot be undone.
+                <span className="block mt-2 text-red-600 font-medium">
+                  ⚠️ {variant?.current_stock && variant.current_stock > 0 
+                    ? `This variant has ${variant.current_stock} units in stock. ` 
+                    : ''
+                  }Deleting this variant will remove all inventory movements record related to this variant.
+                </span>
+                <span className="block mt-2 text-sm text-gray-500 text-center">
+                  {deleteCountdown > 0 ? (
+                    <span>Delete button available in {deleteCountdown} seconds</span>
+                  ) : (
+                    <span className="text-green-600 font-medium">Ready to delete</span>
+                  )}
+                </span>
+              </p>
+              
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={handleCloseModal}
+                  disabled={deleting}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteVariant}
+                  disabled={deleting || deleteCountdown > 0}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
+                >
+                  {deleting ? 'Deleting...' : 'Delete Variant'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );
-} 
+}
