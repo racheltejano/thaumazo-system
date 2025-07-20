@@ -44,7 +44,8 @@ export default function ItemMovementsList({
       'purchase_order': 'Purchase Order',
       'customer_sale': 'Customer Sale',
       'adjustment': 'Adjustment',
-      'manual_correction': 'Manual Correction'
+      'manual_correction': 'Manual Correction',
+      'initial_stock': 'Initial Stock'
     };
     return labels[referenceType] || referenceType;
   };
@@ -151,11 +152,7 @@ export default function ItemMovementsList({
                                                  <div className="flex items-center gap-2">
                            <span className="text-sm font-medium text-gray-600">Change:</span>
                            <span className="text-sm">
-                             From {movement.inventory_items_variants?.current_stock ? 
-                               (movement.movement_type === 'stock_in' ? 
-                                 movement.inventory_items_variants.current_stock - movement.quantity : 
-                                 movement.inventory_items_variants.current_stock + movement.quantity
-                               ) : 0} units to {movement.inventory_items_variants?.current_stock || 0} units
+                             From {movement.old_stock} units to {movement.new_stock} units
                            </span>
                          </div>
                          <div className="flex items-center gap-2">
@@ -163,9 +160,9 @@ export default function ItemMovementsList({
                              {movement.movement_type === 'stock_in' ? 'Cost:' : 'Earnings:'}
                            </span>
                            <span className={`text-sm font-semibold ${movement.movement_type === 'stock_in' ? 'text-red-600' : 'text-green-600'}`}>
-                             {movement.movement_type === 'stock_in' 
-                               ? `₱${((movement.inventory_items_variants?.cost_price || 0) * movement.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                               : `₱${((movement.inventory_items_variants?.selling_price || 0) * movement.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                             {movement.price_at_movement 
+                               ? `₱${(movement.price_at_movement * movement.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                               : 'N/A'
                              }
                            </span>
                          </div>

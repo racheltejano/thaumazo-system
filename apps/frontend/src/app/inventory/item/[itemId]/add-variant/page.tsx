@@ -177,6 +177,10 @@ export default function AddVariantPage() {
             variant_id: insertedVariant.id,
             movement_type: 'stock_in',
             quantity: inventoryPricing.stockQuantity,
+            old_stock: 0,
+            new_stock: inventoryPricing.stockQuantity,
+            price_at_movement: inventoryPricing.costPrice,
+            reference_type: 'initial_stock',
             remarks: 'Initial stock'
           });
 

@@ -9,5 +9,6 @@ CREATE TYPE inventory_reference_type_enum AS ENUM (
   'purchase_order',
   'customer_sale',
   'adjustment',
-  'manual_correction'
+  'manual_correction',
+  'initial_stock'
 );

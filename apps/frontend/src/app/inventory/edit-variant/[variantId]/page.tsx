@@ -550,7 +550,7 @@ export default function EditVariantPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-between items-center pt-6 border-t border-gray-200">
+          <div className="flex justify-end items-center gap-3 pt-6 border-t border-gray-200">
             <button
               onClick={() => router.push(`/inventory/item/${variant?.inventory_items?.id}`)}
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"

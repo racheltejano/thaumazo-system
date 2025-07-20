@@ -38,6 +38,23 @@ export default function AddVariantPage() {
     supplierNumber: ''
   });
 
+  // Success message states
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [createdVariantId, setCreatedVariantId] = useState<string | null>(null);
+
+  // Validation function
+  const isFormValid = () => {
+    return (
+      variantDetails.variantName.trim() !== '' &&
+      variantDetails.sku.trim() !== '' &&
+      inventoryPricing.costPrice.trim() !== '' &&
+      parseFloat(inventoryPricing.costPrice) > 0 &&
+      inventoryPricing.sellingPrice.trim() !== '' &&
+      parseFloat(inventoryPricing.sellingPrice) > 0 &&
+      supplierInfo.supplierName.trim() !== ''
+    );
+  };
+
   // Function to generate a unique SKU
   const generateUniqueSku = () => {
     const parts = [];
@@ -182,6 +199,10 @@ export default function AddVariantPage() {
           variant_id: insertedVariant.id,
           movement_type: 'stock_in',
           quantity: stockQuantity,
+          old_stock: 0,
+          new_stock: stockQuantity,
+          price_at_movement: costPrice,
+          reference_type: 'initial_stock',
           remarks: 'Initial stock'
         });
 
@@ -190,8 +211,10 @@ export default function AddVariantPage() {
         }
       }
 
-      // Redirect back to the item details page
-      router.push(`/inventory/item/${itemId}`);
+      // Show success message instead of redirecting
+      setCreatedVariantId(insertedVariant.id);
+      setShowSuccessMessage(true);
+      setSaving(false);
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
     } finally {
@@ -280,6 +303,43 @@ export default function AddVariantPage() {
           </div>
         )}
 
+        {/* Success Message */}
+        {showSuccessMessage && createdVariantId && (
+          <div className="mb-6 p-6 bg-green-50 border border-green-200 rounded-lg relative">
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setShowSuccessMessage(false);
+                setCreatedVariantId(null);
+              }}
+              className="absolute top-4 right-4 p-1 text-green-600 hover:text-green-800 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-sm font-bold">✓</span>
+                </div>
+                <h3 className="text-lg font-semibold text-green-800">Variant Created Successfully!</h3>
+              </div>
+              <p className="text-green-700 mb-4">
+                Your "{variantDetails.variantName}" has been added to "{item?.name}". You can now{' '}
+                <a 
+                  href={`/inventory/item/${itemId}`}
+                  className="text-green-800 underline hover:text-green-900 font-medium"
+                >
+                  view the item
+                </a>
+                {' '}or continue adding more variants.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <div className="bg-white rounded-lg shadow-md border">
           <div className="p-6 border-b border-gray-200">
@@ -291,7 +351,7 @@ export default function AddVariantPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Variant Name *
+                  Variant Name {variantDetails.variantName.trim() === '' && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="text"
@@ -392,7 +452,7 @@ export default function AddVariantPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cost Price (₱) *
+                  Cost Price (₱) {inventoryPricing.costPrice.trim() === '' && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="number"
@@ -407,7 +467,7 @@ export default function AddVariantPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Selling Price (₱) *
+                  Selling Price (₱) {inventoryPricing.sellingPrice.trim() === '' && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="number"
@@ -433,7 +493,7 @@ export default function AddVariantPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Supplier Name *
+                  Supplier Name {supplierInfo.supplierName.trim() === '' && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="text"
@@ -482,7 +542,7 @@ export default function AddVariantPage() {
           <div className="p-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                SKU *
+                SKU {variantDetails.sku.trim() === '' && <span className="text-red-500">*</span>}
               </label>
               <div className="flex gap-2">
                 <input
@@ -509,20 +569,56 @@ export default function AddVariantPage() {
 
         {/* Action Buttons */}
         <div className="mt-8 flex justify-end gap-4">
-          <button
-            onClick={() => router.push(`/inventory/item/${itemId}`)}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleCreateVariant}
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? 'Creating...' : 'Create Variant'}
-          </button>
+          {showSuccessMessage ? (
+            <>
+              <button
+                onClick={() => {
+                  setShowSuccessMessage(false);
+                  setCreatedVariantId(null);
+                  // Reset only specific fields while keeping others
+                  setVariantDetails({
+                    ...variantDetails,
+                    variantName: '',
+                    sku: ''
+                  });
+                  setInventoryPricing({
+                    ...inventoryPricing,
+                    stockQuantity: ''
+                  });
+                }}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Add Another Variant
+              </button>
+              <button
+                onClick={() => router.push(`/inventory/item/${itemId}`)}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                View Item
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => router.push(`/inventory/item/${itemId}`)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateVariant}
+                disabled={saving || !isFormValid()}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+                  saving || !isFormValid()
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Creating...' : 'Create Variant'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

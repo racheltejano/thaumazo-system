@@ -39,6 +39,9 @@ export interface InventoryMovement {
   variant_id: string
   movement_type: 'stock_in' | 'stock_out'
   quantity: number
+  old_stock: number
+  new_stock: number
+  price_at_movement: number | null
   reference_type: string | null
   reference_id: string | null
   remarks: string | null
@@ -79,6 +82,8 @@ export interface EditStockItem {
   currentStock: number
   mode: 'add' | 'subtract'
   quantity: number
+  cost_price?: number
+  selling_price?: number
 }
 
 // Legacy types for backward compatibility during transition

@@ -17,7 +17,10 @@ export default function AddInventoryPage() {
   });
   const [variants, setVariants] = useState<NewInventoryVariant[]>([{
     item_id: '',
+    variant_name: '',
     supplier_name: '',
+    supplier_email: '',
+    supplier_number: '',
     packaging_type: '',
     cost_price: 0,
     selling_price: 0,
@@ -28,11 +31,16 @@ export default function AddInventoryPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showVariantWarning, setShowVariantWarning] = useState(false);
+  const [createdItemId, setCreatedItemId] = useState<string | null>(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const addVariant = () => {
     setVariants([...variants, {
       item_id: '',
+      variant_name: '',
       supplier_name: '',
+      supplier_email: '',
+      supplier_number: '',
       packaging_type: '',
       cost_price: 0,
       selling_price: 0,
@@ -161,6 +169,10 @@ export default function AddInventoryPage() {
                   variant_id: insertedVariant.id,
                   movement_type: 'stock_in',
                   quantity: initialStocks[i],
+                  old_stock: 0,
+                  new_stock: initialStocks[i],
+                  price_at_movement: variant.cost_price,
+                  reference_type: 'initial_stock',
                   remarks: 'Initial stock'
                 });
             }
@@ -168,11 +180,15 @@ export default function AddInventoryPage() {
         }
       }
 
-      setMessage('✅ Item created successfully!');
+      setCreatedItemId(insertedItem.id);
+      setShowSuccessMessage(true);
       setNewItem({ name: '', category_id: null, description: '' });
       setVariants([{
         item_id: '',
+        variant_name: '',
         supplier_name: '',
+        supplier_email: '',
+        supplier_number: '',
         packaging_type: '',
         cost_price: 0,
         selling_price: 0,
@@ -180,11 +196,6 @@ export default function AddInventoryPage() {
         is_fragile: false
       }]);
       setInitialStocks([0]);
-      
-      // Redirect to the items table after a short delay
-      setTimeout(() => {
-        router.push('/inventory/table');
-      }, 1500);
       
       setLoading(false);
     } catch (err) {
@@ -233,6 +244,43 @@ export default function AddInventoryPage() {
             : 'bg-red-50 text-red-800 border border-red-200'
         }`}>
           {message}
+        </div>
+      )}
+
+      {/* Success Message */}
+      {showSuccessMessage && createdItemId && (
+        <div className="mb-6 p-6 bg-green-50 border border-green-200 rounded-lg relative">
+          {/* Close button */}
+          <button
+            onClick={() => {
+              setShowSuccessMessage(false);
+              setCreatedItemId(null);
+            }}
+            className="absolute top-4 right-4 p-1 text-green-600 hover:text-green-800 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 text-sm font-bold">✓</span>
+              </div>
+              <h3 className="text-lg font-semibold text-green-800">Item Created Successfully!</h3>
+            </div>
+            <p className="text-green-700 mb-4">
+              Your new item has been added to the inventory. You can now{' '}
+              <a 
+                href={`/inventory/item/${createdItemId}`}
+                className="text-green-800 underline hover:text-green-900 font-medium"
+              >
+                view it
+              </a>
+              {' '}or continue creating more items.
+            </p>
+          </div>
         </div>
       )}
 
@@ -295,7 +343,7 @@ export default function AddInventoryPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3">
+      <div className="flex justify-end gap-3">
         <button
           onClick={() => router.push('/inventory/dashboard')}
           className="px-4 py-2 bg-white border border-gray-300 text-gray-800 font-medium rounded-lg transition-colors hover:bg-gray-50"

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 type MovementType = 'stock_in' | 'stock_out';
-type ReferenceType = 'purchase_order' | 'sales_order' | 'return' | 'adjustment' | 'transfer' | 'damage' | 'expiry' | 'other';
+type ReferenceType = 'purchase_order' | 'customer_sale' | 'adjustment' | 'manual_correction' | 'initial_stock';
 
 export default function MoveVariantStockPage() {
   const params = useParams();
@@ -46,13 +46,10 @@ export default function MoveVariantStockPage() {
 
   const referenceTypes: { value: ReferenceType; label: string }[] = [
     { value: 'purchase_order', label: 'Purchase Order' },
-    { value: 'sales_order', label: 'Sales Order' },
-    { value: 'return', label: 'Return' },
+    { value: 'customer_sale', label: 'Customer Sale' },
     { value: 'adjustment', label: 'Adjustment' },
-    { value: 'transfer', label: 'Transfer' },
-    { value: 'damage', label: 'Damage' },
-    { value: 'expiry', label: 'Expiry' },
-    { value: 'other', label: 'Other' }
+    { value: 'manual_correction', label: 'Manual Correction' },
+    { value: 'initial_stock', label: 'Initial Stock' }
   ];
 
   useEffect(() => {
@@ -144,6 +141,11 @@ export default function MoveVariantStockPage() {
           variant_id: variantId,
           movement_type: formData.movement_type,
           quantity: quantity,
+          old_stock: variant?.current_stock || 0,
+          new_stock: newStock,
+          price_at_movement: formData.movement_type === 'stock_in' 
+            ? variant?.cost_price || 0
+            : variant?.selling_price || 0,
           reference_type: formData.reference_type || null,
           reference_id: formData.reference_id || null,
           remarks: formData.remarks || null,
@@ -151,7 +153,8 @@ export default function MoveVariantStockPage() {
         });
 
       if (movementError) {
-        setError('Error creating movement record');
+        console.error('Movement error:', movementError);
+        setError(`Error creating movement record: ${movementError.message}`);
         setSaving(false);
         return;
       }
@@ -160,13 +163,13 @@ export default function MoveVariantStockPage() {
       const { error: updateError } = await supabase
         .from('inventory_items_variants')
         .update({
-          current_stock: newStock,
-          updated_at: new Date().toISOString()
+          current_stock: newStock
         })
         .eq('id', variantId);
 
       if (updateError) {
-        setError('Error updating stock');
+        console.error('Update error:', updateError);
+        setError(`Error updating stock: ${updateError.message}`);
         setSaving(false);
         return;
       }
@@ -234,8 +237,7 @@ export default function MoveVariantStockPage() {
       >
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4">
               <button
                 onClick={() => router.push(`/inventory/item/${variant.inventory_items?.id}`)}
                 className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-105"
@@ -254,22 +256,6 @@ export default function MoveVariantStockPage() {
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSubmit}
-                disabled={saving}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                  saving
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Processing...' : 'Move Stock'}
-              </button>
-            </div>
-          </div>
         </div>
 
         {error && (
@@ -303,11 +289,11 @@ export default function MoveVariantStockPage() {
                 </div>
                 <div className="text-sm text-green-600">Cost Price</div>
               </div>
-              <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-900">
+              <div className="text-center p-4 bg-red-50 rounded-lg">
+                <div className="text-2xl font-bold text-red-900">
                   ₱{variant.selling_price?.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                 </div>
-                <div className="text-sm text-yellow-600">Selling Price</div>
+                <div className="text-sm text-red-600">Selling Price</div>
               </div>
             </div>
           </div>
@@ -454,6 +440,28 @@ export default function MoveVariantStockPage() {
             </div>
           </div>
         </form>
+
+        {/* Action Buttons */}
+        <div className="mt-8 flex justify-end gap-4">
+          <button
+            onClick={() => router.push(`/inventory/item/${variant.inventory_items?.id}`)}
+            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+              saving
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Processing...' : 'Move Stock'}
+          </button>
+        </div>
 
         {/* Low Stock Warning */}
         {variant.current_stock <= 3 && variant.current_stock > 0 && (

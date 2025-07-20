@@ -64,6 +64,11 @@ export const EditQuantityModal = ({ editQtyItem, onClose, onSuccess }: EditQuant
           variant_id: editQtyItem.variant_id,
           movement_type: editQtyItem.mode === 'add' ? 'stock_in' : 'stock_out',
           quantity: parsed,
+          old_stock: editQtyItem.currentStock,
+          new_stock: newStock,
+          price_at_movement: editQtyItem.mode === 'add' 
+            ? editQtyItem.cost_price || 0
+            : editQtyItem.selling_price || 0,
           remarks: `Manual ${editQtyItem.mode === 'add' ? 'stock in' : 'stock out'} adjustment`
         });
 
