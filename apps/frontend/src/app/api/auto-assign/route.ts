@@ -48,11 +48,11 @@ type TimeSlotOption = {
   availabilityBlockId: string
 }
 
-// Track assignments during this execution to prevent overlaps
 type PendingAssignment = {
   driverId: string
   startTime: string
   endTime: string
+  orderId: string
 }
 
 export async function POST() {
@@ -68,7 +68,9 @@ export async function POST() {
     const nowPH = utcToZonedTime(new Date(), TIMEZONE)
     const todayPH = formatDate(nowPH, 'yyyy-MM-dd')
     
-    // Get unassigned orders that are NOT past today's date
+    console.log(`Processing auto-assignment for date: ${todayPH}`)
+
+    // Get unassigned orders
     const { data: orders, error: orderError } = await supabase
       .from('orders')
       .select('id, pickup_timestamp, estimated_total_duration')
@@ -95,7 +97,13 @@ export async function POST() {
     console.log(`Found ${orders.length} total orders, ${validOrders.length} are not in the past`)
 
     if (validOrders.length === 0) {
-      return NextResponse.json({ message: 'No valid orders found (all orders are in the past).' }, { status: 200 })
+      return NextResponse.json({ 
+        message: 'No valid orders found (all orders are in the past).',
+        totalOrders: orders.length,
+        validOrders: 0,
+        successfulAssignments: 0,
+        skippedPastOrders: orders.length
+      }, { status: 200 })
     }
 
     // Get all drivers
@@ -110,8 +118,9 @@ export async function POST() {
       return NextResponse.json({ error: 'No drivers found.' }, { status: 400 })
     }
 
-    // Sort orders by pickup timestamp (earliest first) for fair assignment
-    validOrders.sort((a, b) => new Date(a.pickup_timestamp).getTime() - new Date(b.pickup_timestamp).getTime())
+    // Group orders by date for better processing
+    const ordersByDate = groupOrdersByDate(validOrders)
+    console.log(`Orders grouped by ${Object.keys(ordersByDate).length} dates`)
 
     const assignments: Array<{
       orderId: string
@@ -119,56 +128,34 @@ export async function POST() {
       startTime: string
       endTime: string
       availabilityBlockId: string
+      driverName: string
     }> = []
 
-    // Track pending assignments to avoid overlaps within this execution
-    const pendingAssignments: PendingAssignment[] = []
-
-    // Process each order with round-robin driver assignment for better distribution
-    let driverIndex = 0
-    for (const order of validOrders) {
-      if (!order.pickup_timestamp || !order.estimated_total_duration) {
-        console.log(`Skipping order ${order.id}: missing pickup_timestamp or estimated_total_duration`)
-        continue
-      }
-
-      // Try to find assignment starting from current driver index
-      const assignment = await findBestDriverAssignment(
-        supabase, 
-        order, 
-        drivers, 
-        pendingAssignments,
-        driverIndex
+    // Process each date separately to ensure proper distribution
+    for (const [dateStr, dateOrders] of Object.entries(ordersByDate)) {
+      console.log(`Processing ${dateOrders.length} orders for date: ${dateStr}`)
+      
+      const dateAssignments = await processOrdersForDate(
+        supabase,
+        dateOrders,
+        drivers,
+        dateStr
       )
       
-      if (assignment) {
-        assignments.push(assignment)
-        
-        // Add to pending assignments to prevent future overlaps
-        pendingAssignments.push({
-          driverId: assignment.driverId,
-          startTime: assignment.startTime,
-          endTime: assignment.endTime
-        })
-        
-        // Move to next driver for better distribution
-        driverIndex = (driverIndex + 1) % drivers.length
-        
-        console.log(`Assigned order ${order.id} to driver ${assignment.driverId}`)
-      } else {
-        console.log(`No available driver found for order ${order.id}`)
-      }
+      assignments.push(...dateAssignments)
     }
 
-    // Execute all assignments
+    // Execute all assignments in database
     let successCount = 0
+    const failedAssignments: string[] = []
+
     for (const assignment of assignments) {
       try {
         const startDateTime = new Date(assignment.startTime)
         const endDateTime = new Date(assignment.endTime)
         const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
 
-        // Update order
+        // Update order with assignment
         const { error: orderUpdateError } = await supabase
           .from('orders')
           .update({
@@ -198,18 +185,25 @@ export async function POST() {
         if (timeSlotError) throw timeSlotError
 
         successCount++
+        console.log(`✅ Assigned order ${assignment.orderId} to ${assignment.driverName}`)
       } catch (err) {
-        console.error(`Failed to assign order ${assignment.orderId}:`, err)
+        console.error(`❌ Failed to assign order ${assignment.orderId}:`, err)
+        failedAssignments.push(assignment.orderId)
       }
     }
 
-    return NextResponse.json({ 
+    const response = {
       message: `Successfully assigned ${successCount} out of ${validOrders.length} valid orders.`,
       totalOrders: orders.length,
       validOrders: validOrders.length,
       successfulAssignments: successCount,
-      skippedPastOrders: orders.length - validOrders.length
-    }, { status: 200 })
+      failedAssignments: failedAssignments.length,
+      skippedPastOrders: orders.length - validOrders.length,
+      failedOrderIds: failedAssignments
+    }
+
+    console.log('Final result:', response)
+    return NextResponse.json(response, { status: 200 })
 
   } catch (err: unknown) {
     const error = err as Error
@@ -218,18 +212,122 @@ export async function POST() {
   }
 }
 
-// Helper function to round up duration (matching drawer logic)
-function roundUpDuration(minutes: number): number {
-  return Math.ceil(minutes / ROUND_UP_TO_MINUTES) * ROUND_UP_TO_MINUTES
+// Group orders by their pickup date
+function groupOrdersByDate(orders: Order[]): Record<string, Order[]> {
+  return orders.reduce((acc, order) => {
+    const pickupUtc = new Date(order.pickup_timestamp)
+    const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
+    const dateStr = formatDate(pickupPH, 'yyyy-MM-dd')
+    
+    if (!acc[dateStr]) {
+      acc[dateStr] = []
+    }
+    acc[dateStr].push(order)
+    
+    return acc
+  }, {} as Record<string, Order[]>)
 }
 
-// Main function to find best driver assignment for an order with round-robin distribution
-async function findBestDriverAssignment(
+// Process all orders for a specific date with fair distribution
+async function processOrdersForDate(
+  supabase: any,
+  orders: Order[],
+  drivers: Driver[],
+  dateStr: string
+): Promise<Array<{
+  orderId: string
+  driverId: string
+  startTime: string
+  endTime: string
+  availabilityBlockId: string
+  driverName: string
+}>> {
+  
+  console.log(`Processing ${orders.length} orders for ${dateStr}`)
+  
+  // Sort orders by pickup time (earliest first) for chronological processing
+  const sortedOrders = orders.sort((a, b) => 
+    new Date(a.pickup_timestamp).getTime() - new Date(b.pickup_timestamp).getTime()
+  )
+  
+  const assignments: Array<{
+    orderId: string
+    driverId: string
+    startTime: string
+    endTime: string
+    availabilityBlockId: string
+    driverName: string
+  }> = []
+  
+  // Track assignments within this date to prevent conflicts
+  const dateAssignments: PendingAssignment[] = []
+  
+  // Track workload per driver for fair distribution
+  const driverWorkload: Record<string, number> = {}
+  drivers.forEach(driver => {
+    driverWorkload[driver.id] = 0
+  })
+  
+  // Process each order
+  for (const order of sortedOrders) {
+    if (!order.pickup_timestamp || !order.estimated_total_duration) {
+      console.log(`Skipping order ${order.id}: missing pickup_timestamp or estimated_total_duration`)
+      continue
+    }
+    
+    // Find best driver assignment with fair distribution
+    const assignment = await findBestDriverAssignmentForDate(
+      supabase,
+      order,
+      drivers,
+      dateStr,
+      dateAssignments,
+      driverWorkload
+    )
+    
+    if (assignment) {
+      assignments.push({
+        ...assignment,
+        driverName: drivers.find(d => d.id === assignment.driverId)?.first_name + ' ' + 
+                   drivers.find(d => d.id === assignment.driverId)?.last_name || 'Unknown'
+      })
+      
+      // Add to pending assignments to prevent overlaps
+      dateAssignments.push({
+        driverId: assignment.driverId,
+        startTime: assignment.startTime,
+        endTime: assignment.endTime,
+        orderId: assignment.orderId
+      })
+      
+      // Update workload tracking
+      const duration = (new Date(assignment.endTime).getTime() - new Date(assignment.startTime).getTime()) / 60000
+      driverWorkload[assignment.driverId] += duration
+      
+      console.log(`📅 ${dateStr}: Assigned order ${order.id} (${duration}min) to driver ${assignment.driverId}`)
+    } else {
+      console.log(`❌ ${dateStr}: No available driver found for order ${order.id}`)
+    }
+  }
+  
+  // Log workload distribution
+  console.log(`📊 ${dateStr} - Driver workload distribution:`)
+  Object.entries(driverWorkload).forEach(([driverId, workload]) => {
+    const driver = drivers.find(d => d.id === driverId)
+    console.log(`  ${driver?.first_name} ${driver?.last_name}: ${workload} minutes`)
+  })
+  
+  return assignments
+}
+
+// Find best driver assignment with fair distribution
+async function findBestDriverAssignmentForDate(
   supabase: any,
   order: Order,
   drivers: Driver[],
-  pendingAssignments: PendingAssignment[],
-  startDriverIndex: number = 0
+  dateStr: string,
+  existingAssignments: PendingAssignment[],
+  driverWorkload: Record<string, number>
 ): Promise<{
   orderId: string
   driverId: string
@@ -238,27 +336,23 @@ async function findBestDriverAssignment(
   availabilityBlockId: string
 } | null> {
   
-  // Convert UTC pickup timestamp to PH time
-  const pickupUtc = new Date(order.pickup_timestamp)
-  const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
-  const pickupDateStr = formatDate(pickupPH, 'yyyy-MM-dd')
+  const dayStart = zonedTimeToUtc(`${dateStr}T00:00:00`, TIMEZONE)
+  const dayEnd = zonedTimeToUtc(`${dateStr}T23:59:59`, TIMEZONE)
   
-  const dayStart = zonedTimeToUtc(`${pickupDateStr}T00:00:00`, TIMEZONE)
-  const dayEnd = zonedTimeToUtc(`${pickupDateStr}T23:59:59`, TIMEZONE)
-
-  // Try drivers starting from the specified index for better distribution
-  for (let i = 0; i < drivers.length; i++) {
-    const driverIndex = (startDriverIndex + i) % drivers.length
-    const driver = drivers[driverIndex]
-    
-    const timeSlot = await findAvailableTimeSlot(
+  // Sort drivers by current workload (least busy first) for fair distribution
+  const sortedDrivers = [...drivers].sort((a, b) => 
+    driverWorkload[a.id] - driverWorkload[b.id]
+  )
+  
+  // Try each driver starting with least busy
+  for (const driver of sortedDrivers) {
+    const timeSlot = await findAvailableTimeSlotForDriver(
       supabase,
       driver.id,
       order,
-      pickupPH,
       dayStart,
       dayEnd,
-      pendingAssignments
+      existingAssignments
     )
     
     if (timeSlot) {
@@ -271,16 +365,15 @@ async function findBestDriverAssignment(
       }
     }
   }
-
+  
   return null
 }
 
-// Find available time slot for a specific driver (matching drawer logic + pending assignments check)
-async function findAvailableTimeSlot(
+// Find available time slot for specific driver on specific date
+async function findAvailableTimeSlotForDriver(
   supabase: any,
   driverId: string,
   order: Order,
-  pickupDate: Date,
   dayStart: Date,
   dayEnd: Date,
   pendingAssignments: PendingAssignment[]
@@ -298,7 +391,7 @@ async function findAvailableTimeSlot(
     return null
   }
 
-  // Get existing time slots for the driver on this day
+  // Get existing database time slots for this driver on this day
   const { data: existingSlots, error: slotsError } = await supabase
     .from('driver_time_slots')
     .select('id, start_time, end_time, status, order_id')
@@ -313,17 +406,17 @@ async function findAvailableTimeSlot(
 
   const existingTimeSlots: ExistingTimeSlot[] = existingSlots || []
 
-  // Add pending assignments for this driver to existing slots to prevent overlaps
+  // Combine existing database slots with pending assignments for this driver
   const driverPendingAssignments = pendingAssignments.filter(pa => pa.driverId === driverId)
-  const combinedExistingSlots = [
+  const allConflictingSlots = [
     ...existingTimeSlots,
     ...driverPendingAssignments.map((pa, index) => ({
       id: `pending_${index}`,
       driver_id: driverId,
       start_time: pa.startTime,
       end_time: pa.endTime,
-      status: 'pending',
-      order_id: null
+      status: 'pending' as const,
+      order_id: pa.orderId
     }))
   ]
 
@@ -352,10 +445,9 @@ async function findAvailableTimeSlot(
   }
 
   // Generate time slot options
-  const timeSlotOptions = generateTimeSlotOptions(
+  const timeSlotOptions = generateTimeSlotOptionsForDriver(
     availableBlocks,
-    combinedExistingSlots, // Use combined slots that include pending assignments
-    pickupDate,
+    allConflictingSlots,
     order.estimated_total_duration,
     dayStart,
     dayEnd
@@ -365,19 +457,14 @@ async function findAvailableTimeSlot(
   return timeSlotOptions.length > 0 ? timeSlotOptions[0] : null
 }
 
-// Generate time slot options (matching drawer logic)
-function generateTimeSlotOptions(
+// Generate time slot options for a driver (exact match to drawer logic)
+function generateTimeSlotOptionsForDriver(
   availableBlocks: AvailabilityBlock[],
   existingTimeSlots: ExistingTimeSlot[],
-  pickupDate: Date,
   estimatedDuration: number,
   dayStart: Date,
   dayEnd: Date
 ): TimeSlotOption[] {
-  
-  const pickupDateStr = formatDate(pickupDate, 'yyyy-MM-dd')
-  const dayStartForDate = zonedTimeToUtc(`${pickupDateStr}T00:00:00`, TIMEZONE)
-  const dayEndForDate = zonedTimeToUtc(`${pickupDateStr}T23:59:59`, TIMEZONE)
   
   // Round up the estimated duration
   const roundedDuration = roundUpDuration(estimatedDuration)
@@ -386,7 +473,7 @@ function generateTimeSlotOptions(
 
   const options: TimeSlotOption[] = []
 
-  // Create buffered time slots from existing bookings
+  // Create buffered time slots from existing bookings (including pending ones)
   const bufferedExistingSlots = existingTimeSlots.map(slot => {
     const existingStartStr = slot.start_time.endsWith('Z') ? slot.start_time : slot.start_time + 'Z'
     const existingEndStr = slot.end_time.endsWith('Z') ? slot.end_time : slot.end_time + 'Z'
@@ -408,8 +495,8 @@ function generateTimeSlotOptions(
     const blockEnd = new Date(block.end_time + 'Z')
     
     // Calculate effective window for this day
-    const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStartForDate.getTime()))
-    const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEndForDate.getTime()))
+    const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))
+    const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEnd.getTime()))
     
     if (effectiveStart >= effectiveEnd) return
 
@@ -428,7 +515,7 @@ function generateTimeSlotOptions(
       
       // Check if slot fits within the availability block
       if (slotEnd <= effectiveEnd) {
-        // Check for conflicts with buffered existing time slots (including pending ones)
+        // Check for conflicts with buffered existing time slots (including pending assignments)
         const hasConflict = bufferedExistingSlots.some(existingSlot => {
           return currentSlotStart < existingSlot.bufferedEnd && existingSlot.bufferedStart < slotEnd
         })
@@ -453,4 +540,9 @@ function generateTimeSlotOptions(
   options.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   
   return options
+}
+
+// Helper function to round up duration (matching drawer logic)
+function roundUpDuration(minutes: number): number {
+  return Math.ceil(minutes / ROUND_UP_TO_MINUTES) * ROUND_UP_TO_MINUTES
 }
