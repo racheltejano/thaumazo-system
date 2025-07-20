@@ -88,7 +88,27 @@ const sidebarMenus: SidebarMenus = {
       href: '/inventory/dashboard',
     },
     {
-      label: 'Add Inventory',
+      label: 'Activity Logs',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M9 12l2 2l4 -4" />
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+      ),
+      href: '/inventory/activity-logs',
+    },
+    {
+      label: 'Category',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M3 3h18v18H3z" />
+          <path d="M9 9h6v6H9z" />
+        </svg>
+      ),
+      href: '/inventory/categories',
+    },
+    {
+      label: 'Add Item',
       icon: (
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M12 5v14M5 12h14" />

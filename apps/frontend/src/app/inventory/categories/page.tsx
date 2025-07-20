@@ -86,14 +86,23 @@ export default function CategoriesPage() {
       >
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-2">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/inventory/dashboard')}
+                className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-700 transition-all duration-200 hover:scale-105"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">Categories</h1>
+            </div>
             <button
-              onClick={() => router.push('/inventory/dashboard')}
-              className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-700 transition-all duration-200 hover:scale-105"
+              onClick={() => setShowCreateForm(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
+              Create Category
             </button>
-            <h1 className="text-3xl font-bold text-gray-900">Categories</h1>
           </div>
           <p className="text-gray-600 ml-14">Manage your inventory categories</p>
         </div>
@@ -104,17 +113,6 @@ export default function CategoriesPage() {
             <p className="text-red-700">{error}</p>
           </div>
         )}
-
-        {/* Create Category Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Create Category
-          </button>
-        </div>
 
         {/* Categories List */}
         <div className="bg-white rounded-lg shadow-md border">
@@ -166,7 +164,7 @@ export default function CategoriesPage() {
 
         {/* Create Category Modal */}
         {showCreateForm && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Create Category</h2>
@@ -222,7 +220,7 @@ export default function CategoriesPage() {
 
         {/* Edit Category Modal */}
         {editingCategory && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Edit Category</h2>
