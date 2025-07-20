@@ -52,7 +52,7 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
   const filtered = useMemo(() => {
     return inventory.filter((item) =>
       item.name?.toLowerCase().includes(search.toLowerCase()) ||
-      item.category?.toLowerCase().includes(search.toLowerCase()) ||
+      item.inventory_items_categories?.name?.toLowerCase().includes(search.toLowerCase()) ||
       item.description?.toLowerCase().includes(search.toLowerCase()) ||
       (item.variantsCount || 0).toString().includes(search) ||
       (item.totalStock || 0).toString().includes(search)
@@ -308,7 +308,7 @@ export const InventoryTable = ({ inventory, onEditQuantity, onViewProduct }: Inv
                 )}
                 {visibleColumns.category && (
                   <td className="px-6 py-4 text-gray-700">
-                    {item.category || '-'}
+                    {item.inventory_items_categories?.name || '-'}
                   </td>
                 )}
                 {visibleColumns.variants && (

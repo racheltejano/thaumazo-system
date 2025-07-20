@@ -125,7 +125,7 @@ export default function InventoryItemsGrid() {
                 name: item.name,
                 description: item.description || 'No description available',
                 stockStatus: getStockStatus(item.totalStock || 0),
-                category: item.category?.name || 'Uncategorized',
+                category: item.inventory_items_categories?.name || 'Uncategorized',
                 totalStock: item.totalStock || 0,
                 variants: item.variantsCount || 0,
                 avgPrice: calculateAveragePrice(item),

@@ -15,6 +15,13 @@ export default function ItemProfilePage() {
   const [variants, setVariants] = useState<InventoryItemVariant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
 
   useEffect(() => {
@@ -135,8 +142,15 @@ export default function ItemProfilePage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="mb-8">
+      <div 
+        className={`max-w-6xl mx-auto transition-all duration-700 ease-out ${
+          isVisible 
+            ? 'opacity-100 transform translate-y-0' 
+            : 'opacity-0 transform translate-y-8'
+        }`}
+      >
+        {/* Header */}
+        <div className="mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -149,9 +163,13 @@ export default function ItemProfilePage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{item.name}</h1>
               <div className="flex items-center gap-4 mt-1 text-gray-600">
-                <span>{item.category?.name || 'No category'}</span>
+                <span>{item.inventory_items_categories?.name || 'No category'}</span>
                 <span>•</span>
-                <span>Created {new Date(item.created_at).toLocaleDateString('en-CA')}</span>
+                                  <span>Created {new Date(item.created_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}</span>
               </div>
             </div>
           </div>
@@ -356,8 +374,7 @@ export default function ItemProfilePage() {
           </div>
         )}
       </div>
-
-
+      </div>
     </div>
   );
 } 

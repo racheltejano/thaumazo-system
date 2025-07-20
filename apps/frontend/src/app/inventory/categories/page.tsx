@@ -11,6 +11,13 @@ export default function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCategory, setNewCategory] = useState({ name: '', description: '' });
   const [saving, setSaving] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
   
   const { 
     categories, 
@@ -70,7 +77,13 @@ export default function CategoriesPage() {
 
   return (
     <div className="p-6">
-      <div className="max-w-4xl mx-auto">
+      <div 
+        className={`max-w-6xl mx-auto transition-all duration-700 ease-out ${
+          isVisible 
+            ? 'opacity-100 transform translate-y-0' 
+            : 'opacity-0 transform translate-y-8'
+        }`}
+      >
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">

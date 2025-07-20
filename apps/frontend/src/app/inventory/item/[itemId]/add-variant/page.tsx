@@ -15,6 +15,7 @@ export default function AddVariantPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   
   const [variantDetails, setVariantDetails] = useState({
     sku: '',
@@ -83,6 +84,12 @@ export default function AddVariantPage() {
       fetchItemData();
     }
   }, [itemId]);
+
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => setIsVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const fetchItemData = async () => {
     setLoading(true);
@@ -231,7 +238,13 @@ export default function AddVariantPage() {
 
   return (
     <div className="p-6">
-      <div className="max-w-5xl mx-auto">
+      <div 
+        className={`max-w-5xl mx-auto transition-all duration-700 ease-out ${
+          isVisible 
+            ? 'opacity-100 transform translate-y-0' 
+            : 'opacity-0 transform translate-y-8'
+        }`}
+      >
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -485,7 +498,7 @@ export default function AddVariantPage() {
             <Save className="h-4 w-4" />
             {saving ? 'Creating...' : 'Create Variant'}
           </button>
-        </div>
+                </div>
       </div>
     </div>
   );

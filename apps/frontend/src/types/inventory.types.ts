@@ -2,7 +2,7 @@ export interface InventoryItem {
   id: string
   name: string
   category_id: string | null
-  category?: {
+  inventory_items_categories?: {
     id: string
     name: string
     description: string | null
