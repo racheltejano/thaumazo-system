@@ -38,10 +38,12 @@ CREATE TABLE public.driver_time_slots (
   status text NOT NULL DEFAULT 'scheduled'::text CHECK (status = ANY (ARRAY['scheduled'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'break'::text])),
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
+  start_time_tz timestamp with time zone,
+  end_time_tz timestamp with time zone,
   CONSTRAINT driver_time_slots_pkey PRIMARY KEY (id),
-  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id),
   CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
+  CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id),
+  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id)
 );
 CREATE TABLE public.inventory (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -53,13 +55,6 @@ CREATE TABLE public.inventory (
   CONSTRAINT inventory_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
 );
-CREATE TABLE public.inventory_item_categories (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL UNIQUE,
-  description text,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT inventory_item_categories_pkey PRIMARY KEY (id)
-);
 CREATE TABLE public.inventory_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -67,7 +62,14 @@ CREATE TABLE public.inventory_items (
   created_at timestamp with time zone DEFAULT now(),
   category_id uuid,
   CONSTRAINT inventory_items_pkey PRIMARY KEY (id),
-  CONSTRAINT inventory_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.inventory_item_categories(id)
+  CONSTRAINT inventory_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.inventory_items_categories(id)
+);
+CREATE TABLE public.inventory_items_categories (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT inventory_items_categories_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.inventory_items_movements (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -76,8 +78,8 @@ CREATE TABLE public.inventory_items_movements (
   reference_id uuid,
   remarks text,
   created_at timestamp with time zone DEFAULT now(),
-  movement_type inventory_movement_type_enum NOT NULL,
-  reference_type inventory_reference_type_enum,
+  movement_type USER-DEFINED,
+  reference_type USER-DEFINED,
   CONSTRAINT inventory_items_movements_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_movements_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES public.inventory_items_variants(id)
 );
@@ -92,6 +94,9 @@ CREATE TABLE public.inventory_items_variants (
   sku text NOT NULL UNIQUE,
   current_stock integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
+  variant_name text,
+  supplier_email text,
+  supplier_number text,
   CONSTRAINT inventory_items_variants_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_variants_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id)
 );
@@ -163,6 +168,10 @@ CREATE TABLE public.orders (
   tracking_id text UNIQUE,
   estimated_total_duration integer,
   estimated_end_time time without time zone,
+  pickup_timestamp timestamp with time zone,
+  delivery_window_start_tz timestamp with time zone,
+  delivery_window_end_tz timestamp with time zone,
+  estimated_end_timestamp timestamp with time zone,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
   CONSTRAINT orders_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
   CONSTRAINT orders_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)

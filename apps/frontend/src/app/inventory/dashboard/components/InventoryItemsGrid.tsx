@@ -121,6 +121,7 @@ export default function InventoryItemsGrid() {
           <div key={item.id}>
             <InventoryItemCard 
               item={{
+                id: item.id,
                 name: item.name,
                 description: item.description || 'No description available',
                 stockStatus: getStockStatus(item.totalStock || 0),

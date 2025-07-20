@@ -34,13 +34,13 @@ export default function DashboardHeader() {
           <FolderOpen className="h-4 w-4" />
           Categories
         </button>
-        <button
-          onClick={() => router.push('/inventory/add')}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add New Item
-        </button>
+      <button
+        onClick={() => router.push('/inventory/add')}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+      >
+        <Plus className="h-4 w-4" />
+        Add New Item
+      </button>
       </div>
     </div>
   );

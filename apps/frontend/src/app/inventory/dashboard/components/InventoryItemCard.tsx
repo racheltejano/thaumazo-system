@@ -1,7 +1,10 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 interface InventoryItemCardProps {
   item: {
+    id: string;
     name: string;
     description: string;
     stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock';
@@ -26,10 +29,15 @@ function getStockStatusConfig(status: string) {
 }
 
 export default function InventoryItemCard({ item }: InventoryItemCardProps) {
+  const router = useRouter();
   const statusConfig = getStockStatusConfig(item.stockStatus);
 
+  const handleViewDetails = () => {
+    router.push(`/inventory/item/${item.id}`);
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-all duration-300 ease-out hover:scale-105 h-80">
+    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-all duration-300 ease-out hover:scale-102 h-80">
       {/* Header with Name and Stock Status */}
       <div className="flex justify-between items-start mb-3">
         <h3 className="text-lg font-semibold text-gray-900 flex-1 pr-4 truncate">
@@ -66,7 +74,10 @@ export default function InventoryItemCard({ item }: InventoryItemCardProps) {
       </div>
 
       {/* View Details Button */}
-      <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+      <button 
+        onClick={handleViewDetails}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+      >
         View Details
       </button>
     </div>

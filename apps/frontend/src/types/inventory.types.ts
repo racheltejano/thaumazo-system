@@ -19,7 +19,10 @@ export interface InventoryItem {
 export interface InventoryItemVariant {
   id: string
   item_id: string
+  variant_name: string
   supplier_name: string
+  supplier_email: string | null
+  supplier_number: string | null
   packaging_type: string | null
   cost_price: number | null
   selling_price: number | null
@@ -50,7 +53,10 @@ export interface NewInventoryItem {
 
 export interface NewInventoryVariant {
   item_id: string
+  variant_name: string
   supplier_name: string
+  supplier_email: string | null
+  supplier_number: string | null
   packaging_type: string
   cost_price: number
   selling_price: number
