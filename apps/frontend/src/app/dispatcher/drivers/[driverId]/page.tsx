@@ -3,8 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Phone, Mail, Truck, Clock, MapPin } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import DriverOverview from './components/DriverOverview';
+import AssignedOrders from './components/AssignedOrders';
+import OrderHistory from './components/OrderHistory';
+import ScheduleAvailability from './components/ScheduleAvailability';
 
 interface DriverProfile {
   id: string;
@@ -17,6 +21,14 @@ interface DriverProfile {
   last_login: string | null;
   profile_pic: string | null;
   created_at: string;
+}
+
+interface DriverStats {
+  total_orders: number;
+  active_orders: number;
+  completed_orders: number;
+  average_delivery_time: number;
+  total_distance: number;
 }
 
 interface Order {
@@ -33,15 +45,41 @@ interface Order {
   delivery_window_end?: string;
 }
 
+interface AvailabilityEntry {
+  id: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+}
+
 export default function DispatcherDriverDetailPage() {
   const params = useParams();
   const router = useRouter();
   const driverId = params.driverId as string;
 
   const [driver, setDriver] = useState<DriverProfile | null>(null);
+  const [stats, setStats] = useState<DriverStats | null>(null);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [availabilityData, setAvailabilityData] = useState<AvailabilityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Date range filtering state
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [showDateFilter, setShowDateFilter] = useState(false);
+
+  // Set default date range to next 30 days
+  useEffect(() => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    
+    setStartDate(today.toISOString().split('T')[0]);
+    setEndDate(thirtyDaysFromNow.toISOString().split('T')[0]);
+  }, []);
 
   useEffect(() => {
     const fetchDriverData = async () => {
@@ -63,15 +101,67 @@ export default function DispatcherDriverDetailPage() {
 
         setDriver(driverData);
 
-        // Fetch active orders
-        const { data: assignedOrdersData } = await supabase
-          .from('orders')
-          .select('id, tracking_id, status, pickup_address, delivery_address, created_at, updated_at, pickup_date, pickup_time, delivery_window_start, delivery_window_end')
-          .eq('driver_id', driverId)
-          .in('status', ['driver_assigned', 'truck_left_warehouse', 'arrived_at_pickup'])
-          .order('created_at', { ascending: false });
+        // Fetch driver statistics and data
+        const [
+          { count: totalOrders },
+          { count: activeOrders },
+          { count: completedOrders },
+          { data: assignedOrdersData },
+          { data: recentOrdersData },
+          { data: availabilityData }
+        ] = await Promise.all([
+          supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('driver_id', driverId),
+          supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('driver_id', driverId)
+            .in('status', ['driver_assigned', 'truck_left_warehouse', 'arrived_at_pickup']),
+          supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('driver_id', driverId)
+            .eq('status', 'delivered'),
+          supabase
+            .rpc('get_driver_orders', { _driver_id: driverId }),
+          supabase
+            .from('orders')
+            .select('id, tracking_id, status, pickup_address, delivery_address, created_at, updated_at, pickup_date, pickup_time, delivery_window_start, delivery_window_end')
+            .eq('driver_id', driverId)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          supabase
+            .from('driver_availability')
+            .select('id, title, start_time, end_time, created_at')
+            .eq('driver_id', driverId)
+            .order('start_time', { ascending: true })
+        ]);
+
+        setStats({
+          total_orders: totalOrders || 0,
+          active_orders: activeOrders || 0,
+          completed_orders: completedOrders || 0,
+          average_delivery_time: 0, // Placeholder - would need delivery time tracking
+          total_distance: 0, // Placeholder - would need distance tracking
+        });
+
+        console.log('Driver Profile Data:', {
+          driver: driverData,
+          stats: { 
+            totalOrders, 
+            activeOrdersCount: activeOrders, 
+            completedOrders 
+          },
+          assignedOrdersArray: assignedOrdersData?.length || 0,
+          recentOrders: recentOrdersData?.length || 0,
+          availability: availabilityData?.length || 0
+        });
 
         setActiveOrders(assignedOrdersData || []);
+        setOrderHistory(recentOrdersData || []);
+        setAvailabilityData(availabilityData || []);
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch driver data');
@@ -84,6 +174,18 @@ export default function DispatcherDriverDetailPage() {
       fetchDriverData();
     }
   }, [driverId]);
+
+  // Filter availability data based on date range
+  const filteredAvailabilityData = availabilityData.filter(availability => {
+    if (!startDate || !endDate) return true;
+    
+    const availabilityDate = new Date(availability.start_time);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59); // Include the entire end date
+    
+    return availabilityDate >= start && availabilityDate <= end;
+  });
 
   const formatLastLogin = (lastLogin: string | null) => {
     if (!lastLogin) return 'Never';
@@ -99,29 +201,48 @@ export default function DispatcherDriverDetailPage() {
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'driver_assigned':
-        return 'text-blue-600 bg-blue-100';
-      case 'truck_left_warehouse':
-        return 'text-orange-600 bg-orange-100';
-      case 'arrived_at_pickup':
-        return 'text-purple-600 bg-purple-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
-  const getStatusText = (status: string) => {
+  const formatTime = (timeString: string) => {
+    const date = new Date(timeString);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const formatDateOnly = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getStatusColor = (status: string) => {
     switch (status) {
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
       case 'driver_assigned':
-        return 'Assigned';
+        return 'bg-blue-100 text-blue-800';
       case 'truck_left_warehouse':
-        return 'En Route';
+        return 'bg-yellow-100 text-yellow-800';
       case 'arrived_at_pickup':
-        return 'At Pickup';
+        return 'bg-orange-100 text-orange-800';
       default:
-        return status;
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -130,9 +251,15 @@ export default function DispatcherDriverDetailPage() {
       <div className="p-6">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="space-y-4">
-            <div className="h-32 bg-gray-200 rounded"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="h-64 bg-gray-200 rounded"></div>
+              <div className="h-48 bg-gray-200 rounded"></div>
+            </div>
+            <div className="space-y-6">
+              <div className="h-48 bg-gray-200 rounded"></div>
+              <div className="h-32 bg-gray-200 rounded"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -143,8 +270,15 @@ export default function DispatcherDriverDetailPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-medium">Error loading driver</h3>
-          <p className="text-red-600 text-sm mt-1">{error}</p>
+          <h3 className="text-red-800 font-medium">Error loading driver profile</h3>
+          <p className="text-red-600 text-sm mt-1">{error || 'Driver not found'}</p>
+          <Link 
+            href="/dispatcher/drivers"
+            className="inline-flex items-center mt-3 text-orange-600 hover:text-orange-700"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Drivers
+          </Link>
         </div>
       </div>
     );
@@ -155,8 +289,8 @@ export default function DispatcherDriverDetailPage() {
       {/* Header */}
       <div className="mb-6">
         <Link 
-          href="/dispatcher/drivers" 
-          className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4"
+          href="/dispatcher/drivers"
+          className="inline-flex items-center text-orange-600 hover:text-orange-700 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Drivers
@@ -164,98 +298,43 @@ export default function DispatcherDriverDetailPage() {
         <h1 className="text-2xl font-bold text-gray-900">Driver Profile</h1>
       </div>
 
-      {/* Driver Info Card */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="flex items-center mb-4">
-          <div className="flex-shrink-0 h-16 w-16">
-            {driver.profile_pic ? (
-              <img
-                className="h-16 w-16 rounded-full object-cover"
-                src={driver.profile_pic.replace('/upload/', '/upload/w_64,h_64,c_fill,f_auto,q_auto/')}
-                alt={`${driver.first_name} ${driver.last_name}`}
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  target.nextElementSibling?.classList.remove('hidden');
-                }}
-              />
-            ) : null}
-            <div className={`h-16 w-16 rounded-full bg-blue-500 flex items-center justify-center ${driver.profile_pic ? 'hidden' : ''}`}>
-              <span className="text-white font-medium text-lg">
-                {`${driver.first_name?.[0] || ''}${driver.last_name?.[0] || ''}`.toUpperCase()}
-              </span>
-            </div>
-          </div>
-          <div className="ml-4">
-            <h2 className="text-xl font-bold text-gray-900">
-              {driver.first_name} {driver.last_name}
-            </h2>
-            <p className="text-gray-600">Driver</p>
-          </div>
-        </div>
+      <div className="space-y-6">
+        {/* Driver Overview and Performance Stats */}
+        <DriverOverview 
+          driver={driver}
+          stats={stats}
+          formatDate={formatDate}
+          formatLastLogin={formatLastLogin}
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center">
-            <Mail className="w-4 h-4 text-gray-400 mr-2" />
-            <span className="text-gray-700">{driver.email}</span>
-          </div>
-          <div className="flex items-center">
-            <Phone className="w-4 h-4 text-gray-400 mr-2" />
-            <span className="text-gray-700">{driver.contact_number || 'N/A'}</span>
-          </div>
-          <div className="flex items-center">
-            <Clock className="w-4 h-4 text-gray-400 mr-2" />
-            <span className="text-gray-700">Last login: {formatLastLogin(driver.last_login)}</span>
-          </div>
-          <div className="flex items-center">
-            <Truck className="w-4 h-4 text-gray-400 mr-2" />
-            <span className="text-gray-700">Active orders: {activeOrders.length}</span>
-          </div>
-        </div>
-      </div>
+        {/* Assigned Orders */}
+        <AssignedOrders 
+          orders={activeOrders}
+          formatDate={formatDate}
+          formatDateOnly={formatDateOnly}
+        />
 
-      {/* Active Orders */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">Active Orders</h3>
-        </div>
-        <div className="p-6">
-          {activeOrders.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No active orders</p>
-          ) : (
-            <div className="space-y-4">
-              {activeOrders.map((order) => (
-                <div key={order.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center">
-                      <MapPin className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="font-medium text-gray-900">Order #{order.tracking_id}</span>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
-                      {getStatusText(order.status)}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600 mb-1">Pickup Address:</p>
-                      <p className="text-gray-900">{order.pickup_address}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 mb-1">Delivery Address:</p>
-                      <p className="text-gray-900">{order.delivery_address}</p>
-                    </div>
-                  </div>
-                  {order.pickup_date && (
-                    <div className="mt-3 text-sm text-gray-600">
-                      Pickup Date: {new Date(order.pickup_date).toLocaleDateString()}
-                      {order.pickup_time && ` at ${order.pickup_time}`}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Order History */}
+        <OrderHistory 
+          orders={orderHistory}
+          formatDate={formatDate}
+          formatDateOnly={formatDateOnly}
+          getStatusColor={getStatusColor}
+        />
+
+        {/* Driver Schedule & Availability */}
+        <ScheduleAvailability 
+          availabilityData={availabilityData}
+          filteredAvailabilityData={filteredAvailabilityData}
+          showDateFilter={showDateFilter}
+          startDate={startDate}
+          endDate={endDate}
+          setShowDateFilter={setShowDateFilter}
+          setStartDate={setStartDate}
+          setEndDate={setEndDate}
+          formatDateOnly={formatDateOnly}
+          formatTime={formatTime}
+        />
       </div>
     </div>
   );

@@ -194,7 +194,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="text-3xl font-bold text-gray-900">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                        <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                       ) : (
                         dashboardStats.totalOrders?.toLocaleString() || '0'
                       )}
@@ -210,13 +210,13 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Active Drivers</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                        <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                       ) : (
                         dashboardStats.activeDrivers?.toLocaleString() || '0'
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="p-3 bg-green-100 rounded-lg">
                     <Users className="h-6 w-6 text-green-600" />
@@ -228,13 +228,13 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Revenue</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                        <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                       ) : (
                         `$${dashboardStats.revenue?.toFixed(2) || '0.00'}`
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="p-3 bg-purple-100 rounded-lg">
                     <Package className="h-6 w-6 text-purple-600" />
@@ -247,7 +247,7 @@ export default function AdminDashboard() {
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Pending Approvals</p>
                     {statsLoading ? (
-                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                     ) : dashboardStats.pendingApprovals === 0 ? (
                       <p className="text-xs text-green-600">✓ All clear</p>
                     ) : (
