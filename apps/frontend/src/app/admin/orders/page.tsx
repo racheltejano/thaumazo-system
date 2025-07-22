@@ -359,6 +359,7 @@ export const OrderTable = ({ orders, loading, basePath = '/admin/orders' }: Orde
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Asia/Manila',
     });
   };
 
