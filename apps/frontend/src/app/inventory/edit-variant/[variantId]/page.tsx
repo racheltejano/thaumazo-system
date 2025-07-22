@@ -175,7 +175,7 @@ export default function EditVariantPage() {
         .eq('id', variantId);
 
       if (error) {
-        setError('Error updating variant');
+        setError(error.message || 'Error updating variant');
         setSaving(false);
         return;
       }
