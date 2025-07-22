@@ -25,8 +25,7 @@ interface Order {
   id: string
   status: string
   created_at: string
-  pickup_date: string
-  pickup_time: string
+  pickup_timestamp: string  // Changed from pickup_date and pickup_time
   vehicle_type: string
   special_instructions: string
   estimated_cost: number
@@ -168,6 +167,31 @@ export default function OrderDetailsPage() {
     fetchOrder()
   }, [orderId])
 
+  // Helper function to convert UTC timestamp to Philippine time and split into date and time
+  const formatPickupDateTime = (utcTimestamp: string) => {
+    const date = new Date(utcTimestamp)
+    
+    // Convert to Philippine time (UTC+8)
+    const phDate = new Date(date.getTime() + (8 * 60 * 60 * 1000))
+    
+    const pickupDate = phDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC' // Use UTC since we already adjusted for PH time
+    })
+    
+    const pickupTime = phDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC' // Use UTC since we already adjusted for PH time
+    })
+    
+    return { pickupDate, pickupTime }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -211,14 +235,8 @@ export default function OrderDetailsPage() {
   }
   const StatusIcon = currentStatus.icon
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
+  // Get pickup date and time in Philippine time
+  const { pickupDate, pickupTime } = formatPickupDateTime(order.pickup_timestamp)
 
   const formatTime = (timeStr: string) => {
     return new Date(`1970-01-01T${timeStr}`).toLocaleTimeString('en-US', {
@@ -288,14 +306,14 @@ export default function OrderDetailsPage() {
                       <Calendar className="h-5 w-5 text-gray-400 mr-3" />
                       <div>
                         <p className="text-sm font-medium text-gray-900">Pickup Date</p>
-                        <p className="text-sm text-gray-500">{formatDate(order.pickup_date)}</p>
+                        <p className="text-sm text-gray-500">{pickupDate}</p>
                       </div>
                     </div>
                     <div className="flex items-center">
                       <Clock className="h-5 w-5 text-gray-400 mr-3" />
                       <div>
                         <p className="text-sm font-medium text-gray-900">Pickup Time</p>
-                        <p className="text-sm text-gray-500">{formatTime(order.pickup_time)}</p>
+                        <p className="text-sm text-gray-500">{pickupTime}</p>
                       </div>
                     </div>
                     {order.delivery_window_start && order.delivery_window_end && (
@@ -405,8 +423,8 @@ export default function OrderDetailsPage() {
                         <p className="text-sm font-medium text-gray-900">Pickup Address</p>
                         <p className="text-sm text-gray-600">{order.clients.pickup_address}</p>
                         {order.clients.landmark && (
-                          <p className="text-sm text-gray-500 mt-1">Landmark: {order.clients.landmark}</p>
-                        )}
+                            <p className="text-sm text-gray-500 mt-1">Landmark: {order.clients.landmark}</p>
+                            )}
                       </div>
                     </div>
                   </div>
