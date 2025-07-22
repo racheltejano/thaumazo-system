@@ -100,8 +100,10 @@ export default function DriverAvailabilityView() {
   }
 
   const formatTime = (timeString: string) => {
-    const date = new Date(timeString)
-    return format(date, 'h:mm a')
+    // Convert UTC time to Philippine time (UTC+8)
+    const utcDate = new Date(timeString)
+    const phDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000))
+    return format(phDate, 'h:mm a')
   }
 
   const getTotalHours = () => {
