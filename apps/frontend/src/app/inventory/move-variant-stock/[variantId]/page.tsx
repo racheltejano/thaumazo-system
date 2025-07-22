@@ -226,10 +226,11 @@ export default function MoveVariantStockPage() {
     );
   }
 
+  // Centering wrapper styles
   return (
-    <div className="p-6">
+    <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">
       <div 
-        className={`w-full transition-all duration-700 ease-out ${
+        className={`w-full max-w-3xl transition-all duration-700 ease-out ${
           isVisible 
             ? 'opacity-100 transform translate-y-0' 
             : 'opacity-0 transform translate-y-8'
@@ -318,15 +319,19 @@ export default function MoveVariantStockPage() {
                       formData.movement_type === type.value
                         ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                    } ${type.value === 'stock_out' && variant.current_stock === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <input
                       type="radio"
                       name="movement_type"
                       value={type.value}
                       checked={formData.movement_type === type.value}
-                      onChange={(e) => handleInputChange('movement_type', e.target.value as MovementType)}
+                      onChange={(e) => {
+                        if (type.value === 'stock_out' && variant.current_stock === 0) return;
+                        handleInputChange('movement_type', e.target.value as MovementType);
+                      }}
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      disabled={type.value === 'stock_out' && variant.current_stock === 0}
                     />
                     <div className="flex items-center gap-2">
                       {type.icon}
@@ -335,6 +340,12 @@ export default function MoveVariantStockPage() {
                   </label>
                 ))}
               </div>
+              {variant.current_stock === 0 && (
+                <div className="mt-2 text-red-600 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Cannot move stock out: No stock available.
+                </div>
+              )}
             </div>
           </div>
 
@@ -360,10 +371,16 @@ export default function MoveVariantStockPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter quantity"
                   required
+                  disabled={formData.movement_type === 'stock_out' && variant.current_stock === 0}
                 />
                 {formData.movement_type === 'stock_out' && variant.current_stock > 0 && (
                   <p className="text-sm text-gray-500 mt-1">
                     Available stock: {variant.current_stock}
+                  </p>
+                )}
+                {formData.movement_type === 'stock_out' && variant.current_stock === 0 && (
+                  <p className="text-sm text-red-600 mt-1">
+                    You cannot move stock out when there is no stock.
                   </p>
                 )}
               </div>
@@ -451,12 +468,12 @@ export default function MoveVariantStockPage() {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || (formData.movement_type === 'stock_out' && variant.current_stock === 0)}
             className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
               saving
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
+            } ${formData.movement_type === 'stock_out' && variant.current_stock === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Save className="w-4 h-4" />
             {saving ? 'Processing...' : 'Move Stock'}

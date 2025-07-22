@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItem, NewInventoryVariant } from '@/types/inventory.types';
@@ -41,6 +41,8 @@ export default function AddVariantPage() {
   // Success message states
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [createdVariantId, setCreatedVariantId] = useState<string | null>(null);
+  const [formDisabled, setFormDisabled] = useState(false);
+  const successRef = useRef<HTMLDivElement | null>(null);
 
   // Validation function
   const isFormValid = () => {
@@ -107,6 +109,17 @@ export default function AddVariantPage() {
     const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (showSuccessMessage) {
+      setFormDisabled(true);
+      setTimeout(() => {
+        successRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100); // allow popup to render
+    } else {
+      setFormDisabled(false);
+    }
+  }, [showSuccessMessage]);
 
   const fetchItemData = async () => {
     setLoading(true);
@@ -307,7 +320,7 @@ export default function AddVariantPage() {
 
         {/* Success Message */}
         {showSuccessMessage && createdVariantId && (
-          <div className="mb-6 p-6 bg-green-50 border border-green-200 rounded-lg relative">
+          <div ref={successRef} className="mb-6 p-6 bg-green-50 border border-green-200 rounded-lg relative">
             {/* Close button */}
             <button
               onClick={() => {
@@ -341,6 +354,7 @@ export default function AddVariantPage() {
                   onClick={() => {
                     setShowSuccessMessage(false);
                     setCreatedVariantId(null);
+                    setFormDisabled(false);
                     // Reset only specific fields while keeping others
                     setVariantDetails({
                       ...variantDetails,
@@ -381,6 +395,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setVariantDetails({ ...variantDetails, variantName: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., Red, Large, Premium"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -394,6 +409,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setVariantDetails({ ...variantDetails, color: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., Red, Blue, Green"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -407,6 +423,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setVariantDetails({ ...variantDetails, size: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., Small, Medium, Large"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -420,6 +437,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setVariantDetails({ ...variantDetails, packagingType: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., Box, Bag, Container"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -430,6 +448,7 @@ export default function AddVariantPage() {
                     checked={variantDetails.isFragile}
                     onChange={(e) => setVariantDetails({ ...variantDetails, isFragile: e.target.checked })}
                     className="mr-2"
+                    disabled={formDisabled}
                   />
                   <span className="text-sm font-medium text-gray-700">Fragile Item</span>
                 </label>
@@ -469,6 +488,7 @@ export default function AddVariantPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0"
                   min="0"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -484,6 +504,7 @@ export default function AddVariantPage() {
                   placeholder="0.00"
                   min="0"
                   step="0.01"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -499,6 +520,7 @@ export default function AddVariantPage() {
                   placeholder="0.00"
                   min="0"
                   step="0.01"
+                  disabled={formDisabled}
                 />
               </div>
             </div>
@@ -523,6 +545,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setSupplierInfo({ ...supplierInfo, supplierName: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Supplier name"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -536,6 +559,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setSupplierInfo({ ...supplierInfo, supplierEmail: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="supplier@example.com"
+                  disabled={formDisabled}
                 />
               </div>
               
@@ -549,6 +573,7 @@ export default function AddVariantPage() {
                   onChange={(e) => setSupplierInfo({ ...supplierInfo, supplierNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="+63 912 345 6789"
+                  disabled={formDisabled}
                 />
               </div>
             </div>
@@ -573,11 +598,13 @@ export default function AddVariantPage() {
                   onChange={(e) => setVariantDetails({ ...variantDetails, sku: e.target.value })}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., RED-LARGE-001"
+                  disabled={formDisabled}
                 />
                 <button
                   type="button"
                   onClick={handleGenerateSku}
                   className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                  disabled={formDisabled}
                 >
                   Generate
                 </button>
@@ -597,6 +624,7 @@ export default function AddVariantPage() {
                 onClick={() => {
                   setShowSuccessMessage(false);
                   setCreatedVariantId(null);
+                  setFormDisabled(false);
                   // Reset only specific fields while keeping others
                   setVariantDetails({
                     ...variantDetails,
