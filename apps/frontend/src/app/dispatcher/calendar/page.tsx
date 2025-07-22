@@ -1,4 +1,5 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import {
   Calendar,
@@ -7,173 +8,189 @@ import {
 } from 'react-big-calendar'
 import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
-import { DndProvider } from 'react-dnd'
-import { HTML5Backend } from 'react-dnd-html5-backend'
-import DraggableOrder from '@/components/Dispatcher/DraggableOrder'
-import OrderDetailsModal from '@/components/Dispatcher/OrderDetailsModal'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
-// Set default timezone for moment
+
+
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
 
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+
 type DriverEvent = {
-  id?: string
+  id: string
   title: string
   start: Date
   end: Date
-  type: 'availability' | 'order'
-  status?: 'assigned' | 'unassigned'
-  driverId?: string
-  driverName?: string
+  type: 'order' | 'availability'
+  order?: Order
+}
+
+type WeatherData = {
+  temperature: number | null
+  windspeed: number | null
+  weathercode: number | null
+  weatherDescription: string
 }
 
 type Order = {
   id: string
-  pickup_timestamp: string 
+  tracking_id: string
+  pickup_date: string
+  pickup_time: string
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
   client_id: string
   status: string
-  vehicle_type: string | null 
-  tail_lift_required: boolean | null
-  tracking_id: string | null
-  estimated_total_duration: number | null
-  dropoff_count: number
-  driver_id?: string | null
-  clients: {
-    tracking_id: string
-    business_name: string | null
-    contact_person: string
-  } | null
-  profiles?: {
-    first_name: string
-    last_name: string
-  } | null
-}
-
-type Driver = {
-  id: string
-  first_name: string
-  last_name: string
-  color: string
-}
-
-type AvailabilityData = {
-  id: string
-  title: string
-  start_time: string
-  end_time: string
-  driver_id: string
-  profiles: {
-    first_name: string
-    last_name: string
-  } | null
-}
-
-type OrderData = {
-  id: string
-  pickup_timestamp: string
-  delivery_window_start: string | null
-  delivery_window_end: string | null
-  special_instructions: string
-  client_id: string
-  status: string
-  vehicle_type: string | null 
+  vehicle_type: string | null
   tail_lift_required: boolean | null
   driver_id: string | null
-  tracking_id: string | null
-  estimated_total_duration: number | null
-  profiles: {
-    first_name: string
-    last_name: string
-  } | null
-  clients: {
-    tracking_id: string
-    business_name: string | null
-    contact_person: string
-  } | null
 }
 
-// Generate a consistent color for each driver
-const generateDriverColor = (driverId: string): string => {
-  const colors = [
-    '#3182ce', '#38a169', '#d69e2e', '#9f7aea', '#e53e3e',
-    '#00b5d8', '#dd6b20', '#319795', '#805ad5', '#c53030',
-    '#2b6cb0', '#2f855a', '#b7791f', '#553c9a', '#c05621',
-    '#0987a0', '#9c4221', '#285e61', '#44337a', '#9b2c2c'
-  ]
-  
-  // Create a simple hash from the driver ID
-  let hash = 0
-  for (let i = 0; i < driverId.length; i++) {
-    hash = ((hash << 5) - hash) + driverId.charCodeAt(i)
-    hash = hash & hash // Convert to 32-bit integer
+type Client = {
+  tracking_id: string
+  business_name: string
+  contact_person: string
+  contact_number: string
+  email: string | null
+  pickup_address: string
+  landmark: string | null
+  pickup_area: string | null
+  pickup_latitude: number | null
+  pickup_longitude: number | null
+}
+
+type Dropoff = {
+  id: string
+  dropoff_name: string
+  dropoff_address: string
+  dropoff_contact: string
+  dropoff_phone: string
+  sequence: number
+  latitude: number | null
+  longitude: number | null
+}
+
+const ORDER_STATUSES = [
+  { value: 'order_placed', label: 'Order Placed', color: '#718096' },
+  { value: 'driver_assigned', label: 'Driver Assigned', color: '#3182ce' },
+  { value: 'truck_left_warehouse', label: 'Truck Left Warehouse', color: '#d69e2e' },
+  { value: 'arrived_at_pickup', label: 'Arrived at Pickup', color: '#ed8936' },
+  { value: 'delivered', label: 'Delivered', color: '#38a169' },
+  { value: 'cancelled', label: 'Cancelled', color: '#e53e3e' },
+]
+
+function getWeatherDescription(code: number): string {
+  const weatherCodes: Record<number, string> = {
+    0: 'Clear sky',
+    1: 'Mainly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Depositing rime fog',
+    51: 'Light drizzle',
+    53: 'Moderate drizzle',
+    55: 'Dense drizzle',
+    56: 'Light freezing drizzle',
+    57: 'Dense freezing drizzle',
+    61: 'Slight rain',
+    63: 'Moderate rain',
+    65: 'Heavy rain',
+    66: 'Light freezing rain',
+    67: 'Heavy freezing rain',
+    71: 'Slight snow fall',
+    73: 'Moderate snow fall',
+    75: 'Heavy snow fall',
+    77: 'Snow grains',
+    80: 'Slight rain showers',
+    81: 'Moderate rain showers',
+    82: 'Violent rain showers',
+    85: 'Slight snow showers',
+    86: 'Heavy snow showers',
+    95: 'Thunderstorm',
+    96: 'Thunderstorm with slight hail',
+    99: 'Thunderstorm with heavy hail'
   }
-  
-  return colors[Math.abs(hash) % colors.length]
+  return weatherCodes[code] || 'Unknown'
 }
 
-export default function DispatcherCalendarPage() {
-  const [availabilityEvents, setAvailabilityEvents] = useState<DriverEvent[]>([])
-  const [orderEvents, setOrderEvents] = useState<DriverEvent[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
-  const [drivers, setDrivers] = useState<Driver[]>([])
-  const [currentView, setCurrentView] = useState<View>('month')
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [loading, setLoading] = useState(true)
-  const [assigning, setAssigning] = useState(false)
+function formatDate(dateString: string): string {
+  return moment(dateString).format('MMMM D, YYYY')
+}
+
+function formatTime(timeString: string): string {
+  return moment(timeString, 'HH:mm:ss').format('h:mm A')
+}
+
+export default function DriverCalendarPage() {
+  const [events, setEvents] = useState<DriverEvent[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [calendarType, setCalendarType] = useState<'availability' | 'orders'>('availability')
-  const [selectedDriverId, setSelectedDriverId] = useState<string>('all')
+  const [client, setClient] = useState<Client | null>(null)
+  const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
+  const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
+  const [showPickupMap, setShowPickupMap] = useState(false)
+  const [showDropoffMaps, setShowDropoffMaps] = useState<{[key: string]: boolean}>({})
+  const [currentView, setCurrentView] = useState<View>('month')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [statusLoading, setStatusLoading] = useState(false)
+  const currentDate = moment();
+  const startOfWeek = currentDate.clone().startOf('week');
+  const endOfWeek = currentDate.clone().endOf('week'); 
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherError, setWeatherError] = useState('')
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
+    const fetchSessionThenData = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
-      // Fetch drivers first to get names and create colors
-      const { data: driversData, error: driversError } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .eq('role', 'driver')
-
-      if (driversError) {
-        console.error('❌ Error fetching drivers:', driversError)
+      if (!session) {
+        setError('You must be logged in to view your calendar.')
+        setLoading(false)
         return
       }
 
-      // Create driver objects with colors
-      const driversWithColors: Driver[] = (driversData || []).map(driver => ({
-        id: driver.id,
-        first_name: driver.first_name,
-        last_name: driver.last_name,
-        color: generateDriverColor(driver.id)
-      }))
+      await fetchDriverData()
+    }
 
-      setDrivers(driversWithColors)
+    fetchSessionThenData()
+  }, [])
 
-      // Fetch availability data with driver info
+  const fetchDriverData = async () => {
+    setLoading(true)
+    setError('')
+    console.log('🔄 Fetching driver data...')
+
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (!user || userError) {
+        console.error('❌ User authentication failed:', userError)
+        setError('You must be logged in to view your calendar.')
+        setLoading(false)
+        return
+      }
+      console.log('✅ User authenticated:', user.id)
+
+      // Fetch driver's availability
       const { data: availabilityData, error: availError } = await supabase
         .from('driver_availability')
-        .select(`
-          id,
-          title,
-          start_time,
-          end_time,
-          driver_id,
-          profiles!driver_id (
-            first_name,
-            last_name
-          )
-        `) as { data: AvailabilityData[] | null, error: Error | null }
+        .select('id, title, start_time, end_time')
+        .eq('driver_id', user.id)
 
-      // Updated orders query with client data
+      console.log('📅 Availability data:', availabilityData)
+
+      // Fetch orders assigned to this driver
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
           id,
-          pickup_timestamp,
+          tracking_id,
+          pickup_date,
+          pickup_time,
           delivery_window_start,
           delivery_window_end,
           special_instructions,
@@ -181,376 +198,820 @@ export default function DispatcherCalendarPage() {
           status,
           vehicle_type,
           tail_lift_required,
-          driver_id,
-          tracking_id,
-          estimated_total_duration,
-          profiles!driver_id (
-            first_name,
-            last_name
-          ),
-          clients!client_id (
-            tracking_id,
-            business_name,
-            contact_person
-          )
-        `) as { data: OrderData[] | null, error: Error | null }
+          driver_id
+        `)
+        .eq('driver_id', user.id)
 
-      // Fetch dropoff counts for each order
-      const { data: dropoffData, error: dropoffError } = await supabase
-        .from('order_dropoffs')
-        .select('order_id')
+      console.log('📦 Orders data:', orderData)
 
-      if (availError || orderError || dropoffError) {
-        console.error('❌ Supabase error:', availError || orderError || dropoffError)
+      if (availError || orderError) {
+        console.error('❌ Supabase query error:', availError || orderError)
+        setError('Failed to load calendar data.')
+        setLoading(false)
         return
       }
 
-      // Count dropoffs per order
-      const dropoffCounts = (dropoffData || []).reduce((acc, dropoff) => {
-        acc[dropoff.order_id] = (acc[dropoff.order_id] || 0) + 1
-        return acc
-      }, {} as Record<string, number>)
-
-      // Process availability events - Convert UTC to Manila time
-      const availEvents: DriverEvent[] = (availabilityData || []).map((e) => {
-        const driverName = e.profiles 
-          ? `${e.profiles.first_name} ${e.profiles.last_name}`
-          : 'Unknown Driver'
-        
-        // Parse as UTC first, then convert to Manila time
-        const startTime = moment.utc(e.start_time).tz('Asia/Manila').toDate()
-        const endTime = moment.utc(e.end_time).tz('Asia/Manila').toDate()
-        
-        // Format times for display in Manila time
-        const startTimeStr = moment.tz(startTime, 'Asia/Manila').format('h:mm A')
-        const endTimeStr = moment.tz(endTime, 'Asia/Manila').format('h:mm A')
-        
-        return {
-          id: e.id,
-          title: `${driverName} - ${startTimeStr} - ${endTimeStr}`,
-          start: startTime,
-          end: endTime,
-          type: 'availability',
-          driverId: e.driver_id,
-          driverName: driverName
-        }
-      })
-
-      // Process order events with enhanced data - Convert UTC to Manila time
-      const orderEventsData: DriverEvent[] = (orderData || []).map((o) => {
-        const clientTrackingId = o.clients?.tracking_id || o.tracking_id || 'N/A'
-        let title = `${clientTrackingId}`
-
-        if (o.driver_id && o.profiles) {
-          const driverName = `${o.profiles.first_name} ${o.profiles.last_name}`
-          title = `${driverName} - ${clientTrackingId}`
-        }
-
-        // Parse pickup timestamp as UTC and convert to Manila time
-        const pickupMoment = moment.utc(o.pickup_timestamp).tz('Asia/Manila')
-        
-        // Calculate end time based on estimated duration or default to 1 hour
-        const durationHours = o.estimated_total_duration 
-          ? Math.ceil(o.estimated_total_duration / 60) // Convert minutes to hours
-          : 1
-        const endMoment = pickupMoment.clone().add(durationHours, 'hours')
-
-        return {
-          id: o.id,
-          title,
-          start: pickupMoment.toDate(),
-          end: endMoment.toDate(),
-          type: 'order',
-          status: o.status === 'order_placed' ? 'unassigned' : 'assigned',
-          driverId: o.driver_id || undefined,
-          driverName: o.profiles ? `${o.profiles.first_name} ${o.profiles.last_name}` : undefined
-        }
-      })
-
-      // Enhanced order data with dropoff counts
-      const enhancedOrders = (orderData || []).map(order => ({
-        ...order,
-        dropoff_count: dropoffCounts[order.id] || 0
+      // Create availability events
+      const availEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
+        id: e.id,
+        title: e.title || 'Available',
+        start: new Date(e.start_time + 'Z'),
+        end: new Date(e.end_time + 'Z'),
+        type: 'availability',
       }))
 
-      setAvailabilityEvents(availEvents)
-      setOrderEvents(orderEventsData)
-      setOrders(enhancedOrders)
+      // Create order events
+      const orderEvents: DriverEvent[] = (orderData || []).map((o) => {
+  const pickupDateTimeUTC = moment.utc(`${o.pickup_date}T${o.pickup_time}`);
+  const pickupDateTimePH = pickupDateTimeUTC.tz('Asia/Manila').toDate();
+
+  let endDateTimePH: Date;
+
+  if (o.delivery_window_end) {
+    const deliveryEndUTC = moment.utc(`${o.pickup_date}T${o.delivery_window_end}`);
+    endDateTimePH = deliveryEndUTC.tz('Asia/Manila').toDate();
+  } else {
+    endDateTimePH = moment(pickupDateTimePH).add(2, 'hours').toDate();
+  }
+
+  return {
+    id: o.id,
+    title: `Tracking #${o.tracking_id}`,
+    start: pickupDateTimePH,
+    end: endDateTimePH,
+    type: 'order',
+    order: o,
+  }
+})
+
+
+      console.log('✅ Events created:', { availEvents: availEvents.length, orderEvents: orderEvents.length })
+      setEvents([...availEvents, ...orderEvents])
+    } catch (err) {
+      console.error('❌ Unexpected error fetching data:', err)
+      setError('An unexpected error occurred.')
+    } finally {
       setLoading(false)
     }
+  }
 
-    fetchData()
+  const fetchOrderDetails = async (order: Order) => {
+    try {
+      // Fetch client details
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select(
+          'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
+        )
+        .eq('id', order.client_id)
+        .single()
+
+      if (clientError) {
+        console.error('❌ Failed to fetch client:', clientError)
+      } else {
+        setClient(clientData)
+      }
+
+      // Fetch dropoffs
+      const { data: dropoffData, error: dropoffError } = await supabase
+        .from('order_dropoffs')
+        .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude')
+        .eq('order_id', order.id)
+        .order('sequence', { ascending: true })
+
+      if (dropoffError) {
+        console.error('❌ Failed to fetch dropoffs:', dropoffError)
+      } else {
+        setDropoffs(dropoffData || [])
+      }
+
+    } catch (err) {
+      console.error('❌ Error fetching order details:', err)
+    }
+  }
+
+  const fetchEstimatedTravelTime = async (clientData: Client, dropoffData: Dropoff[]) => {
+    if (
+      !MAPBOX_TOKEN ||
+      !clientData?.pickup_latitude ||
+      !clientData?.pickup_longitude ||
+      dropoffData.length === 0
+    ) {
+      setEstimatedTime('Unavailable')
+      return
+    }
+
+    const filteredDropoffs = dropoffData.filter(d => d.latitude && d.longitude)
+    if (filteredDropoffs.length === 0) {
+      setEstimatedTime('Unavailable')
+      return
+    }
+
+    const coordinates = [
+      `${clientData.pickup_longitude},${clientData.pickup_latitude}`,
+      ...filteredDropoffs.map(d => `${d.longitude},${d.latitude}`)
+    ]
+
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates.join(';')}?access_token=${MAPBOX_TOKEN}&overview=false&geometries=geojson`
+
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+
+      if (data.routes && data.routes[0]?.duration) {
+        const durationInMinutes = Math.round(data.routes[0].duration / 60)
+        const hours = Math.floor(durationInMinutes / 60)
+        const minutes = durationInMinutes % 60
+        
+        if (hours > 0) {
+          setEstimatedTime(`${hours} hour${hours > 1 ? 's' : ''} ${minutes} mins`)
+        } else {
+          setEstimatedTime(`${minutes} mins`)
+        }
+      } else {
+        console.warn('No valid route returned:', data)
+        setEstimatedTime('Unavailable')
+      }
+    } catch (err) {
+      console.error('❌ Error fetching travel time:', err)
+      setEstimatedTime('Unavailable')
+    }
+  }
+
+  const handleEventClick = async (event: DriverEvent) => {
+    if (event.type === 'order' && event.order) {
+      setSelectedOrder(event.order)
+      setClient(null)
+      setDropoffs([])
+      setEstimatedTime(null)
+      setShowPickupMap(false)
+      setShowDropoffMaps({})
+      
+      await fetchOrderDetails(event.order)
+    }
+  }
+
+  useEffect(() => {
+    if (client && dropoffs.length > 0) {
+      fetchEstimatedTravelTime(client, dropoffs)
+    }
+  }, [client, dropoffs])
+
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    setStatusLoading(true)
+    console.log('🔄 Attempting to update order:', { orderId, newStatus })
+    
+    try {
+      // First, let's check if the user is authenticated
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (!user || userError) {
+        console.error('❌ User not authenticated:', userError)
+        alert('You must be logged in to update orders.')
+        return
+      }
+      console.log('✅ User authenticated:', user.id)
+
+      // Check if this order belongs to the current driver
+      const { data: orderCheck, error: checkError } = await supabase
+        .from('orders')
+        .select('id, tracking_id, driver_id, status')
+        .eq('id', orderId)
+        .single()
+
+      if (checkError) {
+        console.error('❌ Error checking order:', checkError)
+        alert('Failed to verify order: ' + checkError.message)
+        return
+      }
+
+      if (!orderCheck) {
+        console.error('❌ Order not found:', orderId)
+        alert('Order not found.')
+        return
+      }
+
+      if (orderCheck.driver_id !== user.id) {
+        console.error('❌ Order does not belong to current driver:', {
+          orderDriverId: orderCheck.driver_id,
+          currentUserId: user.id
+        })
+        alert('You can only update your own orders.')
+        return
+      }
+
+      console.log('✅ Order verification passed:', orderCheck)
+
+      // Now attempt the update
+      const { data, error } = await supabase
+        .from('orders')
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .select()
+
+      if (error) {
+        console.error('❌ Supabase update error:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        alert('Failed to update order status: ' + error.message)
+      } else {
+        console.log('✅ Update successful:', data)
+        alert('Order status updated successfully!')
+        
+        // Update the selected order state immediately
+        if (selectedOrder) {
+          setSelectedOrder({
+            ...selectedOrder,
+            status: newStatus
+          })
+        }
+        
+        // Refresh the calendar data
+        await fetchDriverData()
+        setSelectedOrder(null)
+      }
+    } catch (err) {
+      console.error('❌ Unexpected error:', err)
+      alert('An unexpected error occurred while updating order status')
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  
+
+  const getStatusColor = (status: string) => {
+    const statusObj = ORDER_STATUSES.find(s => s.value === status)
+    return statusObj ? statusObj.color : '#718096'
+  }
+
+  const getStatusLabel = (status: string) => {
+    const statusObj = ORDER_STATUSES.find(s => s.value === status)
+    return statusObj ? statusObj.label : status.replace('_', ' ').toUpperCase()
+  }
+
+  const getAvailableNextStatuses = (currentStatus: string) => {
+    // Define logical progression of statuses
+    const statusFlow = {
+      'order_placed': ['driver_assigned', 'cancelled'],
+      'driver_assigned': ['truck_left_warehouse', 'cancelled'],
+      'truck_left_warehouse': ['arrived_at_pickup', 'cancelled'],
+      'arrived_at_pickup': ['delivered', 'cancelled'],
+      'delivered': [], // Final state
+      'cancelled': [] // Final state
+    }
+
+    return statusFlow[currentStatus as keyof typeof statusFlow] || []
+  }
+
+  const getTotalHours = () => {
+    return events
+      .filter(e => e.type === 'availability' && !e.title.includes('Unavailable'))
+      .reduce((total, event) => {
+        const hours = (event.end.getTime() - event.start.getTime()) / (1000 * 60 * 60)
+        return total + hours
+      }, 0)
+  }
+
+  const getOrderCount = () => {
+    return events.filter(e => e.type === 'order').length
+  }
+
+  const toggleDropoffMap = (dropoffId: string) => {
+    setShowDropoffMaps(prev => ({
+      ...prev,
+      [dropoffId]: !prev[dropoffId]
+    }))
+  }
+
+  useEffect(() => {
+    const fetchWeather = async (lat: number, lon: number) => {
+      try {
+        setWeatherLoading(true)
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`
+        )
+        const data = await res.json()
+        if (data && data.current_weather) {
+          setWeather({
+            temperature: data.current_weather.temperature,
+            windspeed: data.current_weather.windspeed,
+            weathercode: data.current_weather.weathercode,
+            weatherDescription: getWeatherDescription(data.current_weather.weathercode)
+          })
+        } else {
+          setWeatherError('Failed to fetch weather data.')
+        }
+      } catch {
+        setWeatherError('Failed to fetch weather data.')
+      } finally {
+        setWeatherLoading(false)
+      }
+    }
+
+    if (!navigator.geolocation) {
+      setWeatherError('Geolocation is not supported by your browser.')
+      setWeatherLoading(false)
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        fetchWeather(position.coords.latitude, position.coords.longitude)
+      },
+      (error) => {
+        if (error.code !== 1) { 
+          if (error && Object.keys(error).length > 0) {
+            console.error('Geolocation error:', error)
+          } else {
+            console.warn('Geolocation failed with empty error object.')
+          }
+        }
+        fetchWeather(14.5995, 120.9842)  
+      }
+    )
   }, [])
 
-  const handleAutoAssign = async () => {
-    setAssigning(true)
-    try {
-      const res = await fetch('/api/auto-assign', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Auto-assign failed')
-      alert(`✅ ${data.message}`)
-      window.location.reload()
-    } catch (err: unknown) {
-      const error = err as Error
-      console.error('Auto-assign failed:', error)
-      alert(`❌ ${error.message}`)
-    } finally {
-      setAssigning(false)
-    }
-  }
+  const upcomingOrders = events
+    .filter(e => e.type === 'order' && moment(e.start).isBetween(moment().startOf('day'), moment().add(7, 'days').endOf('day'), null, '[]'))
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
 
-  const getEventColor = (event: DriverEvent) => {
-    if (event.type === 'availability') {
-      const driver = drivers.find(d => d.id === event.driverId)
-      return driver?.color || '#3182ce'
-    } else {
-      // Order events
-      if (event.status === 'unassigned') return '#ed8936'
-      if (event.driverId) {
-        const driver = drivers.find(d => d.id === event.driverId)
-        return driver?.color || '#38a169'
-      }
-      return '#38a169'
+  const filteredAvailability = events.filter((e) => {
+    if (e.type === 'availability') {
+      const startMoment = moment(e.start);
+      return startMoment.isBetween(startOfWeek, endOfWeek, 'days', '[]');
     }
-  }
-
-  // Custom styles for better monthly view
-  const calendarStyle = {
-    height: currentView === 'month' ? '600px' : '400px', // Taller for month view
-  }
-
-  const customComponents = {
-    month: {
-      event: ({ event }: { event: DriverEvent }) => (
-        <div 
-          className="text-xs p-1 mb-1 block" 
-          style={{ 
-            backgroundColor: getEventColor(event),
-            color: '#fff',
-            borderRadius: '3px',
-            fontSize: '10px',
-            lineHeight: '1.2',
-            whiteSpace: 'normal',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: 'block',
-            width: '100%',
-            minHeight: '18px'
-          }}
-          title={event.title} // Tooltip for full text
-        >
-          {event.title}
-        </div>
-      )
-    },
-    week: {
-      event: ({ event }: { event: DriverEvent }) => (
-        <div 
-          className="text-xs p-1 block" 
-          style={{ 
-            backgroundColor: getEventColor(event),
-            color: '#fff',
-            borderRadius: '3px',
-            fontSize: '11px',
-            lineHeight: '1.2',
-            whiteSpace: 'normal',
-            overflow: 'hidden',
-            display: 'block',
-            width: '100%',
-            height: '100%'
-          }}
-          title={event.title} // Tooltip for full text
-        >
-          {event.title}
-        </div>
-      )
-    },
-    day: {
-      event: ({ event }: { event: DriverEvent }) => (
-        <div 
-          className="text-xs p-1 block" 
-          style={{ 
-            backgroundColor: getEventColor(event),
-            color: '#fff',
-            borderRadius: '3px',
-            fontSize: '11px',
-            lineHeight: '1.2',
-            whiteSpace: 'normal',
-            overflow: 'hidden',
-            display: 'block',
-            width: '100%',
-            height: '100%'
-          }}
-          title={event.title} // Tooltip for full text
-        >
-          {event.title}
-        </div>
-      )
-    },
-    agenda: {
-      event: ({ event }: { event: DriverEvent }) => (
-        <div 
-          className="text-sm p-2 block" 
-          style={{ 
-            backgroundColor: getEventColor(event),
-            color: '#fff',
-            borderRadius: '3px',
-            fontSize: '12px',
-            lineHeight: '1.3',
-            whiteSpace: 'normal',
-            overflow: 'hidden',
-            display: 'block',
-            width: '100%'
-          }}
-          title={event.title} // Tooltip for full text
-        >
-          {event.title}
-        </div>
-      )
-    }
-  }
+    return false;
+  });
 
   if (loading) {
     return (
-      <p className="p-6">Loading calendar...</p>
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your calendar...</p>
+        </div>
+      </div>
     )
   }
 
-  return (
-  <DndProvider backend={HTML5Backend}>
-    <div className="bg-gray-50 text-gray-800 min-h-screen">
-      <div className="flex px-4 py-4 gap-4">
-        {/* Sidebar */}
-        <aside
-          className="w-1/5 bg-white p-4 rounded-xl shadow-sm border border-gray-200"
-          style={{ height: currentView === 'month' ? '700px' : '400px' }}
-        >
-          <h2 className="text-lg font-semibold mb-4">📦 Unassigned Orders</h2>
+return (
+  <div className="max-w-7xl mx-auto px-4 py-8">
 
-          {orders.length === 0 ? (
-            <p className="text-sm text-gray-500">All orders are assigned!</p>
-          ) : (
-            <div className="flex flex-col h-full">
-              {/* Scrollable orders list */}
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {orders
-                  .filter((o) => o.status === 'order_placed')
-                  .map((order) => (
-                    <DraggableOrder
-                      key={order.id}
-                      order={order}
-                      onClick={() => setSelectedOrder(order)}
-                    />
-                ))}
-              </div>
+    {/* Error Message */}
+    {error && (
+      <div className="mb-6 text-center text-sm font-medium text-red-600 bg-red-50 py-3 px-4 rounded-lg border border-red-200">
+        {error}
+      </div>
+    )}
 
-              {/* Sticky bottom actions */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <button
-                  onClick={handleAutoAssign}
-                  disabled={assigning}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm py-2 rounded-md transition disabled:opacity-50"
-                >
-                  {assigning ? 'Assigning...' : 'Auto-Assign Orders'}
-                </button>
-                <br/>
-                <br/>
-                <br/>
-              </div>
-            </div>
-          )}
-        </aside>
-
-        {/* Main Calendar Area */}
-        <section className="flex-1 space-y-4">
-          <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold">
-                  {calendarType === 'availability' ? '🚛 Driver Availability' : '📦 Orders Schedule'}
-                </h1>
-                <select
-                  value={calendarType}
-                  onChange={(e) => setCalendarType(e.target.value as 'availability' | 'orders')}
-                  className="border rounded-md px-3 py-1 text-sm"
-                >
-                  <option value="availability">Driver Availability</option>
-                  <option value="orders">Orders Schedule</option>
-                </select>
-              </div>
-
-              {calendarType === 'availability' && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium">Driver:</label>
-                    <select
-                      value={selectedDriverId}
-                      onChange={(e) => setSelectedDriverId(e.target.value)}
-                      className="border rounded-md px-3 py-1 text-sm"
-                    >
-                      <option value="all">All Drivers</option>
-                      {drivers.map(driver => (
-                        <option key={driver.id} value={driver.id}>
-                          {driver.first_name} {driver.last_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">View:</label>
-                  <select
-                    value={currentView}
-                    onChange={(e) => setCurrentView(e.target.value as View)}
-                    className="border rounded-md px-3 py-1 text-sm"
-                  >
-                    <option value="month">Month</option>
-                    <option value="week">Week</option>
-                    <option value="day">Day</option>
-                  </select>
-                </div>
-            </div>
-
-            <div className="overflow-auto">
-              <Calendar
-                localizer={localizer}
-                events={
-                  calendarType === 'availability'
-                    ? selectedDriverId === 'all'
-                      ? availabilityEvents
-                      : availabilityEvents.filter(event => event.driverId === selectedDriverId)
-                    : orderEvents
-                }
-                startAccessor={(event) => event.start}
-                endAccessor={(event) => event.end}
-                view={currentView}
-                date={currentDate}
-                onView={(view) => setCurrentView(view)}
-                onNavigate={(date) => setCurrentDate(date)}
-                style={calendarStyle}
-                components={customComponents}
-                eventPropGetter={(event: DriverEvent) => ({
-                  style: {
-                    backgroundColor: getEventColor(event),
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px'
-                  }
-                })}
-              />
-            </div>
-          </div>
-        </section>
+    {/* Dashboard Summary Cards */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {/* Hours Scheduled */}
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
+        <div className="text-3xl font-bold text-orange-600 mb-1">{getTotalHours().toFixed(1)}</div>
+        <div className="text-sm text-gray-600 font-medium">Hours Scheduled</div>
+      </div>
+      
+      {/* Orders Assigned */}
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
+        <div className="text-3xl font-bold text-blue-600 mb-1">{getOrderCount()}</div>
+        <div className="text-sm text-gray-600 font-medium">Orders Assigned</div>
+      </div>
+      
+      {/* Orders Delivered */}
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
+        <div className="text-3xl font-bold text-green-600 mb-1">
+          {events.filter(e => e.type === 'order' && e.order?.status === 'delivered').length}
+        </div>
+        <div className="text-sm text-gray-600 font-medium">Orders Delivered</div>
       </div>
     </div>
 
-    {selectedOrder && (
-      <OrderDetailsModal
-        order={selectedOrder}
-        onClose={() => setSelectedOrder(null)}
-      />
-    )}
-  </DndProvider>
-)
+    {/* Main Content Grid */}
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+      {/* Left Sidebar */}
+      <div className="lg:col-span-1 space-y-6">
+        {/* Current Weather */}
+        <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
+          <h2 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
+            <span>🌤️</span>
+            Current Weather
+          </h2>
+          {weatherLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm text-blue-700">Loading weather...</span>
+            </div>
+          ) : weatherError ? (
+            <p className="text-red-600 text-sm">{weatherError}</p>
+          ) : weather ? (
+            <div className="space-y-2 text-sm text-blue-800">
+              <div className="flex justify-between">
+                <span className="font-medium">Temperature:</span>
+                <span>{weather.temperature}°C</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Wind Speed:</span>
+                <span>{weather.windspeed} km/h</span>
+              </div>
+              <div className="mt-3 p-2 bg-blue-200 rounded-lg">
+                <span className="font-medium">Condition:</span>
+                <div className="text-blue-900 font-semibold">{weather.weatherDescription}</div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-blue-700 text-sm">No weather data available.</p>
+          )}
+        </div>
 
+        {/* Today's Orders */}
+        <div className="p-6 rounded-xl bg-white border border-gray-200 shadow-sm">
+          <h2 className="text-lg font-semibold text-orange-600 mb-4 flex items-center gap-2">
+            <span>📦</span>
+            Orders for Today
+          </h2>
+          {events.filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day')).length === 0 ? (
+            <div className="text-center py-4">
+              <div className="text-gray-400 text-2xl mb-2">📅</div>
+              <p className="text-sm text-gray-500 italic">No orders scheduled for today</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {events
+                .filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day'))
+                .map(order => (
+                  <div key={order.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                       onClick={() => handleEventClick(order)}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="font-medium text-sm text-gray-900">
+                        Tracking #{order.order?.tracking_id}
+                      </div>
+                      <span
+                        className="text-xs font-semibold px-2 py-1 rounded-full text-white"
+                        style={{ backgroundColor: getStatusColor(order.order?.status || 'order_placed') }}
+                      >
+                        {getStatusLabel(order.order?.status || 'order_placed')}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {moment(order.start).format('HH:mm')} - {moment(order.end).format('HH:mm')}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Calendar View */}
+      <div className="lg:col-span-3">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gray-50">
+            <h2 className="text-lg font-semibold text-gray-900">Calendar View</h2>
+          </div>
+          <div className="p-4">
+            <Calendar
+              localizer={localizer}
+              events={events}
+              startAccessor="start"
+              endAccessor="end"
+              view={currentView}
+              onView={(view) => setCurrentView(view)}
+              onSelectEvent={handleEventClick}
+              style={{ height: '600px' }}
+              eventPropGetter={(event: DriverEvent) => {
+                let backgroundColor = '#3182ce'
+                let textColor = '#fff'
+
+                if (event.type === 'availability') {
+                  backgroundColor = event.title.includes('Unavailable') ? '#e53e3e' : '#38a169'
+                } else if (event.type === 'order' && event.order) {
+                  backgroundColor = getStatusColor(event.order.status)
+                }
+
+                return {
+                  style: {
+                    backgroundColor,
+                    color: textColor,
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    padding: '2px 4px'
+                  }
+                }
+              }}
+              dayPropGetter={(date) => {
+                const isToday = moment(date).isSame(moment(), 'day')
+                return isToday ? { style: { backgroundColor: '#fef3e2' } } : {}
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Upcoming Orders Section */}
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-8">
+      <div className="p-6 border-b border-gray-200 bg-gray-50">
+        <h2 className="text-lg font-semibold text-orange-600 flex items-center gap-2">
+          <span>📅</span>
+          Upcoming Orders (Next 7 Days)
+        </h2>
+      </div>
+      <div className="p-6">
+        {upcomingOrders.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-gray-400 text-3xl mb-3">📋</div>
+            <p className="text-gray-500 italic">No upcoming orders in the next 7 days</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {upcomingOrders.map((orderEvent) => (
+              <div key={orderEvent.id} 
+                   className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer border border-gray-200"
+                   onClick={() => handleEventClick(orderEvent)}>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="font-medium text-sm text-gray-900">
+                    Tracking #{orderEvent.order?.tracking_id}
+                  </div>
+                  <span
+                    className="text-xs font-semibold px-2 py-1 rounded-full text-white"
+                    style={{ backgroundColor: getStatusColor(orderEvent.order?.status || 'order_placed') }}
+                  >
+                    {getStatusLabel(orderEvent.order?.status || 'order_placed')}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {moment(orderEvent.start).format('ddd, MMM D')}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {moment(orderEvent.start).format('HH:mm')} - {moment(orderEvent.end).format('HH:mm')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Order Details Modal */}
+{selectedOrder && (
+  <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* Modal Header */}
+      <div className="p-6 border-b border-gray-200 bg-gray-50">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <span>📝</span>
+            Order Details: {selectedOrder.tracking_id}
+          </h3>
+          <button
+            onClick={() => setSelectedOrder(null)}
+            className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
+            disabled={statusLoading}
+            aria-label="Close modal"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div className="p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Order Details */}
+          <div className="space-y-6">
+            {/* Order Information */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <span>📋</span> Order Information
+              </h4>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Pickup Date:</span>
+                  <span className="text-gray-900">{formatDate(selectedOrder.pickup_date)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Pickup Time:</span>
+                  <span className="text-gray-900">{formatTime(selectedOrder.pickup_time)}</span>
+                </div>
+                {selectedOrder.delivery_window_start && (
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-700">Delivery Window:</span>
+                    <span className="text-gray-900">
+                      {formatTime(selectedOrder.delivery_window_start)} - {formatTime(selectedOrder.delivery_window_end || '')}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Vehicle Type:</span>
+                  <span className="text-gray-900">{selectedOrder.vehicle_type || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-700">Tail Lift:</span>
+                  <span className="text-gray-900">{selectedOrder.tail_lift_required ? 'Required' : 'Not Required'}</span>
+                </div>
+                {estimatedTime && (
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-700">Est. Travel Time:</span>
+                        <span className="text-gray-900">{estimatedTime}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+            {/* Current Status */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <span>🔄</span> Current Status
+              </h4>
+              <div className="flex items-center gap-3">
+                <span
+                  className="px-3 py-2 rounded-lg text-sm font-medium text-white"
+                  style={{ backgroundColor: getStatusColor(selectedOrder.status) }}
+                >
+                  {getStatusLabel(selectedOrder.status)}
+                </span>
+              </div>
+            </div>
+
+            {/* Special Instructions */}
+            {selectedOrder.special_instructions && (
+              <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-yellow-800">
+                  <span>⚠️</span> Special Instructions
+                </h4>
+                <p className="text-sm text-yellow-800">{selectedOrder.special_instructions}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Client & Status Updates */}
+          <div className="space-y-6">
+            {/* Client Information with Map Button */}
+            {client && (
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-blue-800">
+                  <span>👤</span> Client Information
+                </h4>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <span className="font-medium text-blue-700">Business:</span>
+                    <div className="text-blue-900">{client.business_name}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Contact:</span>
+                    <div className="text-blue-900">{client.contact_person}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Phone:</span>
+                    <div className="text-blue-900">{client.contact_number}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Pickup Address:</span>
+                    <div className="text-blue-900 mb-2">{client.pickup_address}</div>
+                    {/* Map button for pickup location */}
+                    {client.pickup_latitude && client.pickup_longitude && (
+                      <button
+                        onClick={() => setShowPickupMap(!showPickupMap)}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors flex items-center gap-1"
+                      >
+                        <span>🗺️</span>
+                        {showPickupMap ? 'Hide Map' : 'Show Map'}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Pickup Location Map */}
+                  {showPickupMap && client.pickup_latitude && client.pickup_longitude && (
+                    <div className="mt-3 rounded-lg overflow-hidden border border-blue-300">
+                      <img
+                        src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-p+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},14,0/400x200@2x?access_token=${MAPBOX_TOKEN}`}
+                        alt="Pickup Location Map"
+                        className="w-full h-48 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling.style.display = 'block';
+                        }}
+                      />
+                      <div className="hidden p-3 bg-red-50 text-red-600 text-sm text-center">
+                        Map could not be loaded
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Dropoff Information with Map Buttons */}
+            {dropoffs.length > 0 && (
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-green-800">
+                  <span>📍</span> Dropoff Locations
+                </h4>
+                <div className="space-y-4">
+                  {dropoffs.map((dropoff) => (
+                    <div key={dropoff.id} className="text-sm border-b border-green-200 last:border-b-0 pb-3 last:pb-0">
+                      <div className="font-medium text-green-700">
+                        {dropoff.sequence}. {dropoff.dropoff_name}
+                      </div>
+                      <div className="text-green-600 mb-1">{dropoff.dropoff_address}</div>
+                      <div className="text-green-600 mb-2">{dropoff.dropoff_contact} - {dropoff.dropoff_phone}</div>
+                      
+                      {/* Map button for dropoff location */}
+                      {dropoff.latitude && dropoff.longitude && (
+                        <button
+                          onClick={() => toggleDropoffMap(dropoff.id)}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded-md transition-colors flex items-center gap-1 mb-2"
+                        >
+                          <span>🗺️</span>
+                          {showDropoffMaps[dropoff.id] ? 'Hide Map' : 'Show Map'}
+                        </button>
+                      )}
+                      
+                      {/* Dropoff Location Map */}
+                      {showDropoffMaps[dropoff.id] && dropoff.latitude && dropoff.longitude && (
+                        <div className="mt-2 rounded-lg overflow-hidden border border-green-300">
+                          <img
+                            src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-${dropoff.sequence}+00ff00(${dropoff.longitude},${dropoff.latitude})/${dropoff.longitude},${dropoff.latitude},14,0/400x200@2x?access_token=${MAPBOX_TOKEN}`}
+                            alt={`Dropoff ${dropoff.sequence} Location Map`}
+                            className="w-full h-48 object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling.style.display = 'block';
+                            }}
+                          />
+                          <div className="hidden p-3 bg-red-50 text-red-600 text-sm text-center">
+                            Map could not be loaded
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Status Update Section */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <span>🔄</span> Update Status
+              </h4>
+              <div className="space-y-2">
+                {getAvailableNextStatuses(selectedOrder.status).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => updateOrderStatus(selectedOrder.id, status)}
+                    disabled={statusLoading}
+                    className={`w-full px-4 py-3 text-sm font-medium rounded-lg transition-all ${
+                      statusLoading
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'text-white hover:opacity-90 hover:shadow-md'
+                    }`}
+                    style={{ backgroundColor: statusLoading ? '#e5e7eb' : getStatusColor(status) }}
+                  >
+                    {statusLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                        Updating...
+                      </div>
+                    ) : (
+                      `Mark as ${getStatusLabel(status)}`
+                    )}
+                  </button>
+                ))}
+                {getAvailableNextStatuses(selectedOrder.status).length === 0 && (
+                  <div className="text-center py-4">
+                    <div className="text-gray-400 text-xl mb-2">✅</div>
+                    <p className="text-sm text-gray-500 italic">No status updates available</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="flex justify-end">
+            <button
+              onClick={() => setSelectedOrder(null)}
+              disabled={statusLoading}
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+  </div>
+)
 }
