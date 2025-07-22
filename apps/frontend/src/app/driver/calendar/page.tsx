@@ -24,22 +24,24 @@ type DriverEvent = {
 
 type Order = {
   id: string
-  pickup_date: string
-  pickup_time: string
-  delivery_window_start: string | null
-  delivery_window_end: string | null
+  pickup_timestamp: string
+  estimated_end_timestamp: string
   special_instructions: string
   client_id: string
   status: string
   vehicle_type: string | null
   tail_lift_required: boolean | null
   driver_id: string | null
+  tracking_id: string
 }
 
 export default function DriverCalendarPage() {
-  const [events, setEvents] = useState<DriverEvent[]>([])
+  const [availabilityEvents, setAvailabilityEvents] = useState<DriverEvent[]>([])
+  const [orderEvents, setOrderEvents] = useState<DriverEvent[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [currentView, setCurrentView] = useState<View>('month')
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [calendarFilter, setCalendarFilter] = useState<'orders' | 'availability'>('orders')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -65,16 +67,14 @@ export default function DriverCalendarPage() {
         .select('id, title, start_time, end_time')
         .eq('driver_id', user.id)
 
-      // Fetch orders assigned to this driver
+      // Fetch orders assigned to this driver - Updated to use correct timestamp fields
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
           id,
           tracking_id,
-          pickup_date,
-          pickup_time,
-          delivery_window_start,
-          delivery_window_end,
+          pickup_timestamp,
+          estimated_end_timestamp,
           special_instructions,
           client_id,
           status,
@@ -100,29 +100,24 @@ export default function DriverCalendarPage() {
         type: 'availability',
       }))
 
-      // Create order events
-      const orderEvents: DriverEvent[] = (orderData || []).map((o) => {
-        const pickupDateTime = new Date(`${o.pickup_date}T${o.pickup_time}`)
-        let endDateTime = new Date(pickupDateTime)
-        
-        // If delivery window is specified, use delivery end time, otherwise add 2 hours
-        if (o.delivery_window_end) {
-          endDateTime = new Date(`${o.pickup_date}T${o.delivery_window_end}`)
-        } else {
-          endDateTime.setHours(endDateTime.getHours() + 2)
-        }
+      // Create order events - Updated to use correct timestamp fields
+      const ordEvents: DriverEvent[] = (orderData || []).map((o) => {
+        // Use pickup_timestamp and estimated_end_timestamp directly
+        const startDateTime = new Date(o.pickup_timestamp)
+        const endDateTime = new Date(o.estimated_end_timestamp)
 
         return {
           id: o.id,
           title: `Tracking #${o.tracking_id}`,
-          start: pickupDateTime,
+          start: startDateTime,
           end: endDateTime,
           type: 'order',
           order: o,
         }
       })
 
-      setEvents([...availEvents, ...orderEvents])
+      setAvailabilityEvents(availEvents)
+      setOrderEvents(ordEvents)
     } catch (err) {
       console.error('Error fetching driver data:', err)
       setError('An unexpected error occurred.')
@@ -135,6 +130,14 @@ export default function DriverCalendarPage() {
     if (event.type === 'order' && event.order) {
       setSelectedOrder(event.order)
     }
+  }
+
+  const handleNavigate = (newDate: Date) => {
+    setCurrentDate(newDate)
+  }
+
+  const handleViewChange = (newView: View) => {
+    setCurrentView(newView)
   }
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
@@ -169,8 +172,8 @@ export default function DriverCalendarPage() {
   }
 
   const getTotalHours = () => {
-    return events
-      .filter(e => e.type === 'availability' && !e.title.includes('Unavailable'))
+    return availabilityEvents
+      .filter(e => !e.title.includes('Unavailable'))
       .reduce((total, event) => {
         const hours = (event.end.getTime() - event.start.getTime()) / (1000 * 60 * 60)
         return total + hours
@@ -178,7 +181,12 @@ export default function DriverCalendarPage() {
   }
 
   const getOrderCount = () => {
-    return events.filter(e => e.type === 'order').length
+    return orderEvents.length
+  }
+
+  // Get the current events to display based on filter
+  const getCurrentEvents = () => {
+    return calendarFilter === 'orders' ? orderEvents : availabilityEvents
   }
 
   if (loading) {
@@ -224,7 +232,7 @@ export default function DriverCalendarPage() {
         <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">
-              {events.filter(e => e.type === 'order' && e.order?.status === 'completed').length}
+              {orderEvents.filter(e => e.order?.status === 'completed').length}
             </div>
             <div className="text-sm text-gray-600">Orders Completed</div>
           </div>
@@ -232,30 +240,52 @@ export default function DriverCalendarPage() {
       </div>
 
       {/* Calendar Controls */}
-      <div className="flex items-center gap-2 mb-4">
-        <label className="text-sm font-medium">View:</label>
-        <select
-          value={currentView}
-          onChange={(e) => setCurrentView(e.target.value as View)}
-          className="border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-        >
-          <option value="month">Month</option>
-          <option value="week">Week</option>
-          <option value="day">Day</option>
-        </select>
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Filter:</label>
+          <select
+            value={calendarFilter}
+            onChange={(e) => setCalendarFilter(e.target.value as 'orders' | 'availability')}
+            className="border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+          >
+            <option value="orders">📦 Assigned Orders</option>
+            <option value="availability">📅 My Availability</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">View:</label>
+          <select
+            value={currentView}
+            onChange={(e) => setCurrentView(e.target.value as View)}
+            className="border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+          >
+            <option value="month">Month</option>
+            <option value="week">Week</option>
+            <option value="day">Day</option>
+          </select>
+        </div>
       </div>
 
       {/* Calendar */}
       <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
+        <div className="bg-gray-50 px-4 py-2 border-b">
+          <h3 className="text-sm font-medium text-gray-700">
+            {calendarFilter === 'orders' ? '📦 Your Assigned Orders' : '📅 Your Availability Schedule'}
+          </h3>
+        </div>
         <Calendar
           localizer={localizer}
-          events={events}
+          events={getCurrentEvents()}
           startAccessor="start"
           endAccessor="end"
           view={currentView}
-          onView={(view) => setCurrentView(view)}
+          date={currentDate}
+          onView={handleViewChange}
+          onNavigate={handleNavigate}
           onSelectEvent={handleEventClick}
           style={{ height: '600px' }}
+          toolbar={true}
+          showMultiDayTimes={true}
           eventPropGetter={(event: DriverEvent) => {
             let backgroundColor = '#3182ce'
             let textColor = '#fff'
@@ -279,33 +309,56 @@ export default function DriverCalendarPage() {
             const isToday = moment(date).isSame(moment(), 'day')
             return isToday ? { style: { backgroundColor: '#fef3e2' } } : {}
           }}
+          messages={{
+            today: 'Today',
+            previous: 'Back',
+            next: 'Next',
+            month: 'Month',
+            week: 'Week',
+            day: 'Day',
+            agenda: 'Agenda',
+            date: 'Date',
+            time: 'Time',
+            event: 'Event',
+            noEventsInRange: calendarFilter === 'orders' 
+              ? 'No orders assigned for this period' 
+              : 'No availability scheduled for this period',
+            showMore: (total) => `+${total} more`,
+          }}
         />
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 mt-6">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded"></div>
-          <span>Available</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-500 rounded"></div>
-          <span>Unavailable</span>
-        </div>
-        {/* Assuming ORDER_STATUSES is defined elsewhere or needs to be defined */}
-        {/* For now, I'll just list the statuses directly */}
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-500 rounded"></div>
-          <span>Assigned Order</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-orange-500 rounded"></div>
-          <span>In Progress</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-600 rounded"></div>
-          <span>Completed</span>
-        </div>
+        {calendarFilter === 'availability' ? (
+          // Availability Legend
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 rounded"></div>
+              <span>Available</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500 rounded"></div>
+              <span>Unavailable</span>
+            </div>
+          </>
+        ) : (
+          // Orders Legend
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-500 rounded"></div>
+              <span>Assigned Order</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-500 rounded"></div>
+              <span>In Progress</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-600 rounded"></div>
+              <span>Completed</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Order Details Modal */}
@@ -324,17 +377,11 @@ export default function DriverCalendarPage() {
 
             <div className="space-y-3 text-sm">
               <div>
-                <span className="font-medium">Pickup Date:</span> {selectedOrder.pickup_date}
+                <span className="font-medium">Pickup Time:</span> {moment(selectedOrder.pickup_timestamp).format('MMMM DD, YYYY HH:mm')}
               </div>
               <div>
-                <span className="font-medium">Pickup Time:</span> {selectedOrder.pickup_time}
+                <span className="font-medium">Estimated End Time:</span> {moment(selectedOrder.estimated_end_timestamp).format('MMMM DD, YYYY HH:mm')}
               </div>
-              {selectedOrder.delivery_window_start && (
-                <div>
-                  <span className="font-medium">Delivery Window:</span>{' '}
-                  {selectedOrder.delivery_window_start} - {selectedOrder.delivery_window_end}
-                </div>
-              )}
               {selectedOrder.vehicle_type && (
                 <div>
                   <span className="font-medium">Vehicle Type:</span> {selectedOrder.vehicle_type}
