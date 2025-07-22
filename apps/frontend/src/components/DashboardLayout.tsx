@@ -43,7 +43,7 @@ const sidebarMenus: SidebarMenus = {
       href: '/admin/staff',
     },
     {
-      label: 'Driver Management',
+      label: 'Drivers Management',
       icon: (
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -63,6 +63,15 @@ const sidebarMenus: SidebarMenus = {
         </svg>
       ),
       href: '/admin/approvals',
+    },
+    {
+      label: 'Orders Management',
+      icon: (
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M3 6h18M3 12h18M3 18h18" />
+        </svg>
+      ),
+      href: '/admin/orders',
     },
     {
       label: 'Add Inventory',
