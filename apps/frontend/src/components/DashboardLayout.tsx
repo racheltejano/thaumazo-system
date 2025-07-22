@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from "next/image";
-import Link from 'next/link';
+
 
 type SidebarMenuItem = {
   label: string;

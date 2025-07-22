@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import React from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Package, Clock, Truck, DollarSign, Settings, ChevronDown, MapPin, User, Calendar } from 'lucide-react';
+import { Package, Clock, Truck, Settings, ChevronDown, MapPin, User, Calendar } from 'lucide-react';
 
 export interface Order {
   id: string;
