@@ -22,6 +22,7 @@ type Order = {
   id: string
   pickup_timestamp: string
   estimated_total_duration: number
+  client_id: string // Added for proximity lookup
 }
 
 type AvailabilityBlock = {
@@ -55,6 +56,13 @@ type PendingAssignment = {
   orderId: string
 }
 
+type DriverScore = {
+  driver: Driver
+  timeSlot: TimeSlotOption
+  score: number
+  distance: number
+}
+
 export async function POST() {
   if (!supabaseUrl || !serviceRoleKey) {
     console.error('[ENV ERROR] Missing Supabase credentials.')
@@ -70,10 +78,10 @@ export async function POST() {
     
     console.log(`Processing auto-assignment for date: ${todayPH}`)
 
-    // Get unassigned orders
+    // Get unassigned orders with client_id for proximity lookup
     const { data: orders, error: orderError } = await supabase
       .from('orders')
-      .select('id, pickup_timestamp, estimated_total_duration')
+      .select('id, pickup_timestamp, estimated_total_duration, client_id')
       .eq('status', 'order_placed')
 
     if (orderError) throw orderError
@@ -212,6 +220,107 @@ export async function POST() {
   }
 }
 
+// Haversine distance calculation for proximity
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (x: number) => x * Math.PI / 180;
+  const R = 6371; // Earth's radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Get last drop-off locations for each driver
+async function getDriverLastDropoffs(
+  supabase: any, 
+  drivers: Driver[], 
+  beforeTimestamp: string
+): Promise<Record<string, { latitude: number; longitude: number; timestamp: string; distance?: number }>> {
+  const driverIds = drivers.map(d => d.id)
+  
+  // Get the most recent completed order for each driver
+  const { data: lastOrders, error } = await supabase
+    .from('orders')
+    .select(`
+      driver_id,
+      estimated_end_timestamp,
+      order_dropoffs (
+        latitude,
+        longitude,
+        sequence
+      )
+    `)
+    .in('driver_id', driverIds)
+    .lt('estimated_end_timestamp', beforeTimestamp)
+    .eq('status', 'completed')
+    .order('estimated_end_timestamp', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching driver last dropoffs:', error)
+    return {}
+  }
+
+  const result: Record<string, { latitude: number; longitude: number; timestamp: string }> = {}
+  
+  for (const order of lastOrders || []) {
+    if (!result[order.driver_id]) {
+      // Get the last dropoff (highest sequence number)
+      const lastDropoff = order.order_dropoffs
+        ?.sort((a: any, b: any) => b.sequence - a.sequence)[0]
+      
+      if (lastDropoff) {
+        result[order.driver_id] = {
+          latitude: lastDropoff.latitude,
+          longitude: lastDropoff.longitude,
+          timestamp: order.estimated_end_timestamp
+        }
+      }
+    }
+  }
+  
+  return result
+}
+
+// Calculate driver score based on distance and workload
+function calculateDriverScore(
+  driverId: string,
+  lastDropoffs: Record<string, any>,
+  pickupLat: number,
+  pickupLng: number,
+  driverWorkload: Record<string, number>
+): { score: number; distance: number } {
+  const lastDropoff = lastDropoffs[driverId]
+  
+  // Distance component (0-100, lower is better)
+  let distance = Infinity
+  let distanceScore = 100
+  
+  if (lastDropoff) {
+    distance = haversineDistance(
+      lastDropoff.latitude,
+      lastDropoff.longitude,
+      pickupLat,
+      pickupLng
+    )
+    // Normalize distance (assuming max 50km, adjust as needed)
+    distanceScore = Math.min(distance * 2, 100)
+  }
+  
+  // Workload component (0-100, lower is better)
+  const maxWorkload = Math.max(...Object.values(driverWorkload))
+  const workloadScore = maxWorkload > 0 ? (driverWorkload[driverId] / maxWorkload) * 30 : 0
+  
+  // Combined score: 70% distance, 30% workload
+  const score = (distanceScore * 0.7) + (workloadScore * 0.3)
+  
+  return { score, distance }
+}
+
 // Group orders by their pickup date
 function groupOrdersByDate(orders: Order[]): Record<string, Order[]> {
   return orders.reduce((acc, order) => {
@@ -228,7 +337,7 @@ function groupOrdersByDate(orders: Order[]): Record<string, Order[]> {
   }, {} as Record<string, Order[]>)
 }
 
-// Process all orders for a specific date with fair distribution
+// Process all orders for a specific date with proximity-based assignment
 async function processOrdersForDate(
   supabase: any,
   orders: Order[],
@@ -275,7 +384,7 @@ async function processOrdersForDate(
       continue
     }
     
-    // Find best driver assignment with fair distribution
+    // Find best driver assignment with proximity and fair distribution
     const assignment = await findBestDriverAssignmentForDate(
       supabase,
       order,
@@ -320,7 +429,7 @@ async function processOrdersForDate(
   return assignments
 }
 
-// Find best driver assignment with fair distribution
+// Enhanced driver assignment with proximity and workload scoring
 async function findBestDriverAssignmentForDate(
   supabase: any,
   order: Order,
@@ -338,6 +447,89 @@ async function findBestDriverAssignmentForDate(
   
   const dayStart = zonedTimeToUtc(`${dateStr}T00:00:00`, TIMEZONE)
   const dayEnd = zonedTimeToUtc(`${dateStr}T23:59:59`, TIMEZONE)
+  
+  // Get pickup location for the current order
+  const { data: client, error: clientError } = await supabase
+    .from('clients')
+    .select('pickup_latitude, pickup_longitude')
+    .eq('id', order.client_id)
+    .single()
+
+  if (clientError || !client || !client.pickup_latitude || !client.pickup_longitude) {
+    console.log(`Could not get pickup location for order ${order.id}, falling back to workload-based assignment`)
+    // Fallback to workload-based assignment
+    return findBestDriverByWorkload(supabase, order, drivers, dayStart, dayEnd, existingAssignments, driverWorkload)
+  }
+
+  // Get last drop-off locations for each driver
+  const driverLastDropoffs = await getDriverLastDropoffs(supabase, drivers, order.pickup_timestamp)
+  
+  // Score each available driver
+  const driverScores: DriverScore[] = []
+  
+  for (const driver of drivers) {
+    const timeSlot = await findAvailableTimeSlotForDriver(
+      supabase,
+      driver.id,
+      order,
+      dayStart,
+      dayEnd,
+      existingAssignments
+    )
+    
+    if (timeSlot) {
+      const { score, distance } = calculateDriverScore(
+        driver.id,
+        driverLastDropoffs,
+        client.pickup_latitude,
+        client.pickup_longitude,
+        driverWorkload
+      )
+      
+      driverScores.push({
+        driver,
+        timeSlot,
+        score,
+        distance
+      })
+    }
+  }
+  
+  // Sort by score (lowest is best)
+  driverScores.sort((a, b) => a.score - b.score)
+  
+  if (driverScores.length > 0) {
+    const best = driverScores[0]
+    console.log(`🎯 Best driver for order ${order.id}: ${best.driver.first_name} ${best.driver.last_name} (distance: ${best.distance === Infinity ? 'N/A' : best.distance.toFixed(2) + 'km'}, score: ${best.score.toFixed(2)})`)
+    
+    return {
+      orderId: order.id,
+      driverId: best.driver.id,
+      startTime: best.timeSlot.start_time,
+      endTime: best.timeSlot.end_time,
+      availabilityBlockId: best.timeSlot.availabilityBlockId
+    }
+  }
+  
+  return null
+}
+
+// Fallback to workload-based assignment when location data is unavailable
+async function findBestDriverByWorkload(
+  supabase: any,
+  order: Order,
+  drivers: Driver[],
+  dayStart: Date,
+  dayEnd: Date,
+  existingAssignments: PendingAssignment[],
+  driverWorkload: Record<string, number>
+): Promise<{
+  orderId: string
+  driverId: string
+  startTime: string
+  endTime: string
+  availabilityBlockId: string
+} | null> {
   
   // Sort drivers by current workload (least busy first) for fair distribution
   const sortedDrivers = [...drivers].sort((a, b) => 

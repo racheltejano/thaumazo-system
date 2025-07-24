@@ -710,7 +710,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
           {/* Combined Date and Time inputs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date*</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date </label>
               <input 
                 type="date" 
                 name="pickup_date" 
@@ -721,7 +721,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time* (Manila Time)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time </label>
               <input 
                 type="time" 
                 name="pickup_time" 

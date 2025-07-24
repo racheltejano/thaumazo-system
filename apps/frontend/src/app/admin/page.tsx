@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/AuthContext'
-import { Plus, Users, Package, ClipboardList, Settings, RefreshCw, Copy, Check, Mail, AlertCircle } from 'lucide-react'
+import { Plus, Users, Package, ClipboardList, Settings, RefreshCw, Copy, Check, Mail, AlertCircle, X } from 'lucide-react'
 
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -20,6 +20,7 @@ export default function AdminDashboard() {
   const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState('')
   const [emailStatus, setEmailStatus] = useState('')
+  const [emailLoading, setEmailLoading] = useState(false)
   const [recentTrackingIds, setRecentTrackingIds] = useState<string[]>([])
   const [showSuccess, setShowSuccess] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -28,7 +29,7 @@ export default function AdminDashboard() {
   const role = auth?.role
   const authLoading = auth?.loading
 
-  // Add state for dashboard stats
+  // Dashboard stats state
   const [dashboardStats, setDashboardStats] = useState({
     totalOrders: null as number | null,
     activeDrivers: null as number | null,
@@ -62,6 +63,8 @@ export default function AdminDashboard() {
   // Fetch dashboard stats
   useEffect(() => {
     const fetchStats = async () => {
+      if (authLoading || !user || role !== 'admin') return;
+      
       setStatsLoading(true);
       
       try {
@@ -85,7 +88,7 @@ export default function AdminDashboard() {
         const revenue = deliveredOrders?.reduce((sum, order) => sum + Number(order.estimated_cost || 0), 0) || 0;
         
         // Get pending approvals count
-        const { data: pendingApprovals, error: approvalsError } = await supabase.rpc('get_unapproved_users');
+        const { data: pendingApprovals } = await supabase.rpc('get_unapproved_users');
         const pendingCount = pendingApprovals?.length || 0;
         
         setDashboardStats({
@@ -96,12 +99,19 @@ export default function AdminDashboard() {
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
+        setDashboardStats({
+          totalOrders: 0,
+          activeDrivers: 0,
+          revenue: 0,
+          pendingApprovals: 0,
+        });
       }
       
       setStatsLoading(false);
     };
+    
     fetchStats();
-  }, []);
+  }, [authLoading, user, role]);
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -112,53 +122,107 @@ export default function AdminDashboard() {
 
     const id = generateTrackingId()
 
-    const { error } = await supabase.from('clients').insert({
-      tracking_id: id,
-      contact_person: 'Pending',
-      contact_number: 'Pending',
-      pickup_address: 'Pending',
-    })
+    try {
+      const { error } = await supabase.from('clients').insert({
+        tracking_id: id,
+        contact_person: 'Pending',
+        contact_number: 'Pending',
+        pickup_address: 'Pending',
+      })
 
-    if (error) {
-      setError(error.message)
-    } else {
-      setTrackingId(id)
-      setRecentTrackingIds(prev => [id, ...prev.slice(0, 4)]) // Keep last 5
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 3000)
+      if (error) {
+        setError(error.message)
+      } else {
+        setTrackingId(id)
+        setRecentTrackingIds(prev => [id, ...prev.slice(0, 4)]) // Keep last 5
+        setShowSuccess(true)
+        setTimeout(() => setShowSuccess(false), 3000)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate tracking ID')
     }
 
     setLoading(false)
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(trackingId)
+  const handleCopy = (idToCopy = trackingId) => {
+    navigator.clipboard.writeText(idToCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleSendEmail = async () => {
-    if (!email) {
-      setEmailStatus('Please enter an email address.')
-      return
-    }
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
 
-    setEmailStatus('Sending...')
+const handleSendEmail = async () => {
+  if (!email.trim()) {
+    setEmailStatus('Please enter an email address.')
+    return
+  }
 
-    try {
-      const { error } = await supabase.functions.invoke('send-tracking-email', {
-        body: { email, trackingId: trackingId }
+  if (!validateEmail(email)) {
+    setEmailStatus('Please enter a valid email address.')
+    return
+  }
+
+  if (!trackingId) {
+    setEmailStatus('No tracking ID to send.')
+    return
+  }
+
+  setEmailLoading(true)
+  setEmailStatus('Sending email...')
+
+  try {
+    // Updated to use the correct API route path
+    const response = await fetch('/api/send-tracking-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        email: email.trim(), 
+        trackingId: trackingId 
       })
+    })
 
-      if (error) {
-        setEmailStatus('Error sending email: ' + error.message)
-      } else {
-        setEmailStatus('Email sent successfully!')
-        setEmail('')
-      }
-    } catch (err) {
-      setEmailStatus('Error sending email.')
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to send email')
     }
+
+    setEmailStatus('✅ Email sent successfully!')
+    setEmail('')
+    
+    // Clear success message after 5 seconds
+    setTimeout(() => setEmailStatus(''), 5000)
+    
+  } catch (err: any) {
+    console.error('Email sending error:', err)
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to send email.'
+    
+    if (err.message?.includes('not configured')) {
+      errorMessage = 'Email service not configured. Please contact your administrator.'
+    } else if (err.message?.includes('Invalid email')) {
+      errorMessage = 'Please enter a valid email address.'
+    } else if (err.message?.includes('network')) {
+      errorMessage = 'Network error. Please check your connection and try again.'
+    } else if (err.message) {
+      errorMessage = err.message
+    }
+    
+    setEmailStatus(`❌ ${errorMessage}`)
+  } finally {
+    setEmailLoading(false)
+  }
+}
+  const clearEmailStatus = () => {
+    setEmailStatus('')
   }
 
   if (loadingAuth || authLoading) {
@@ -190,22 +254,26 @@ export default function AdminDashboard() {
           <div className="lg:col-span-3 space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Total Orders Card */}
               <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                 <div className="flex items-center justify-between">
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Total Orders</p>
+                    <div className="text-3xl font-bold text-gray-900">
                       {statsLoading ? (
                         <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                       ) : (
                         dashboardStats.totalOrders?.toLocaleString() || '0'
                       )}
                     </div>
-
+                  </div>
                   <div className="p-3 bg-blue-100 rounded-lg">
                     <Package className="h-6 w-6 text-blue-600" />
                   </div>
                 </div>
               </div>
 
+              {/* Active Drivers Card */}
               <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -224,6 +292,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Revenue Card */}
               <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -242,6 +311,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Pending Approvals Card */}
               <div className={`bg-white rounded-xl shadow-md p-6 border ${dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 ? 'border-red-200' : 'border-gray-100'}`}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -311,7 +381,7 @@ export default function AdminDashboard() {
                         {trackingId}
                       </code>
                       <button
-                        onClick={handleCopy}
+                        onClick={() => handleCopy(trackingId)}
                         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                       >
                         {copied ? (
@@ -345,12 +415,8 @@ export default function AdminDashboard() {
                         <div key={index} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg">
                           <code className="text-sm font-mono text-gray-700">{id}</code>
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(id)
-                              setCopied(true)
-                              setTimeout(() => setCopied(false), 2000)
-                            }}
-                            className="text-blue-600 hover:text-blue-700 text-sm"
+                            onClick={() => handleCopy(id)}
+                            className="text-blue-600 hover:text-blue-700 text-sm transition-colors"
                           >
                             Copy
                           </button>
@@ -367,24 +433,46 @@ export default function AdminDashboard() {
                       <Mail className="h-4 w-4" />
                       Send Tracking ID via Email
                     </h3>
-                    <div className="flex gap-3">
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Enter email address"
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-                      />
-                      <button
-                        onClick={handleSendEmail}
-                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                      >
-                        Send
-                      </button>
+                    
+                    <div className="space-y-3">
+                      <div className="flex gap-3">
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendEmail()}
+                          placeholder="Enter email address"
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+                          disabled={emailLoading}
+                        />
+                        <button
+                          onClick={handleSendEmail}
+                          disabled={emailLoading}
+                          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                        >
+                          {emailLoading ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            'Send'
+                          )}
+                        </button>
+                      </div>
+                      
+                      {emailStatus && (
+                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+                          <p className="text-sm text-blue-700">{emailStatus}</p>
+                          <button
+                            onClick={clearEmailStatus}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {emailStatus && (
-                      <p className="text-sm mt-2 text-blue-700">{emailStatus}</p>
-                    )}
                   </div>
                 )}
               </div>
@@ -398,10 +486,10 @@ export default function AdminDashboard() {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
               <div className="space-y-3">
                 <button 
-                  onClick={() => router.push('/admin/drivers')}
+                  onClick={() => router.push('/admin/orders')}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md"
                 >
-                  <Users className="h-4 w-4" />
+                  <ClipboardList className="h-4 w-4" />
                   View All Orders
                 </button>
                 <button 
@@ -434,6 +522,13 @@ export default function AdminDashboard() {
                     </span>
                   )}
                 </button>
+                <button 
+                  onClick={() => router.push('/admin/settings')}
+                  className="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md"
+                >
+                  <Settings className="h-4 w-4" />
+                  System Settings
+                </button>
               </div>
             </div>
 
@@ -457,6 +552,12 @@ export default function AdminDashboard() {
                   <span className="text-sm text-gray-600">Email Service</span>
                   <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
                     Connected
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Last Updated</span>
+                  <span className="text-xs text-gray-500">
+                    {new Date().toLocaleTimeString()}
                   </span>
                 </div>
               </div>
