@@ -198,7 +198,7 @@ export default function ClientDashboard() {
                     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path d="M3 6h18M3 12h18M3 18h18" />
                     </svg>
-                    View Order History
+                    Order History
                   </button>
                   <button 
                     onClick={() => {
@@ -211,7 +211,7 @@ export default function ClientDashboard() {
                       <path d="M9 12l2 2l4 -4" />
                       <circle cx="12" cy="12" r="10" />
                     </svg>
-                    Track Package
+                    Track Orders
                   </button>
                   <button 
                     onClick={() => {
