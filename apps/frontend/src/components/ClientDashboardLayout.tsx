@@ -162,8 +162,9 @@ export default function ClientDashboardLayout({
     };
   }, [profileMenuOpen]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setProfileMenuOpen(false);
+    await supabase.auth.signOut();
     router.push('/client/login');
   };
 

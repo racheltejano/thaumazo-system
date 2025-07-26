@@ -21,18 +21,22 @@ export default function ClientRegisterPage() {
       } = await supabase.auth.getUser()
 
       if (user) {
-        // Check if user has a client account
-        const { data: clientAccount } = await supabase
-          .from('client_accounts')
+        // Check if user has a client profile
+        const { data: clientProfile } = await supabase
+          .from('client_profiles')
           .select('*')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
+          .eq('id', user.id)
           .single()
 
-        if (clientAccount) {
+        if (clientProfile) {
           router.push('/client/dashboard')
         } else {
-          router.push('/dashboard')
+          // User exists but no client profile, check if they need to complete profile
+          if (user.email_confirmed_at) {
+            router.push('/client/complete-profile')
+          } else {
+            router.push('/client/confirm-email')
+          }
         }
       }
     }

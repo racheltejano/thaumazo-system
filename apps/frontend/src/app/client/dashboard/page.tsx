@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/AuthContext'
@@ -40,12 +40,35 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true)
   const [showQuickActions, setShowQuickActions] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  const quickActionsRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     // Trigger animation after component mounts
     const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        quickActionsRef.current && 
+        !quickActionsRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
+        setShowQuickActions(false);
+      }
+    };
+
+    if (showQuickActions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showQuickActions]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -73,8 +96,7 @@ export default function ClientDashboard() {
         return
       }
 
-      // For now, we'll just show the profile data since we don't have client_accounts linked yet
-      // This can be expanded later when we implement the full client account linking
+      // Using client_profiles directly for user data
       setClientData({
         id: clientProfile.id,
         tracking_id: 'N/A', // Will be set when client account is created
@@ -135,15 +157,79 @@ export default function ClientDashboard() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Client Dashboard</h1>
             <p className="text-gray-600">Track your orders and manage your account</p>
           </div>
-          <button 
-            onClick={() => setShowQuickActions(true)}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors"
-          >
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Quick Actions
-          </button>
+          <div className="relative">
+            <button 
+              ref={buttonRef}
+              onClick={() => setShowQuickActions(!showQuickActions)}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors"
+            >
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Quick Actions
+            </button>
+            
+            {/* Quick Actions Popup */}
+            {showQuickActions && (
+              <div 
+                ref={quickActionsRef}
+                className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 min-w-[280px] z-50"
+              >
+                <div className="p-3 space-y-2">
+                  <button 
+                    onClick={() => {
+                      setShowQuickActions(false)
+                      router.push('/client/create-order')
+                    }}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
+                  >
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Create New Order
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowQuickActions(false)
+                      router.push('/client/orders')
+                    }}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
+                  >
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M3 6h18M3 12h18M3 18h18" />
+                    </svg>
+                    View Order History
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowQuickActions(false)
+                      router.push('/client/track')
+                    }}
+                    className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
+                  >
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M9 12l2 2l4 -4" />
+                      <circle cx="12" cy="12" r="10" />
+                    </svg>
+                    Track Package
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowQuickActions(false)
+                      router.push('/client/settings')
+                    }}
+                    className="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
+                  >
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Update Profile
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Information Cards Grid */}
@@ -254,79 +340,6 @@ export default function ClientDashboard() {
             </div>
           )}
         </div>
-
-        {/* Quick Actions Modal */}
-        {showQuickActions && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-                  <button 
-                    onClick={() => setShowQuickActions(false)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="p-6 space-y-3">
-                <button 
-                  onClick={() => {
-                    setShowQuickActions(false)
-                    router.push('/client/create-order')
-                  }}
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
-                >
-                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Create New Order
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowQuickActions(false)
-                    router.push('/client/orders')
-                  }}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
-                >
-                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M3 6h18M3 12h18M3 18h18" />
-                  </svg>
-                  View Order History
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowQuickActions(false)
-                    router.push('/client/track')
-                  }}
-                  className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
-                >
-                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M9 12l2 2l4 -4" />
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                  Track Package
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowQuickActions(false)
-                    router.push('/client/settings')
-                  }}
-                  className="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors"
-                >
-                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Update Profile
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </ClientDashboardLayout>
   )
