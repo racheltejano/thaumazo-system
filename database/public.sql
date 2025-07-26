@@ -1,17 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-CREATE TABLE public.client_accounts (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  client_id uuid NOT NULL,
-  user_id uuid NOT NULL UNIQUE,
-  created_at timestamp without time zone DEFAULT now(),
-  updated_at timestamp without time zone DEFAULT now(),
-  is_active boolean NOT NULL DEFAULT true,
-  CONSTRAINT client_accounts_pkey PRIMARY KEY (id),
-  CONSTRAINT client_accounts_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT client_accounts_client_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
-);
 CREATE TABLE public.client_addresses (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   client_id uuid NOT NULL,
@@ -27,6 +16,7 @@ CREATE TABLE public.client_addresses (
   is_default boolean NOT NULL DEFAULT false,
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
+  is_pickup_address boolean NOT NULL DEFAULT false,
   CONSTRAINT client_addresses_pkey PRIMARY KEY (id),
   CONSTRAINT client_addresses_client_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
 );
@@ -43,6 +33,20 @@ CREATE TABLE public.client_contacts (
   CONSTRAINT client_contacts_pkey PRIMARY KEY (id),
   CONSTRAINT client_contacts_client_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
 );
+CREATE TABLE public.client_profiles (
+  id uuid NOT NULL,
+  first_name text,
+  last_name text,
+  contact_number text,
+  profile_pic text,
+  created_at timestamp without time zone DEFAULT now(),
+  updated_at timestamp without time zone DEFAULT now(),
+  can_login boolean DEFAULT true,
+  last_login timestamp with time zone,
+  email text,
+  CONSTRAINT client_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT client_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.clients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   tracking_id text NOT NULL UNIQUE,
@@ -58,6 +62,7 @@ CREATE TABLE public.clients (
   client_type text CHECK (client_type = ANY (ARRAY['first_time'::text, 'returning'::text])),
   pickup_latitude double precision,
   pickup_longitude double precision,
+  updated_at timestamp without time zone DEFAULT now(),
   CONSTRAINT clients_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.driver_availability (
@@ -84,8 +89,8 @@ CREATE TABLE public.driver_time_slots (
   end_time_tz timestamp with time zone,
   CONSTRAINT driver_time_slots_pkey PRIMARY KEY (id),
   CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id),
-  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id),
-  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id)
 );
 CREATE TABLE public.inventory (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -185,8 +190,8 @@ CREATE TABLE public.order_products (
   quantity integer NOT NULL,
   product_id uuid,
   CONSTRAINT order_products_pkey PRIMARY KEY (id),
-  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
+  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.order_status_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

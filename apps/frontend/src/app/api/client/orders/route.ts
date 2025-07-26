@@ -33,18 +33,25 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Client profile not found' }, { status: 404 })
     }
 
-    // Get client record
-    const { data: client, error: clientError } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('contact_number', profile.contact_number)
-      .single()
+    // Get orders for this user using the new relationship
+    // First get the client IDs for this user
+    const { data: clientAccounts, error: clientAccountsError } = await supabase
+      .from('client_accounts')
+      .select('client_id')
+      .eq('client_profile_id', profile.id)
+      .eq('is_active', true)
 
-    if (clientError || !client) {
+    if (clientAccountsError) {
+      return NextResponse.json({ error: 'Failed to load client accounts' }, { status: 500 })
+    }
+
+    const clientIds = clientAccounts?.map(ca => ca.client_id) || []
+
+    if (clientIds.length === 0) {
       return NextResponse.json({ orders: [] })
     }
 
-    // Get orders for this client
+    // Get orders for these clients
     const { data: orders, error: ordersError } = await supabase
       .from('orders')
       .select(`
@@ -64,7 +71,7 @@ export async function GET(req: Request) {
           last_name
         )
       `)
-      .eq('client_id', client.id)
+      .in('client_id', clientIds)
       .order('created_at', { ascending: false })
 
     if (ordersError) {

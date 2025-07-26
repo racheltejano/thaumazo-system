@@ -3,10 +3,9 @@ import { NextResponse } from 'next/server'
 
 export async function POST() {
   try {
-    // Generate a unique tracking ID
-    const timestamp = Date.now()
+    // Generate a unique tracking ID using admin format
     const random = Math.random().toString(36).substring(2, 8).toUpperCase()
-    const trackingId = `CLI-${timestamp}-${random}`
+    const trackingId = `TXT_${random}`
 
     // Check if tracking ID already exists
     const { data: existingClient } = await supabase

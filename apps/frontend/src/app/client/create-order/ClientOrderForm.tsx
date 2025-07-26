@@ -57,11 +57,10 @@ type ClientOrderForm = {
 }
 
 interface ClientOrderFormProps {
-  trackingId: string
   clientProfile: any
 }
 
-export default function ClientOrderForm({ trackingId, clientProfile }: ClientOrderFormProps) {
+export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps) {
   const router = useRouter()
   const [form, setForm] = useState<ClientOrderForm>({
     pickup_address: '',
@@ -93,6 +92,26 @@ export default function ClientOrderForm({ trackingId, clientProfile }: ClientOrd
   const addDebugInfo = (info: string) => {
     setDebugInfo(prev => [...prev, `${new Date().toISOString()}: ${info}`])
     console.log(info)
+  }
+
+  // Generate tracking ID using admin format
+  const generateTrackingId = async (): Promise<string> => {
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const trackingId = `TXT_${random}`
+
+    // Check if tracking ID already exists
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('tracking_id', trackingId)
+      .single()
+
+    if (existingClient) {
+      // If exists, generate a new one recursively
+      return generateTrackingId()
+    }
+
+    return trackingId
   }
 
   // Helper function to create UTC timestamp from local date/time
@@ -348,6 +367,11 @@ export default function ClientOrderForm({ trackingId, clientProfile }: ClientOrd
 
     addDebugInfo('Starting client order submission...')
 
+    // Generate tracking ID first
+    addDebugInfo('Generating tracking ID...')
+    const trackingId = await generateTrackingId()
+    addDebugInfo(`Generated tracking ID: ${trackingId}`)
+
     // Validation
     if (!form.pickup_address.trim()) {
       setError('Pickup address is required')
@@ -412,8 +436,8 @@ export default function ClientOrderForm({ trackingId, clientProfile }: ClientOrd
       }
     }
 
-    // Step 1: Upsert client record
-    addDebugInfo('Upserting client record...')
+    // Step 1: Create client record (will be automatically linked to user via trigger)
+    addDebugInfo('Creating client record...')
     const clientData = {
       tracking_id: trackingId,
       client_type: 'returning',
@@ -431,7 +455,7 @@ export default function ClientOrderForm({ trackingId, clientProfile }: ClientOrd
 
     const { data: client, error: clientError } = await supabase
       .from('clients')
-      .upsert(clientData, { onConflict: 'tracking_id' })
+      .insert(clientData)
       .select('id')
       .single()
 
@@ -442,12 +466,13 @@ export default function ClientOrderForm({ trackingId, clientProfile }: ClientOrd
     }
 
     if (!client) {
-      addDebugInfo('No client returned from upsert')
+      addDebugInfo('No client returned from insert')
       setError('❌ Failed to save client - no data returned')
       return
     }
 
     addDebugInfo(`Client saved with ID: ${client.id}`)
+    addDebugInfo('Client will be automatically linked to user account via trigger')
     
     // Step 2: Create order with combined timestamp
     addDebugInfo('Creating order...')
