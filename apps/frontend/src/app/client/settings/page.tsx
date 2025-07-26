@@ -52,6 +52,7 @@ const sliderStyles = `
 const sidebarLinks = [
   { label: 'Profile', key: 'profile' },
   { label: 'Account', key: 'account' },
+  { label: 'Saved Addresses', key: 'addresses' },
 ];
 
 export default function ClientSettingsPage() {
@@ -96,6 +97,26 @@ export default function ClientSettingsPage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Saved addresses state
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [showAddAddress, setShowAddAddress] = useState(false);
+  const [showEditAddress, setShowEditAddress] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<any>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<string | null>(null);
+  const [newAddress, setNewAddress] = useState({
+    label: '',
+    address_line1: '',
+    address_line2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: 'Philippines',
+    is_default: false,
+    is_pickup_address: false
+  });
 
   // Photo editing state
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
@@ -208,6 +229,35 @@ export default function ClientSettingsPage() {
     };
     fetchPhone();
   }, [user]);
+
+  // Fetch saved addresses
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      if (!user?.id) return;
+      setAddressesLoading(true);
+      
+      const { data, error } = await supabase
+        .from('client_saved_addresses')
+        .select('*')
+        .eq('client_profile_id', user.id)
+        .order('is_default', { ascending: false })
+        .order('is_pickup_address', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching addresses:', error);
+        toast.error('Failed to load saved addresses');
+      } else {
+        setSavedAddresses(data || []);
+      }
+      
+      setAddressesLoading(false);
+    };
+
+    if (activeTab === 'addresses') {
+      fetchAddresses();
+    }
+  }, [user, activeTab]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -434,6 +484,191 @@ export default function ClientSettingsPage() {
   const formatRole = (role: string | null | undefined) => {
     if (!role) return 'User';
     return role.charAt(0).toUpperCase() + role.slice(1).replace('_', ' ');
+  };
+
+  // Saved addresses functions
+  const handleAddAddress = async () => {
+    if (!newAddress.label || !newAddress.address_line1 || !newAddress.city) {
+      toast.error('Please fill in all required fields (Label, Address and City)');
+      return;
+    }
+
+    if (!user?.id) {
+      toast.error('User not authenticated');
+      return;
+    }
+
+    setAddressesLoading(true);
+
+    try {
+      // If setting as default, first unset all other addresses as default
+      if (newAddress.is_default) {
+        await supabase
+          .from('client_saved_addresses')
+          .update({ is_default: false })
+          .eq('client_profile_id', user.id);
+      }
+
+      const { error } = await supabase
+        .from('client_saved_addresses')
+        .insert({
+          ...newAddress,
+          client_profile_id: user.id
+        });
+
+      if (error) {
+        console.error('Error adding address:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        toast.error(`Failed to add address: ${error.message}`);
+      } else {
+        toast.success('Address added successfully!');
+        setNewAddress({
+          label: '',
+          address_line1: '',
+          address_line2: '',
+          city: '',
+          state: '',
+          postal_code: '',
+          country: 'Philippines',
+          is_default: false,
+          is_pickup_address: false
+        });
+        setShowAddAddress(false);
+        // Refresh addresses
+        const { data } = await supabase
+          .from('client_saved_addresses')
+          .select('*')
+          .eq('client_profile_id', user.id)
+          .order('is_default', { ascending: false })
+          .order('is_pickup_address', { ascending: false })
+          .order('created_at', { ascending: false });
+        setSavedAddresses(data || []);
+      }
+    } catch (error) {
+      console.error('Error adding address:', error);
+      toast.error('Failed to add address');
+    }
+
+    setAddressesLoading(false);
+  };
+
+  const handleDeleteAddress = (addressId: string) => {
+    setAddressToDelete(addressId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteAddress = async () => {
+    if (!user?.id || !addressToDelete) return;
+
+    setAddressesLoading(true);
+
+    try {
+      const { error } = await supabase
+        .from('client_saved_addresses')
+        .delete()
+        .eq('id', addressToDelete)
+        .eq('client_profile_id', user.id);
+
+      if (error) {
+        console.error('Error deleting address:', error);
+        toast.error('Failed to delete address');
+      } else {
+        toast.success('Address deleted successfully!');
+        // Refresh addresses
+        const { data } = await supabase
+          .from('client_saved_addresses')
+          .select('*')
+          .eq('client_profile_id', user.id)
+          .order('is_default', { ascending: false })
+          .order('is_pickup_address', { ascending: false })
+          .order('created_at', { ascending: false });
+        setSavedAddresses(data || []);
+      }
+    } catch (error) {
+      console.error('Error deleting address:', error);
+      toast.error('Failed to delete address');
+    }
+
+    setAddressesLoading(false);
+    setShowDeleteConfirm(false);
+    setAddressToDelete(null);
+  };
+
+  const handleEditAddress = (address: any) => {
+    setEditingAddress(address);
+    setShowEditAddress(true);
+  };
+
+  const handleUpdateAddress = async () => {
+    if (!editingAddress || !user?.id) return;
+
+    if (!editingAddress.label || !editingAddress.address_line1 || !editingAddress.city) {
+      toast.error('Please fill in all required fields (Label, Address and City)');
+      return;
+    }
+
+    setAddressesLoading(true);
+
+    try {
+      // If setting as default, first unset all other addresses as default
+      if (editingAddress.is_default) {
+        await supabase
+          .from('client_saved_addresses')
+          .update({ is_default: false })
+          .eq('client_profile_id', user.id)
+          .neq('id', editingAddress.id);
+      }
+
+      const { error } = await supabase
+        .from('client_saved_addresses')
+        .update({
+          label: editingAddress.label,
+          address_line1: editingAddress.address_line1,
+          address_line2: editingAddress.address_line2,
+          city: editingAddress.city,
+          state: editingAddress.state,
+          postal_code: editingAddress.postal_code,
+          country: editingAddress.country,
+          is_default: editingAddress.is_default,
+          is_pickup_address: editingAddress.is_pickup_address
+        })
+        .eq('id', editingAddress.id)
+        .eq('client_profile_id', user.id);
+
+      if (error) {
+        console.error('Error updating address:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        toast.error(`Failed to update address: ${error.message}`);
+      } else {
+        toast.success('Address updated successfully!');
+        setShowEditAddress(false);
+        setEditingAddress(null);
+        // Refresh addresses
+        const { data } = await supabase
+          .from('client_saved_addresses')
+          .select('*')
+          .eq('client_profile_id', user.id)
+          .order('is_default', { ascending: false })
+          .order('is_pickup_address', { ascending: false })
+          .order('created_at', { ascending: false });
+        setSavedAddresses(data || []);
+      }
+    } catch (error) {
+      console.error('Error updating address:', error);
+      toast.error('Failed to update address');
+    }
+
+    setAddressesLoading(false);
   };
 
   if (auth?.loading) {
@@ -725,6 +960,391 @@ export default function ClientSettingsPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+        {activeTab === 'addresses' && (
+          <div className="max-w-4xl">
+            <h1 className="text-2xl font-bold text-zinc-800 mb-1">Saved Addresses</h1>
+            <div className="h-1 w-16 bg-orange-500 mb-6" />
+            
+            <div className="bg-white shadow-md rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-semibold text-zinc-700">Your Addresses</h2>
+                <Button
+                  onClick={() => setShowAddAddress(true)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  + Add New Address
+                </Button>
+              </div>
+
+              {addressesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                  <span className="ml-2 text-gray-600">Loading addresses...</span>
+                </div>
+              ) : savedAddresses.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 mb-4">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 mb-4">No saved addresses yet</p>
+                  <Button
+                    onClick={() => setShowAddAddress(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    Add Your First Address
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {savedAddresses.map((address) => (
+                    <div key={address.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-semibold text-gray-900">{address.label || 'Address'}</span>
+                            {address.is_default && (
+                              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">Default</span>
+                            )}
+                            {address.is_pickup_address && (
+                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Pickup</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600 mb-2">
+                            <div>{address.address_line1}</div>
+                            {address.address_line2 && <div>{address.address_line2}</div>}
+                            <div>{address.city}, {address.state} {address.postal_code}</div>
+                            <div>{address.country}</div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditAddress(address)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAddress(address.id)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add Address Modal */}
+            {showAddAddress && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                  <h3 className="text-lg font-semibold mb-4">Add New Address</h3>
+                  
+                  <div className="space-y-4">
+
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Label *</label>
+                      <input
+                        type="text"
+                        value={newAddress.label}
+                        onChange={(e) => setNewAddress({...newAddress, label: e.target.value})}
+                        className="w-full p-3 border rounded-xl"
+                        placeholder="Home Address"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1 *</label>
+                      <input
+                        type="text"
+                        value={newAddress.address_line1}
+                        onChange={(e) => setNewAddress({...newAddress, address_line1: e.target.value})}
+                        className="w-full p-3 border rounded-xl"
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+                      <input
+                        type="text"
+                        value={newAddress.address_line2}
+                        onChange={(e) => setNewAddress({...newAddress, address_line2: e.target.value})}
+                        className="w-full p-3 border rounded-xl"
+                        placeholder="Apt 4B"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                        <input
+                          type="text"
+                          value={newAddress.city}
+                          onChange={(e) => setNewAddress({...newAddress, city: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="Manila"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                        <input
+                          type="text"
+                          value={newAddress.state}
+                          onChange={(e) => setNewAddress({...newAddress, state: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="Metro Manila"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                        <input
+                          type="text"
+                          value={newAddress.postal_code}
+                          onChange={(e) => setNewAddress({...newAddress, postal_code: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="1234"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                        <input
+                          type="text"
+                          value={newAddress.country}
+                          onChange={(e) => setNewAddress({...newAddress, country: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="Philippines"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newAddress.is_default}
+                          onChange={(e) => setNewAddress({...newAddress, is_default: e.target.checked})}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">Set as default address</span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newAddress.is_pickup_address}
+                          onChange={(e) => setNewAddress({...newAddress, is_pickup_address: e.target.checked})}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">Set as pickup address</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-6">
+                    <Button
+                      onClick={() => setShowAddAddress(false)}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleAddAddress}
+                      disabled={addressesLoading || !newAddress.label || !newAddress.address_line1 || !newAddress.city}
+                      className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                    >
+                      {addressesLoading ? 'Adding...' : 'Add Address'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Address Modal */}
+            {showEditAddress && editingAddress && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                  <h3 className="text-lg font-semibold mb-4">Edit Address</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Label *</label>
+                      <input
+                        type="text"
+                        value={editingAddress.label || ''}
+                        onChange={(e) => setEditingAddress({...editingAddress, label: e.target.value})}
+                        className="w-full p-3 border rounded-xl"
+                        placeholder="Home Address"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1 *</label>
+                      <input
+                        type="text"
+                        value={editingAddress.address_line1 || ''}
+                        onChange={(e) => setEditingAddress({...editingAddress, address_line1: e.target.value})}
+                        className="w-full p-3 border rounded-xl"
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+                      <input
+                        type="text"
+                        value={editingAddress.address_line2 || ''}
+                        onChange={(e) => setEditingAddress({...editingAddress, address_line2: e.target.value})}
+                        className="w-full p-3 border rounded-xl"
+                        placeholder="Apt 4B"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                        <input
+                          type="text"
+                          value={editingAddress.city || ''}
+                          onChange={(e) => setEditingAddress({...editingAddress, city: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="Manila"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                        <input
+                          type="text"
+                          value={editingAddress.state || ''}
+                          onChange={(e) => setEditingAddress({...editingAddress, state: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="Metro Manila"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                        <input
+                          type="text"
+                          value={editingAddress.postal_code || ''}
+                          onChange={(e) => setEditingAddress({...editingAddress, postal_code: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="1234"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                        <input
+                          type="text"
+                          value={editingAddress.country || 'Philippines'}
+                          onChange={(e) => setEditingAddress({...editingAddress, country: e.target.value})}
+                          className="w-full p-3 border rounded-xl"
+                          placeholder="Philippines"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={editingAddress.is_default || false}
+                          onChange={(e) => setEditingAddress({...editingAddress, is_default: e.target.checked})}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">Set as default address</span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={editingAddress.is_pickup_address || false}
+                          onChange={(e) => setEditingAddress({...editingAddress, is_pickup_address: e.target.checked})}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">Set as pickup address</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-6">
+                    <Button
+                      onClick={() => {
+                        setShowEditAddress(false);
+                        setEditingAddress(null);
+                      }}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleUpdateAddress}
+                      disabled={addressesLoading || !editingAddress.label || !editingAddress.address_line1 || !editingAddress.city}
+                      className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                    >
+                      {addressesLoading ? 'Updating...' : 'Update Address'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+                        )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                  <h3 className="text-lg font-semibold mb-4 text-red-600">Delete Address</h3>
+                  
+                  <div className="mb-6">
+                    <p className="text-gray-700">
+                      Are you sure you want to delete this address? This action cannot be undone.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setAddressToDelete(null);
+                      }}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={confirmDeleteAddress}
+                      disabled={addressesLoading}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                    >
+                      {addressesLoading ? 'Deleting...' : 'Delete Address'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

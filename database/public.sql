@@ -1,6 +1,17 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.client_accounts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  client_profile_id uuid NOT NULL,
+  client_id uuid NOT NULL,
+  created_at timestamp without time zone DEFAULT now(),
+  updated_at timestamp without time zone DEFAULT now(),
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT client_accounts_pkey PRIMARY KEY (id),
+  CONSTRAINT client_accounts_client_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
+  CONSTRAINT client_accounts_client_profile_fkey FOREIGN KEY (client_profile_id) REFERENCES public.client_profiles(id)
+);
 CREATE TABLE public.client_addresses (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   client_id uuid NOT NULL,
@@ -47,6 +58,27 @@ CREATE TABLE public.client_profiles (
   CONSTRAINT client_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT client_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.client_saved_addresses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  client_profile_id uuid,
+  client_id uuid,
+  label text NOT NULL,
+  address_line1 text NOT NULL,
+  address_line2 text,
+  city text NOT NULL,
+  state text,
+  postal_code text,
+  country text NOT NULL DEFAULT 'Philippines'::text,
+  latitude double precision,
+  longitude double precision,
+  is_default boolean NOT NULL DEFAULT false,
+  is_pickup_address boolean NOT NULL DEFAULT false,
+  created_at timestamp without time zone DEFAULT now(),
+  updated_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT client_saved_addresses_pkey PRIMARY KEY (id),
+  CONSTRAINT client_saved_addresses_profile_fkey FOREIGN KEY (client_profile_id) REFERENCES public.client_profiles(id),
+  CONSTRAINT client_saved_addresses_client_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
+);
 CREATE TABLE public.clients (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   tracking_id text NOT NULL UNIQUE,
@@ -88,9 +120,9 @@ CREATE TABLE public.driver_time_slots (
   start_time_tz timestamp with time zone,
   end_time_tz timestamp with time zone,
   CONSTRAINT driver_time_slots_pkey PRIMARY KEY (id),
+  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id),
   CONSTRAINT driver_time_slots_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id),
-  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT driver_time_slots_availability_fkey FOREIGN KEY (driver_availability_id) REFERENCES public.driver_availability(id)
+  CONSTRAINT driver_time_slots_order_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.inventory (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -190,8 +222,8 @@ CREATE TABLE public.order_products (
   quantity integer NOT NULL,
   product_id uuid,
   CONSTRAINT order_products_pkey PRIMARY KEY (id),
-  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
-  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT order_products_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
 );
 CREATE TABLE public.order_status_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -226,8 +258,8 @@ CREATE TABLE public.orders (
   delivery_window_end_tz timestamp with time zone,
   estimated_end_timestamp timestamp with time zone,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
-  CONSTRAINT orders_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id),
-  CONSTRAINT orders_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
+  CONSTRAINT orders_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
+  CONSTRAINT orders_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.products (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

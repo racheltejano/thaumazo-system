@@ -79,9 +79,14 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
   ])
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([{ name: '', address: '', contact: '', phone: '' }])
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [debugInfo, setDebugInfo] = useState<string[]>([])
+
+  // Saved addresses state
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('')
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const TIMEZONE = 'Asia/Manila'
@@ -142,11 +147,29 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         setProducts(productsData || [])
       }
 
+      // Fetch saved addresses
+      if (clientProfile?.id) {
+        const { data: addressesData, error: addressesError } = await supabase
+          .from('client_saved_addresses')
+          .select('*')
+          .eq('client_profile_id', clientProfile.id)
+          .order('is_default', { ascending: false })
+          .order('is_pickup_address', { ascending: false })
+          .order('created_at', { ascending: false })
+
+        if (addressesError) {
+          addDebugInfo(`Error fetching addresses: ${addressesError.message}`)
+        } else {
+          addDebugInfo(`Found ${addressesData?.length || 0} saved addresses`)
+          setSavedAddresses(addressesData || [])
+        }
+      }
+
       setLoading(false)
     }
 
     fetchData()
-  }, [])
+  }, [clientProfile])
 
   const handlePickupBlur = async () => {
     if (form.pickup_address) {
@@ -189,6 +212,30 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     }))
+  }
+
+  const handleAddressSelect = (addressId: string) => {
+    setSelectedAddressId(addressId)
+    const selectedAddress = savedAddresses.find(addr => addr.id === addressId)
+    
+    if (selectedAddress) {
+      // Combine address lines
+      const fullAddress = [
+        selectedAddress.address_line1,
+        selectedAddress.address_line2,
+        selectedAddress.city,
+        selectedAddress.state,
+        selectedAddress.postal_code,
+        selectedAddress.country
+      ].filter(Boolean).join(', ')
+
+      setForm(prev => ({
+        ...prev,
+        pickup_address: fullAddress,
+        pickup_latitude: selectedAddress.latitude || undefined,
+        pickup_longitude: selectedAddress.longitude || undefined,
+      }))
+    }
   }
 
   const updateOrderProduct = (index: number, field: keyof OrderProduct, value: any) => {
@@ -362,6 +409,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitting(true)
     setError('')
     setDebugInfo([])
 
@@ -375,18 +423,22 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     // Validation
     if (!form.pickup_address.trim()) {
       setError('Pickup address is required')
+      setSubmitting(false)
       return
     }
     if (!form.pickup_date) {
       setError('Pickup date is required')
+      setSubmitting(false)
       return
     }
     if (!form.pickup_time) {
       setError('Pickup time is required')
+      setSubmitting(false)
       return
     }
     if (!form.truck_type) {
       setError('Truck type is required')
+      setSubmitting(false)
       return
     }
 
@@ -394,6 +446,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     const pickupTimestamp = createPickupTimestamp(form.pickup_date!, form.pickup_time!)
     if (!pickupTimestamp) {
       setError('Invalid pickup date or time')
+      setSubmitting(false)
       return
     }
 
@@ -405,14 +458,17 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       const op = orderProducts[i]
       if (op.isNewProduct && !op.product_name.trim()) {
         setError(`Product #${i + 1} name is required`)
+        setSubmitting(false)
         return
       }
       if (!op.isNewProduct && !op.product_id) {
         setError(`Please select a product for item #${i + 1}`)
+        setSubmitting(false)
         return
       }
       if (op.quantity <= 0) {
         setError(`Product #${i + 1} quantity must be greater than 0`)
+        setSubmitting(false)
         return
       }
     }
@@ -428,10 +484,12 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       const d = dropoffs[i]
       if (!d.address.trim()) {
         setError(`Drop-off #${i + 1} is missing an address.`)
+        setSubmitting(false)
         return
       }
       if (!d.contact.trim() && !d.phone.trim()) {
         setError(`Drop-off #${i + 1} must have either a contact name or a phone.`)
+        setSubmitting(false)
         return
       }
     }
@@ -462,12 +520,14 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     if (clientError) {
       addDebugInfo(`Client error: ${JSON.stringify(clientError)}`)
       setError(`❌ Failed to save client: ${clientError.message}`)
+      setSubmitting(false)
       return
     }
 
     if (!client) {
       addDebugInfo('No client returned from insert')
       setError('❌ Failed to save client - no data returned')
+      setSubmitting(false)
       return
     }
 
@@ -502,12 +562,14 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     if (orderError) {
       addDebugInfo(`Order error: ${JSON.stringify(orderError)}`)
       setError(`❌ Failed to create order: ${orderError.message}`)
+      setSubmitting(false)
       return
     }
 
     if (!order) {
       addDebugInfo('No order returned from insert')
       setError('❌ Failed to create order - no data returned')
+      setSubmitting(false)
       return
     }
 
@@ -644,7 +706,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
   }
 
   return (
-    <div className="bg-white p-8 rounded-xl shadow-md space-y-8">
+    <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-md space-y-8">
       <h2 className="text-2xl font-bold text-gray-900">📦 Order Details</h2>
 
       {error && <p className="text-red-600 font-semibold">{error}</p>}
@@ -688,6 +750,30 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       {/* Pickup Info */}
       <fieldset className="space-y-4">
         <legend className="font-semibold text-lg text-gray-800">📍 Pickup Info</legend>
+        
+        {/* Saved Addresses Dropdown */}
+        {savedAddresses.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Use Saved Address
+            </label>
+            <select
+              value={selectedAddressId}
+              onChange={(e) => handleAddressSelect(e.target.value)}
+              className="border border-gray-400 p-3 w-full rounded text-gray-900"
+            >
+              <option value="">Select a saved address...</option>
+              {savedAddresses.map((address) => (
+                <option key={address.id} value={address.id}>
+                  {address.label || 'Address'} 
+                  {address.is_default && ' (Default)'}
+                  {address.is_pickup_address && ' (Pickup)'}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        
         <input name="pickup_address" value={form.pickup_address} onChange={handleChange} onBlur={handlePickupBlur} placeholder="Pickup Address*" className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
         {form.pickup_latitude && form.pickup_longitude && (
           <div className="relative w-full h-40 mt-2 rounded overflow-hidden shadow">
@@ -885,9 +971,17 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         <p className="text-sm text-gray-700">Estimated Cost: ₱{form.estimated_cost?.toFixed(2)}</p>
       </fieldset>
 
-      <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded shadow">
-        🚀 Submit Order
+      <button 
+        type="submit" 
+        disabled={submitting}
+        className={`w-full font-semibold py-3 rounded shadow ${
+          submitting 
+            ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+            : 'bg-orange-500 hover:bg-orange-600 text-white'
+        }`}
+      >
+        {submitting ? '🔄 Submitting Order...' : '🚀 Submit Order'}
       </button>
-    </div>
+    </form>
   )
 } 
