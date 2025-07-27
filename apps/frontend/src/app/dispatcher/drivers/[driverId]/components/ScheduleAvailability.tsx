@@ -7,7 +7,7 @@ interface AvailabilityEntry {
   start_time: string;
   end_time: string;
   created_at: string;
-  is_available?: boolean; // Added to track availability status
+  is_available?: boolean; 
 }
 
 interface ScheduleAvailabilityProps {
