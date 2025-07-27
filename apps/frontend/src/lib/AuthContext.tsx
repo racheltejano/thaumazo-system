@@ -68,15 +68,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Fallback to database query if JWT doesn't have role
-        const { data: profile, error: profileError } = await supabase
+        // First check if user is a staff member (profiles table)
+        const { data: staffProfile, error: staffError } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", user.id)
           .single();
-        if (profileError) throw profileError;
-        if (isMounted) {
-          setUser(user);
-          setRole(profile?.role || null);
+        
+        if (!staffError && staffProfile) {
+          // User is a staff member
+          if (isMounted) {
+            setUser(user);
+            setRole(staffProfile?.role || null);
+          }
+        } else {
+          // Check if user is a client (client_profiles table)
+          const { data: clientProfile, error: clientError } = await supabase
+            .from("client_profiles")
+            .select("id")
+            .eq("id", user.id)
+            .single();
+          
+          if (!clientError && clientProfile) {
+            // User is a client
+            if (isMounted) {
+              setUser(user);
+              setRole("client");
+            }
+          } else {
+            // User exists but has no profile in either table
+            if (isMounted) {
+              setUser(user);
+              setRole(null);
+            }
+          }
         }
       } catch (err: any) {
         if (isMounted) {
