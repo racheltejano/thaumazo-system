@@ -7,8 +7,11 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 import { supabase } from '@/lib/supabase'
+import { geocodePhilippineAddress } from '@/lib/maps'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import Link from 'next/link'
+import { ArrowLeft, Package, MapPin, Clock, User, Truck } from 'lucide-react'
 
 // Initialize dayjs plugins
 dayjs.extend(utc)
@@ -278,17 +281,18 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
   const geocodeAddress = async (address: string) => {
     if (!address) return null
     try {
-      const res = await axios.get(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
-      )
-      if (res.data && res.data.length > 0) {
-        return {
-          lat: parseFloat(res.data[0].lat),
-          lon: parseFloat(res.data[0].lon),
-        }
+      console.log(`🔍 Geocoding address: ${address}`)
+      
+      const coords = await geocodePhilippineAddress(address)
+      
+      if (coords) {
+        console.log(`✅ Geocoding successful: ${coords.lat}, ${coords.lon} for "${address}"`)
+        return coords
+      } else {
+        console.warn(`❌ No geocoding results found for: ${address}`)
       }
     } catch (error) {
-      console.warn('Geocoding failed', error)
+      console.error('❌ Geocoding failed:', error)
     }
     return null
   }

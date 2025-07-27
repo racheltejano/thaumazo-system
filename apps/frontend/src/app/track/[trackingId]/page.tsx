@@ -206,10 +206,16 @@ export default function TrackingPage() {
 
         const pickupLat = fullClientData.data?.pickup_latitude
         const pickupLng = fullClientData.data?.pickup_longitude
+        
+        console.log('📍 Map coordinates:', { pickupLat, pickupLng })
+        console.log('🗺️ Mapbox token available:', !!MAPBOX_TOKEN)
+        
         const mapUrl =
-          pickupLat && pickupLng
+          pickupLat && pickupLng && MAPBOX_TOKEN
             ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${pickupLng},${pickupLat})/${pickupLng},${pickupLat},15/700x300?access_token=${MAPBOX_TOKEN}`
             : undefined
+
+        console.log('🗺️ Generated map URL:', mapUrl ? 'Available' : 'Not available')
 
         setOrder({
           id: rawOrder.id,
@@ -328,7 +334,7 @@ export default function TrackingPage() {
           {/* Right Column: Map, Dropoffs, Order + Driver Info */}
           <div className="space-y-6">
             {/* Pickup Map */}
-            {order.mapUrl && (
+            {order.mapUrl ? (
               <div className="no-print rounded-lg overflow-hidden border aspect-[2/1] relative w-full">
                 <Image
                   src={order.mapUrl}
@@ -336,6 +342,18 @@ export default function TrackingPage() {
                   fill
                   className="object-cover"
                 />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded-lg border aspect-[2/1] flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <p className="text-sm">📍 Map not available</p>
+                  <p className="text-xs mt-1">
+                    {!order.client?.pickup_latitude || !order.client?.pickup_longitude 
+                      ? 'Coordinates not available for this address'
+                      : 'Mapbox token not configured'
+                    }
+                  </p>
+                </div>
               </div>
             )}
 
