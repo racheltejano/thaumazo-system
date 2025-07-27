@@ -85,7 +85,23 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [debugInfo, setDebugInfo] = useState<string[]>([])
+  // Address validation states
+  const [addressValidation, setAddressValidation] = useState<{
+    pickup: { isValid: boolean; isValidating: boolean; coordinates?: { lat: number; lon: number } }
+    dropoffs: { isValid: boolean; isValidating: boolean; coordinates?: { lat: number; lon: number } }[]
+  }>({
+    pickup: { isValid: false, isValidating: false },
+    dropoffs: [{ isValid: false, isValidating: false }]
+  })
+
+  // Track if fields have been touched (blurred)
+  const [fieldsTouched, setFieldsTouched] = useState<{
+    pickup: boolean
+    dropoffs: boolean[]
+  }>({
+    pickup: false,
+    dropoffs: [false]
+  })
 
   // Saved addresses state
   const [savedAddresses, setSavedAddresses] = useState<any[]>([])
@@ -96,11 +112,6 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
 
   const getMapboxMapUrl = (lat: number, lon: number) =>
     `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${lon},${lat})/${lon},${lat},16/600x200?access_token=${mapboxToken}`
-
-  const addDebugInfo = (info: string) => {
-    setDebugInfo(prev => [...prev, `${new Date().toISOString()}: ${info}`])
-    console.log(info)
-  }
 
   // Generate tracking ID using admin format
   const generateTrackingId = async (): Promise<string> => {
@@ -135,8 +146,6 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
 
   useEffect(() => {
     const fetchData = async () => {
-      addDebugInfo(`Fetching products for client order`)
-      
       // Fetch existing products
       const { data: productsData, error: productsError } = await supabase
         .from('products')
@@ -144,9 +153,8 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         .order('name')
 
       if (productsError) {
-        addDebugInfo(`Error fetching products: ${productsError.message}`)
+        console.error('Error fetching products:', productsError.message)
       } else {
-        addDebugInfo(`Found ${productsData?.length || 0} products`)
         setProducts(productsData || [])
       }
 
@@ -161,9 +169,8 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
           .order('created_at', { ascending: false })
 
         if (addressesError) {
-          addDebugInfo(`Error fetching addresses: ${addressesError.message}`)
+          console.error('Error fetching addresses:', addressesError.message)
         } else {
-          addDebugInfo(`Found ${addressesData?.length || 0} saved addresses`)
           setSavedAddresses(addressesData || [])
         }
       }
@@ -175,7 +182,26 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
   }, [clientProfile])
 
   const handlePickupBlur = async () => {
-    if (form.pickup_address) {
+    // Mark field as touched
+    setFieldsTouched(prev => ({
+      ...prev,
+      pickup: true
+    }))
+
+    if (!form.pickup_address.trim()) {
+      setAddressValidation(prev => ({
+        ...prev,
+        pickup: { isValid: false, isValidating: false }
+      }))
+      return
+    }
+
+    setAddressValidation(prev => ({
+      ...prev,
+      pickup: { isValid: false, isValidating: true }
+    }))
+
+    try {
       const coords = await geocodeAddress(form.pickup_address)
       if (coords) {
         setForm(prev => ({
@@ -183,30 +209,88 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
           pickup_latitude: coords.lat,
           pickup_longitude: coords.lon,
         }))
+        setAddressValidation(prev => ({
+          ...prev,
+          pickup: { isValid: true, isValidating: false, coordinates: coords }
+        }))
+      } else {
+        setAddressValidation(prev => ({
+          ...prev,
+          pickup: { isValid: false, isValidating: false }
+        }))
       }
+    } catch (error) {
+      console.error('Geocoding error:', error)
+      setAddressValidation(prev => ({
+        ...prev,
+        pickup: { isValid: false, isValidating: false }
+      }))
     }
   }
 
   const handleDropoffBlur = async (index: number, address: string) => {
-    if (!address) return
+    // Mark dropoff field as touched
+    setFieldsTouched(prev => ({
+      ...prev,
+      dropoffs: prev.dropoffs.map((d, i) => 
+        i === index ? true : d
+      )
+    }))
 
-    const coords = await geocodeAddress(address)
-    if (!coords) {
-      addDebugInfo(`❌ Geocoding failed for drop-off #${index + 1}`)
+    if (!address.trim()) {
+      setAddressValidation(prev => ({
+        ...prev,
+        dropoffs: prev.dropoffs.map((d, i) => 
+          i === index ? { isValid: false, isValidating: false } : d
+        )
+      }))
       return
     }
 
-    setDropoffs(prev => {
-      const updated = [...prev]
-      updated[index] = {
-        ...updated[index],
-        latitude: coords.lat,
-        longitude: coords.lon,
-      }
-      return updated
-    })
+    // Update validation state to show loading
+    setAddressValidation(prev => ({
+      ...prev,
+      dropoffs: prev.dropoffs.map((d, i) => 
+        i === index ? { isValid: false, isValidating: true } : d
+      )
+    }))
 
-    addDebugInfo(`✅ Geocoded drop-off #${index + 1}: ${coords.lat}, ${coords.lon}`)
+    try {
+      const coords = await geocodeAddress(address)
+      if (coords) {
+        setDropoffs(prev => {
+          const updated = [...prev]
+          updated[index] = {
+            ...updated[index],
+            latitude: coords.lat,
+            longitude: coords.lon,
+          }
+          return updated
+        })
+
+        setAddressValidation(prev => ({
+          ...prev,
+          dropoffs: prev.dropoffs.map((d, i) => 
+            i === index ? { isValid: true, isValidating: false, coordinates: coords } : d
+          )
+        }))
+      } else {
+        setAddressValidation(prev => ({
+          ...prev,
+          dropoffs: prev.dropoffs.map((d, i) => 
+            i === index ? { isValid: false, isValidating: false } : d
+          )
+        }))
+      }
+    } catch (error) {
+      console.error('Dropoff geocoding error:', error)
+      setAddressValidation(prev => ({
+        ...prev,
+        dropoffs: prev.dropoffs.map((d, i) => 
+          i === index ? { isValid: false, isValidating: false } : d
+        )
+      }))
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -217,7 +301,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     }))
   }
 
-  const handleAddressSelect = (addressId: string) => {
+  const handleAddressSelect = async (addressId: string) => {
     setSelectedAddressId(addressId)
     const selectedAddress = savedAddresses.find(addr => addr.id === addressId)
     
@@ -238,6 +322,56 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         pickup_latitude: selectedAddress.latitude || undefined,
         pickup_longitude: selectedAddress.longitude || undefined,
       }))
+
+      // Mark field as touched and trigger validation
+      setFieldsTouched(prev => ({
+        ...prev,
+        pickup: true
+      }))
+
+      // If the saved address has coordinates, validate them
+      if (selectedAddress.latitude && selectedAddress.longitude) {
+        setAddressValidation(prev => ({
+          ...prev,
+          pickup: { 
+            isValid: true, 
+            isValidating: false, 
+            coordinates: { lat: selectedAddress.latitude, lon: selectedAddress.longitude } 
+          }
+        }))
+      } else {
+        // If no coordinates, try to geocode the address
+        setAddressValidation(prev => ({
+          ...prev,
+          pickup: { isValid: false, isValidating: true }
+        }))
+
+        try {
+          const coords = await geocodePhilippineAddress(fullAddress)
+          if (coords) {
+            setForm(prev => ({
+              ...prev,
+              pickup_latitude: coords.lat,
+              pickup_longitude: coords.lon,
+            }))
+            setAddressValidation(prev => ({
+              ...prev,
+              pickup: { isValid: true, isValidating: false, coordinates: coords }
+            }))
+          } else {
+            setAddressValidation(prev => ({
+              ...prev,
+              pickup: { isValid: false, isValidating: false }
+            }))
+          }
+        } catch (error) {
+          console.error('Geocoding error:', error)
+          setAddressValidation(prev => ({
+            ...prev,
+            pickup: { isValid: false, isValidating: false }
+          }))
+        }
+      }
     }
   }
 
@@ -365,10 +499,10 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       // Calculate and store individual leg durations if we have route legs
       if (route.legs?.length) {
         const legs = route.legs
-        const dropoffDurations = legs.map(leg => Math.ceil(leg.duration / 60)) // Round up each leg
+        const dropoffDurations = legs.map((leg: any) => Math.ceil(leg.duration / 60)) // Round up each leg
 
         // Update dropoff records with individual durations
-        const dropoffUpdatePromises = validDropoffs.map(async (dropoff, i) => {
+        const dropoffUpdatePromises = validDropoffs.map(async (dropoff: Dropoff, i: number) => {
           const duration = dropoffDurations[i] || null
           
           const { error } = await supabase
@@ -398,7 +532,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       return { 
         success: true, 
         totalDuration: estimatedTotalDuration,
-        dropoffDurations: route.legs?.map(leg => Math.ceil(leg.duration / 60)) || [],
+        dropoffDurations: route.legs?.map((leg: any) => Math.ceil(leg.duration / 60)) || [],
       }
 
     } catch (error: any) {
@@ -415,14 +549,11 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     e.preventDefault()
     setSubmitting(true)
     setError('')
-    setDebugInfo([])
-
-    addDebugInfo('Starting client order submission...')
 
     // Generate tracking ID first
-    addDebugInfo('Generating tracking ID...')
+    console.log('Generating tracking ID...')
     const trackingId = await generateTrackingId()
-    addDebugInfo(`Generated tracking ID: ${trackingId}`)
+    console.log(`Generated tracking ID: ${trackingId}`)
 
     // Validation
     if (!form.pickup_address.trim()) {
@@ -454,8 +585,8 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       return
     }
 
-    addDebugInfo(`Pickup timestamp (UTC): ${pickupTimestamp}`)
-    addDebugInfo(`Pickup timestamp (Manila): ${dayjs(pickupTimestamp).tz(TIMEZONE).format('YYYY-MM-DD HH:mm:ss')}`)
+    console.log(`Pickup timestamp (UTC): ${pickupTimestamp}`)
+    console.log(`Pickup timestamp (Manila): ${dayjs(pickupTimestamp).tz(TIMEZONE).format('YYYY-MM-DD HH:mm:ss')}`)
 
     // Validate order products
     for (let i = 0; i < orderProducts.length; i++) {
@@ -481,7 +612,23 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       lat: form.pickup_latitude!,
       lon: form.pickup_longitude!,
     }
-    addDebugInfo(`Pickup coordinates: ${JSON.stringify(pickupCoords)}`)
+    console.log(`Pickup coordinates: ${JSON.stringify(pickupCoords)}`)
+    
+    // Validate that coordinates are available
+    if (!pickupCoords.lat || !pickupCoords.lon) {
+      console.log(`⚠️ Missing pickup coordinates. Attempting to geocode again...`)
+      const coords = await geocodeAddress(form.pickup_address)
+      if (coords) {
+        pickupCoords.lat = coords.lat
+        pickupCoords.lon = coords.lon
+        console.log(`✅ Successfully geocoded pickup address: ${coords.lat}, ${coords.lon}`)
+      } else {
+        console.log(`❌ Failed to geocode pickup address: ${form.pickup_address}`)
+        setError('Unable to get coordinates for pickup address. Please try a more general location.')
+        setSubmitting(false)
+        return
+      }
+    }
 
     // Validate drop-offs
     for (let i = 0; i < dropoffs.length; i++) {
@@ -499,7 +646,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     }
 
     // Step 1: Create client record (will be automatically linked to user via trigger)
-    addDebugInfo('Creating client record...')
+    console.log('Creating client record...')
     const clientData = {
       tracking_id: trackingId,
       client_type: 'returning',
@@ -513,7 +660,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       pickup_longitude: pickupCoords?.lon,
     }
 
-    addDebugInfo(`Client data: ${JSON.stringify(clientData)}`)
+    console.log(`Client data: ${JSON.stringify(clientData)}`)
 
     const { data: client, error: clientError } = await supabase
       .from('clients')
@@ -522,24 +669,24 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       .single()
 
     if (clientError) {
-      addDebugInfo(`Client error: ${JSON.stringify(clientError)}`)
+      console.log(`Client error: ${JSON.stringify(clientError)}`)
       setError(`❌ Failed to save client: ${clientError.message}`)
       setSubmitting(false)
       return
     }
 
     if (!client) {
-      addDebugInfo('No client returned from insert')
+      console.log('No client returned from insert')
       setError('❌ Failed to save client - no data returned')
       setSubmitting(false)
       return
     }
 
-    addDebugInfo(`Client saved with ID: ${client.id}`)
-    addDebugInfo('Client will be automatically linked to user account via trigger')
+    console.log(`Client saved with ID: ${client.id}`)
+    console.log('Client will be automatically linked to user account via trigger')
     
     // Step 2: Create order with combined timestamp
-    addDebugInfo('Creating order...')
+    console.log('Creating order...')
     const orderData = {
       client_id: client.id,
       pickup_date: form.pickup_date,
@@ -555,7 +702,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       estimated_end_time: null, // Will be calculated and updated
     }
 
-    addDebugInfo(`Order data: ${JSON.stringify(orderData)}`)
+    console.log(`Order data: ${JSON.stringify(orderData)}`)
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
@@ -564,23 +711,23 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       .single()
 
     if (orderError) {
-      addDebugInfo(`Order error: ${JSON.stringify(orderError)}`)
+      console.log(`Order error: ${JSON.stringify(orderError)}`)
       setError(`❌ Failed to create order: ${orderError.message}`)
       setSubmitting(false)
       return
     }
 
     if (!order) {
-      addDebugInfo('No order returned from insert')
+      console.log('No order returned from insert')
       setError('❌ Failed to create order - no data returned')
       setSubmitting(false)
       return
     }
 
-    addDebugInfo(`Order created with ID: ${order.id}`)
+    console.log(`Order created with ID: ${order.id}`)
 
     // Step 3: Create new products and order products
-    addDebugInfo('Processing products...')
+    console.log('Processing products...')
     const orderProductEntries = []
 
     for (const op of orderProducts) {
@@ -600,13 +747,13 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
           .single()
 
         if (productError) {
-          addDebugInfo(`Product creation error: ${JSON.stringify(productError)}`)
+          console.log(`Product creation error: ${JSON.stringify(productError)}`)
           setError(`❌ Failed to create product "${op.product_name}": ${productError.message}`)
           return
         }
 
         if (newProduct) {
-          addDebugInfo(`Created new product: ${op.product_name} with ID: ${newProduct.id}`)
+          console.log(`Created new product: ${op.product_name} with ID: ${newProduct.id}`)
           orderProductEntries.push({
             order_id: order.id,
             product_id: newProduct.id,
@@ -629,16 +776,16 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         .insert(orderProductEntries)
 
       if (orderProductError) {
-        addDebugInfo(`Order product error: ${JSON.stringify(orderProductError)}`)
+        console.log(`Order product error: ${JSON.stringify(orderProductError)}`)
         setError(`❌ Failed to save order products: ${orderProductError.message}`)
         return
       } else {
-        addDebugInfo(`${orderProductEntries.length} order products created`)
+        console.log(`${orderProductEntries.length} order products created`)
       }
     }
 
     // Step 4: Create dropoffs with coordinates
-    addDebugInfo('Creating dropoffs with coordinates...')
+    console.log('Creating dropoffs with coordinates...')
     const dropoffEntries = await Promise.all(
       dropoffs.filter(d => d.address.trim()).map(async (d, index) => {
         const coords = d.latitude && d.longitude
@@ -646,7 +793,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
           : await geocodeAddress(d.address)
 
         if (!coords) {
-          addDebugInfo(`⚠️ No coordinates found for dropoff: ${d.address}`)
+          console.log(`⚠️ No coordinates found for dropoff: ${d.address}`)
         }
 
         return {
@@ -669,11 +816,11 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         .insert(dropoffEntries)
 
       if (dropoffError) {
-        addDebugInfo(`Dropoff error: ${JSON.stringify(dropoffError)}`)
+        console.log(`Dropoff error: ${JSON.stringify(dropoffError)}`)
         setError(`❌ Failed to create dropoffs: ${dropoffError.message}`)
         return
       } else {
-        addDebugInfo(`${dropoffEntries.length} dropoffs created`)
+        console.log(`${dropoffEntries.length} dropoffs created`)
       }
     }
 
@@ -681,14 +828,14 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
     
     if (travelTimeResult.success) {
-      addDebugInfo(`🎉 Order created successfully with travel time data!`)
-      addDebugInfo(`📊 Total travel time: ${travelTimeResult.totalDuration} minutes`)
+      console.log(`🎉 Order created successfully with travel time data!`)
+      console.log(`📊 Total travel time: ${travelTimeResult.totalDuration} minutes`)
     } else {
-      addDebugInfo(`⚠️ Order created but travel time calculation failed: ${travelTimeResult.reason}`)
+      console.log(`⚠️ Order created but travel time calculation failed: ${travelTimeResult.reason}`)
       // Note: We don't treat this as a fatal error since the order was created successfully
     }
 
-    addDebugInfo('Order submission completed successfully!')
+    console.log('Order submission completed successfully!')
     setSubmitted(true)
     
     // Show success message and redirect
@@ -778,8 +925,47 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
           </div>
         )}
         
-        <input name="pickup_address" value={form.pickup_address} onChange={handleChange} onBlur={handlePickupBlur} placeholder="Pickup Address*" className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
-        {form.pickup_latitude && form.pickup_longitude && (
+        <div className="relative">
+          <input 
+            name="pickup_address" 
+            value={form.pickup_address} 
+            onChange={handleChange} 
+            onBlur={handlePickupBlur} 
+            placeholder="Pickup Address*" 
+            className={`border p-3 w-full rounded text-gray-900 pr-10 ${
+              addressValidation.pickup.isValidating 
+                ? 'border-yellow-400 bg-yellow-50' 
+                : addressValidation.pickup.isValid 
+                ? 'border-green-400 bg-green-50' 
+                : fieldsTouched.pickup && form.pickup_address.trim() && !addressValidation.pickup.isValid
+                ? 'border-red-400 bg-red-50'
+                : 'border-gray-400'
+            }`}
+            required 
+          />
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            {addressValidation.pickup.isValidating && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+            )}
+            {!addressValidation.pickup.isValidating && addressValidation.pickup.isValid && (
+              <span className="text-green-600">✓</span>
+            )}
+            {!addressValidation.pickup.isValidating && fieldsTouched.pickup && form.pickup_address.trim() && !addressValidation.pickup.isValid && (
+              <span className="text-red-600">x</span>
+            )}
+          </div>
+        </div>
+        {addressValidation.pickup.coordinates && (
+          <div className="text-xs text-green-600 mt-1">
+            📍 Coordinates: {addressValidation.pickup.coordinates.lat.toFixed(6)}, {addressValidation.pickup.coordinates.lon.toFixed(6)}
+          </div>
+        )}
+        {fieldsTouched.pickup && form.pickup_address.trim() && !addressValidation.pickup.isValid && !addressValidation.pickup.isValidating && (
+          <div className="text-xs text-red-600 mt-1">
+            x Unable to geocode this address. Please try a more general location.
+          </div>
+        )}
+        {form.pickup_latitude && form.pickup_longitude && addressValidation.pickup.isValid && (
           <div className="relative w-full h-40 mt-2 rounded overflow-hidden shadow">
             <Image src={getMapboxMapUrl(form.pickup_latitude, form.pickup_longitude)} alt="Pickup Map" layout="fill" objectFit="cover" />
           </div>
@@ -831,7 +1017,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-sm text-gray-700">Product #{i + 1}</h3>
               {orderProducts.length > 1 && (
-                <button type="button" onClick={() => removeOrderProduct(i)} className="text-sm text-red-600 hover:underline">❌ Remove</button>
+                                  <button type="button" onClick={() => removeOrderProduct(i)} className="text-sm text-red-600 hover:underline">x Remove</button>
               )}
             </div>
             
@@ -941,7 +1127,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-sm text-gray-700">Drop-off #{i + 1}</h3>
               {dropoffs.length > 1 && (
-                <button type="button" onClick={() => setDropoffs(dropoffs.filter((_, idx) => idx !== i))} className="text-sm text-red-600 hover:underline">❌ Remove</button>
+                                  <button type="button" onClick={() => setDropoffs(dropoffs.filter((_, idx) => idx !== i))} className="text-sm text-red-600 hover:underline">x Remove</button>
               )}
             </div>
             <input value={d.name} onChange={e => updateDropoff(i, 'name', e.target.value)} placeholder="Recipient Name" className="border border-gray-400 p-3 w-full rounded text-gray-900" />

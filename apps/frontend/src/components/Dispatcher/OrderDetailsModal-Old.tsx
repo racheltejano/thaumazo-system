@@ -180,7 +180,7 @@ export default function OrderDetailsModal({
             <p><strong>Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
             <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
             <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>
-            <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✅ Yes' : '❌ No'}</p>
+                            <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✓ Yes' : 'x No'}</p>
             <p><strong>Estimated Travel Time:</strong> {getEstimatedTime()}</p>
 
             {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (

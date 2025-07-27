@@ -209,6 +209,12 @@ export default function TrackingPage() {
         
         console.log('📍 Map coordinates:', { pickupLat, pickupLng })
         console.log('🗺️ Mapbox token available:', !!MAPBOX_TOKEN)
+        console.log('📊 Full client data:', fullClientData.data)
+        console.log('🏪 Client pickup address:', fullClientData.data?.pickup_address)
+        console.log('📍 Client coordinates from DB:', {
+          latitude: fullClientData.data?.pickup_latitude,
+          longitude: fullClientData.data?.pickup_longitude
+        })
         
         const mapUrl =
           pickupLat && pickupLng && MAPBOX_TOKEN

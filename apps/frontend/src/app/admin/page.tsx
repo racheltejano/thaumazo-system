@@ -114,9 +114,9 @@ export default function AdminDashboard() {
 
     const { error } = await supabase.from('clients').insert({
       tracking_id: id,
-      contact_person: 'Pending',
-      contact_number: 'Pending',
-      pickup_address: 'Pending',
+      contact_person: '',
+      contact_number: '',
+      pickup_address: '',
     })
 
     if (error) {
