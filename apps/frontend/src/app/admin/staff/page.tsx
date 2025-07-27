@@ -6,7 +6,7 @@ import { StaffOverviewCards } from './components/StaffOverviewCards';
 import { StaffTable } from './components/StaffTable';
 
 export default function StaffManagementPage() {
-  const { staffs, stats, loading, error } = useStaff();
+  const { staffs, stats, loading, error, refetch } = useStaff();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function StaffManagementPage() {
       </div>
 
       <StaffOverviewCards stats={stats} loading={loading} />
-      <StaffTable staffs={staffs} loading={loading} />
+      <StaffTable staffs={staffs} loading={loading} onRefresh={refetch} />
     </div>
   );
 }
