@@ -200,7 +200,7 @@ export default function DriverCalendarPage() {
           tail_lift_required,
           driver_id
         `)
-        .eq('driver_id', user.id)
+        .or(`driver_id.eq.${user.id},driver_id.is.null`)
 
       console.log('📦 Orders data:', orderData)
 
