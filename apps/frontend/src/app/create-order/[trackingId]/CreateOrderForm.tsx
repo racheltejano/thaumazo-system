@@ -7,7 +7,9 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 import { createSupabaseWithTracking } from '@/lib/supabase'
-import SuccessPopup  from '@/components/Client/SuccessPopup'
+import { supabase } from '@/lib/supabase'
+import { geocodePhilippineAddress } from '@/lib/maps'
+import SuccessPopup from '@/components/Client/SuccessPopup'
 
 // Initialize dayjs plugins
 dayjs.extend(utc)
@@ -175,7 +177,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
 
   const handlePickupBlur = async () => {
     if (form.pickup_address) {
-      const coords = await geocodeAddress(form.pickup_address)
+      const coords = await geocodePhilippineAddress(form.pickup_address)
       if (coords) {
         setForm(prev => ({
           ...prev,
@@ -189,8 +191,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   const handleDropoffBlur = async (index: number, address: string) => {
     if (!address) return
 
-    const coords = await geocodeAddress(address)
-    if (!coords) {
+    const dropoffCoords = await geocodePhilippineAddress(address)
+    if (!dropoffCoords) {
       addDebugInfo(`❌ Geocoding failed for drop-off #${index + 1}`)
       return
     }
@@ -199,13 +201,13 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       const updated = [...prev]
       updated[index] = {
         ...updated[index],
-        latitude: coords.lat,
-        longitude: coords.lon,
+        latitude: dropoffCoords.lat,
+        longitude: dropoffCoords.lon,
       }
       return updated
     })
 
-    addDebugInfo(`✅ Geocoded drop-off #${index + 1}: ${coords.lat}, ${coords.lon}`)
+    addDebugInfo(`✅ Geocoded drop-off #${index + 1}: ${dropoffCoords.lat}, ${dropoffCoords.lon}`)
   }
 
   useEffect(() => {
@@ -264,17 +266,26 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   const geocodeAddress = async (address: string) => {
     if (!address) return null
     try {
+      // Add Philippines context to improve geocoding accuracy
+      const searchQuery = `${address}, Philippines`
+      console.log(`🔍 Geocoding address: ${searchQuery}`)
+      
       const res = await axios.get(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=ph&limit=1`
       )
+      
       if (res.data && res.data.length > 0) {
+        const result = res.data[0]
+        console.log(`✅ Geocoding successful: ${result.lat}, ${result.lon} for "${address}"`)
         return {
-          lat: parseFloat(res.data[0].lat),
-          lon: parseFloat(res.data[0].lon),
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon),
         }
+      } else {
+        console.warn(`❌ No geocoding results found for: ${address}`)
       }
     } catch (error) {
-      console.warn('Geocoding failed', error)
+      console.error('❌ Geocoding failed:', error)
     }
     return null
   }
@@ -615,7 +626,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       dropoffs.filter(d => d.address.trim()).map(async (d, index) => {
         const coords = d.latitude && d.longitude
           ? { lat: d.latitude, lon: d.longitude }
-          : await geocodeAddress(d.address)
+          : await geocodePhilippineAddress(d.address)
 
         if (!coords) {
           addDebugInfo(`⚠️ No coordinates found for dropoff: ${d.address}`)
