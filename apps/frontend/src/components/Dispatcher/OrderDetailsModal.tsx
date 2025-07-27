@@ -1,29 +1,28 @@
-'use client'
-
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import Image from 'next/image'
-import { generateGoogleMapsRoute } from '@/lib/maps' 
-import dynamic from 'next/dynamic'
-import { format, utcToZonedTime } from 'date-fns-tz'
-const DriverAssignmentDrawer = dynamic(() => import('@/components/Dispatcher/DriverAssignmentDrawer'), { ssr: false })
+import { OrderInfo } from './OrderInfo'
+import { ClientInfo } from './ClientInfo'
+import { DropoffInfo } from './DropoffInfo'
+import { StatusUpdate } from './StatusUpdate'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
-export type Order = {
+type Order = {
   id: string
-  pickup_timestamp: string
+  tracking_id: string
+  pickup_date: string
+  pickup_time: string
   delivery_window_start: string | null
   delivery_window_end: string | null
   special_instructions: string
   client_id: string
   status: string
-  vehicle_type: string | null        
+  vehicle_type: string | null
   tail_lift_required: boolean | null
-  estimated_total_duration: number | null // Use this instead of calculating
+  driver_id: string | null
 }
 
-export type Client = {
+type Client = {
   tracking_id: string
   business_name: string
   contact_person: string
@@ -45,52 +44,42 @@ type Dropoff = {
   sequence: number
   latitude: number | null
   longitude: number | null
-  estimated_duration_mins: number | null // Use stored duration
 }
 
-const TIMEZONE = 'Asia/Manila'
+type Driver = {
+  id: string
+  full_name: string
+  email: string
+}
 
-export default function OrderDetailsModal({
-  order,
-  onClose,
-}: {
-  order: Order
+interface OrderDetailsModalProps {
+  selectedOrder: Order
   onClose: () => void
-}) {
-  
+  onOrderUpdate: () => void
+}
+
+export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: OrderDetailsModalProps) {
   const [client, setClient] = useState<Client | null>(null)
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
-  const [products, setProducts] = useState<any[]>([])
-  const [showAssignDrawer, setShowAssignDrawer] = useState(false)
-  const pickupDateTimeInManila = order.pickup_timestamp
-    ? utcToZonedTime(order.pickup_timestamp, TIMEZONE)
-    : null
-  const formattedPickupDateTime = pickupDateTimeInManila
-      ? format(pickupDateTimeInManila, 'PPpp', { timeZone: TIMEZONE })
-      : 'N/A'
-
-  // Get estimated time from stored data instead of calculating
-  const getEstimatedTime = (): string => {
-    if (order.estimated_total_duration) {
-      return `${order.estimated_total_duration} mins`
-    }
-    
-    // Fallback to sum of individual dropoff durations if available
-    const totalDropoffTime = dropoffs.reduce((sum, dropoff) => {
-      return sum + (dropoff.estimated_duration_mins || 0)
-    }, 0)
-    
-    if (totalDropoffTime > 0) {
-      return `${totalDropoffTime} mins`
-    }
-    
-    return 'Not calculated'
-  }
+  const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [updatedOrder, setUpdatedOrder] = useState<Order>(selectedOrder)
 
   useEffect(() => {
-    const fetchClient = async () => {
-      if (!order.client_id) return
-      const { data, error } = await supabase
+    setUpdatedOrder(selectedOrder)
+    fetchOrderDetails(selectedOrder)
+  }, [selectedOrder])
+
+  useEffect(() => {
+    if (client && dropoffs.length > 0) {
+      fetchEstimatedTravelTime(client, dropoffs)
+    }
+  }, [client, dropoffs])
+
+  const fetchOrderDetails = async (order: Order) => {
+    try {
+      // Fetch client details
+      const { data: clientData, error: clientError } = await supabase
         .from('clients')
         .select(
           'tracking_id, business_name, contact_person, contact_number, email, pickup_address, landmark, pickup_area, pickup_latitude, pickup_longitude'
@@ -98,174 +87,259 @@ export default function OrderDetailsModal({
         .eq('id', order.client_id)
         .single()
 
-      if (error) console.error('❌ Failed to fetch client:', error)
-      else setClient(data)
-    }
+      if (clientError) {
+        console.error('❌ Failed to fetch client:', clientError)
+      } else {
+        setClient(clientData)
+      }
 
-    const fetchDropoffs = async () => {
-      const { data, error } = await supabase
+      // Fetch dropoffs
+      const { data: dropoffData, error: dropoffError } = await supabase
         .from('order_dropoffs')
-        .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude, estimated_duration_mins')
+        .select('id, dropoff_name, dropoff_address, dropoff_contact, dropoff_phone, sequence, latitude, longitude')
         .eq('order_id', order.id)
         .order('sequence', { ascending: true })
 
-      if (error) console.error('❌ Failed to fetch dropoffs:', error)
-      else setDropoffs(data || [])
+      if (dropoffError) {
+        console.error('❌ Failed to fetch dropoffs:', dropoffError)
+      } else {
+        setDropoffs(dropoffData || [])
+      }
+
+    } catch (err) {
+      console.error('❌ Error fetching order details:', err)
+    }
+  }
+
+  const fetchEstimatedTravelTime = async (clientData: Client, dropoffData: Dropoff[]) => {
+    if (
+      !MAPBOX_TOKEN ||
+      !clientData?.pickup_latitude ||
+      !clientData?.pickup_longitude ||
+      dropoffData.length === 0
+    ) {
+      setEstimatedTime('Unavailable')
+      return
     }
 
-    const fetchProducts = async () => {
-      const { data, error } = await supabase
-        .from('order_products')
-        .select('quantity, products(name)')
-        .eq('order_id', order.id)
-
-      if (error) console.error('❌ Failed to fetch products:', error)
-      else setProducts(data || [])
+    const filteredDropoffs = dropoffData.filter(d => d.latitude && d.longitude)
+    if (filteredDropoffs.length === 0) {
+      setEstimatedTime('Unavailable')
+      return
     }
 
-    fetchClient()
-    fetchDropoffs()
-    fetchProducts()
-  }, [order.id, order.client_id])
+    const coordinates = [
+      `${clientData.pickup_longitude},${clientData.pickup_latitude}`,
+      ...filteredDropoffs.map(d => `${d.longitude},${d.latitude}`)
+    ]
+
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates.join(';')}?access_token=${MAPBOX_TOKEN}&overview=false&geometries=geojson`
+
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+
+      if (data.routes && data.routes[0]?.duration) {
+        const durationInMinutes = Math.round(data.routes[0].duration / 60)
+        const hours = Math.floor(durationInMinutes / 60)
+        const minutes = durationInMinutes % 60
+        
+        if (hours > 0) {
+          setEstimatedTime(`${hours} hour${hours > 1 ? 's' : ''} ${minutes} mins`)
+        } else {
+          setEstimatedTime(`${minutes} mins`)
+        }
+      } else {
+        console.warn('No valid route returned:', data)
+        setEstimatedTime('Unavailable')
+      }
+    } catch (err) {
+      console.error('❌ Error fetching travel time:', err)
+      setEstimatedTime('Unavailable')
+    }
+  }
+
+
+
+
+
+const updateOrderStatus = async (orderId: string, newStatus: string, selectedDriverId?: string) => {
+  setStatusLoading(true)
+  console.log('🔄 Attempting to update order:', { orderId, newStatus, selectedDriverId })
+  
+  try {
+    // First, let's check if the user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (!user || userError) {
+      console.error('❌ User not authenticated:', userError)
+      alert('You must be logged in to update orders.')
+      return
+    }
+    console.log('✅ User authenticated:', user.id)
+
+    // Check if this order belongs to the current driver
+    const { data: orderCheck, error: checkError } = await supabase
+      .from('orders')
+      .select('id, tracking_id, driver_id, status, pickup_date, pickup_time')
+      .eq('id', orderId)
+      .single()
+
+    if (checkError) {
+      console.error('❌ Error checking order:', checkError)
+      alert('Failed to verify order: ' + checkError.message)
+      return
+    }
+
+    if (!orderCheck) {
+      console.error('❌ Order not found:', orderId)
+      alert('Order not found.')
+      return
+    }
+
+    console.log('✅ Order verification passed:', orderCheck)
+
+    // If status is being changed to 'driver_assigned', ensure we have a driver selected
+    if (newStatus === 'driver_assigned' && !selectedDriverId) {
+      alert('Please select a driver before assigning.')
+      return
+    }
+
+    // Prepare update data
+    const updateData: any = { 
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    }
+
+    if (selectedDriverId && newStatus === 'driver_assigned') {
+      updateData.driver_id = selectedDriverId
+    }
+
+    // Perform the update - FIXED: Use first_name and last_name instead of full_name
+    const { data, error } = await supabase
+      .from('orders')
+      .update(updateData)
+      .eq('id', orderId)
+      .select(`
+        *,
+        profiles!orders_driver_id_fkey (
+          first_name,
+          last_name,
+          email
+        )
+      `)
+
+    if (error) {
+      console.error('❌ Supabase update error:', error)
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      alert('Failed to update order status: ' + error.message)
+    } else {
+      console.log('✅ Update successful:', data)
+      
+      // Construct full name from first_name and last_name
+      const driverFullName = data[0]?.profiles 
+        ? `${data[0].profiles.first_name || ''} ${data[0].profiles.last_name || ''}`.trim() || 'Driver'
+        : 'Driver'
+      
+      const successMessage = selectedDriverId && newStatus === 'driver_assigned' 
+        ? `Driver assigned successfully: ${driverFullName}`
+        : 'Order status updated successfully!'
+      
+      alert(successMessage)
+      
+      // Update the local order state immediately
+      setUpdatedOrder({
+        ...updatedOrder,
+        status: newStatus,
+        driver_id: selectedDriverId || updatedOrder.driver_id
+      })
+      
+      // Refresh the calendar data and close modal
+      onOrderUpdate()
+      onClose()
+    }
+  } catch (err) {
+    console.error('❌ Unexpected error:', err)
+    alert('An unexpected error occurred while updating order status')
+  } finally {
+    setStatusLoading(false)
+  }
+}
 
   return (
-    <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/20 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-xl shadow-lg w-[95%] max-w-5xl overflow-y-auto max-h-[90vh] space-y-4">
-        <div className="flex justify-between items-center border-b pb-2">
-          <h2 className="text-xl font-bold">
-            📝 Tracking ID: <span className="break-all">{client?.tracking_id || order.id}</span>
-          </h2>
-          <button onClick={onClose} className="text-red-500 text-xl font-bold">✖</button>
-        </div>
-
-        <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
-
-          <div>
-            <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-              <span>👤</span> Client Details
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        {/* Modal Header */}
+        <div className="p-6 border-b border-gray-200 bg-gray-50">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <span>📝</span>
+              Order Details: {updatedOrder.tracking_id}
             </h3>
-            <p><strong>Business Name:</strong> {client?.business_name}</p>
-            <p><strong>Contact Person:</strong> {client?.contact_person}</p>
-            <p><strong>Contact Number:</strong> {client?.contact_number}</p>
-            <p><strong>Email:</strong> {client?.email || 'N/A'}</p>
-            <p><strong>Pickup Address:</strong> {client?.pickup_address}</p>
-            <p><strong>Landmark:</strong> {client?.landmark || 'N/A'}</p>
-            <p><strong>Pickup Area:</strong> {client?.pickup_area || 'N/A'}</p>
-
-            {client?.pickup_latitude && client?.pickup_longitude && dropoffs.length > 0 && (
-              <a
-                href={generateGoogleMapsRoute(client.pickup_latitude, client.pickup_longitude, dropoffs)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-center mt-2"
-              >
-                🧭 See Delivery Route
-              </a>
-            )}
-            <br/>
             <button
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-center mt-2"
-              onClick={() => setShowAssignDrawer(true)}
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
+              disabled={statusLoading}
+              aria-label="Close modal"
             >
-              🚚 Assign Driver Manually
+              ×
             </button>
           </div>
-
-          <div>
-            <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-              <span>📅</span> Order Info
-            </h3>
-
-            <p><strong>Pickup Date & Time:</strong> {formattedPickupDateTime}</p>
-            <p><strong>Delivery Window:</strong> {order.delivery_window_start || 'N/A'} – {order.delivery_window_end || 'N/A'}</p>
-            <p><strong>Instructions:</strong> {order.special_instructions || 'None'}</p>
-            <p><strong>Vehicle Type:</strong> {order.vehicle_type}</p>
-            <p><strong>Tail-Lift Required:</strong> {order.tail_lift_required ? '✅ Yes' : '❌ No'}</p>
-            <p><strong>Estimated Travel Time:</strong> {getEstimatedTime()}</p>
-
-            {MAPBOX_TOKEN && client?.pickup_latitude && client?.pickup_longitude && (
-              <div className="relative mt-2 aspect-[2/1] w-full rounded-md border overflow-hidden">
-                <Image
-                  fill
-                  alt={`Map of ${client.pickup_address}`}
-                  className="rounded-md object-cover"
-                  src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${client.pickup_longitude},${client.pickup_latitude})/${client.pickup_longitude},${client.pickup_latitude},15/350x180?access_token=${MAPBOX_TOKEN}`}
-                />
-              </div>
-            )}
-          </div>
         </div>
 
-        {products.length > 0 && (
-          <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
-            <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-              <span>📦</span> Products
-            </h3>
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Column - Order Details */}
+            <div className="space-y-6">
+              <OrderInfo 
+                order={updatedOrder} 
+                estimatedTime={estimatedTime} 
+              />
+            </div>
 
-            <ul className="list-disc list-inside grid md:grid-cols-2 gap-x-4">
-              {products.map((p, idx) => (
-                <li key={idx}>
-                  {p.products?.name || 'Unknown Product'} — Qty: {p.quantity}
-                </li>
-              ))}
-            </ul>
+            {/* Right Column - Client & Status Updates */}
+            <div className="space-y-6">
+              {client && (
+                <ClientInfo 
+                  client={client} 
+                  mapboxToken={MAPBOX_TOKEN} 
+                />
+              )}
+
+              {dropoffs.length > 0 && (
+                <DropoffInfo 
+                  dropoffs={dropoffs} 
+                  mapboxToken={MAPBOX_TOKEN} 
+                />
+              )}
+
+              <StatusUpdate
+                currentStatus={updatedOrder.status}
+                onStatusUpdate={(newStatus, selectedDriverId) => updateOrderStatus(updatedOrder.id, newStatus, selectedDriverId)}
+                loading={statusLoading}
+                order={updatedOrder}
+              />
+            </div>
           </div>
-        )}
 
-        {dropoffs.length > 0 && (
-          <div className="pt-2 border-t space-y-2 text-sm text-gray-800">
-            <h3 className="text-md font-semibold mb-3 flex items-center gap-1">
-              <span>📍</span> Drop-off Points
-            </h3>
-            <ul className="grid md:grid-cols-2 gap-3">
-              {dropoffs.map((d, idx) => (
-                <li key={idx} className="border p-3 rounded-md shadow-sm bg-gray-50">
-                  <p><strong>🔢 Seq:</strong> {d.sequence}</p>
-                  <p><strong>👤 Name:</strong> {d.dropoff_name}</p>
-                  <p>
-                    <strong>📍 Address:</strong>{' '}
-                    <a
-                      href={`/dropoff-images/${d.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      {d.dropoff_address}
-                    </a>
-                  </p>
-
-                  {/* Show estimated duration for this dropoff if available */}
-                  {d.estimated_duration_mins && (
-                    <p><strong>⏱️ Est. Duration:</strong> {d.estimated_duration_mins} mins</p>
-                  )}
-
-                  {MAPBOX_TOKEN && d.latitude && d.longitude && (
-                    <div className="relative mt-2 aspect-[1/.5] w-full max-w-sm rounded-md border overflow-hidden">
-                      <Image
-                        fill
-                        alt={`Map of ${d.dropoff_address}`}
-                        className="object-cover"
-                        src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${d.longitude},${d.latitude})/${d.longitude},${d.latitude},15/500x250?access_token=${MAPBOX_TOKEN}`}
-                      />
-                    </div>
-                  )}
-
-                  <p><strong>📞 Contact:</strong> {d.dropoff_contact}</p>
-                  <p><strong>📱 Phone:</strong> {d.dropoff_phone}</p>
-                </li>
-              ))}
-            </ul>
+          {/* Modal Footer */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="flex justify-end">
+              <button
+                onClick={onClose}
+                disabled={statusLoading}
+                className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        )}
+        </div>
       </div>
-      {showAssignDrawer && (
-        <DriverAssignmentDrawer
-          orderId={order.id}
-          estimatedDurationMins={order.estimated_total_duration || 0}
-          onClose={() => setShowAssignDrawer(false)}
-        />
-      )}
-
     </div>
   )
 }
