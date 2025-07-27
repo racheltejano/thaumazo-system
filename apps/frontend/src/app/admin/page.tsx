@@ -137,30 +137,44 @@ export default function AdminDashboard() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleSendEmail = async () => {
+const handleSendEmail = async () => {
     if (!email) {
       setEmailStatus('Please enter an email address.')
+      return
+    }
+
+    if (!trackingId) {
+      setEmailStatus('No tracking ID available to send.')
       return
     }
 
     setEmailStatus('Sending...')
 
     try {
-      const { error } = await supabase.functions.invoke('send-tracking-email', {
-        body: { email, trackingId: trackingId }
+      const res = await fetch('/api/send-tracking-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), trackingId }),
       })
-
-      if (error) {
-        setEmailStatus('Error sending email: ' + error.message)
-      } else {
-        setEmailStatus('Email sent successfully!')
+      
+      const result = await res.json()
+      
+      if (result.success) {
+        setEmailStatus('✅ Email sent successfully!')
         setEmail('')
+        // Clear success message after 5 seconds
+        setTimeout(() => setEmailStatus(''), 5000)
+      } else {
+        setEmailStatus(`❌ Failed to send email: ${result.error || 'Unknown error'}`)
+        setTimeout(() => setEmailStatus(''), 5000)
       }
     } catch (err) {
-      setEmailStatus('Error sending email.')
+      console.error('Network error:', err)
+      setEmailStatus('❌ An error occurred while sending.')
+      setTimeout(() => setEmailStatus(''), 5000)
     }
   }
-
+  
   if (loadingAuth || authLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen text-center">
