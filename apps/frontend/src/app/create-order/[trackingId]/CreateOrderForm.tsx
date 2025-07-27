@@ -111,6 +111,67 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const TIMEZONE = 'Asia/Manila'
 
+  // Get current date and time in Manila timezone
+  const getCurrentManilaDateTime = () => {
+    return dayjs().tz(TIMEZONE)
+  }
+
+  // Get minimum date (today in Manila timezone)
+  const getMinDate = () => {
+    return getCurrentManilaDateTime().format('YYYY-MM-DD')
+  }
+
+  // Get minimum time for today
+  const getMinTimeForToday = () => {
+    const now = getCurrentManilaDateTime()
+    // Add 1 hour buffer to current time and round up to next 15-minute interval
+    const minTime = now.add(1, 'hour')
+    const minutes = minTime.minute()
+    const roundedMinutes = Math.ceil(minutes / 15) * 15
+    return minTime.minute(roundedMinutes).second(0).format('HH:mm')
+  }
+
+  // Check if selected date is today
+  const isSelectedDateToday = () => {
+    if (!form.pickup_date) return false
+    const selectedDate = dayjs(form.pickup_date).format('YYYY-MM-DD')
+    const today = getCurrentManilaDateTime().format('YYYY-MM-DD')
+    return selectedDate === today
+  }
+
+  // Validate if the selected date/time combination is valid
+  const isDateTimeValid = (date: string, time: string) => {
+    if (!date || !time) return false
+    
+    const selectedDateTime = dayjs.tz(`${date} ${time}`, TIMEZONE)
+    const now = getCurrentManilaDateTime()
+    
+    // Must be at least 1 hour from now
+    return selectedDateTime.isAfter(now.add(1, 'hour'))
+  }
+
+  // Generate time options based on selected date
+  const generateTimeOptions = () => {
+    const options = []
+    const isToday = isSelectedDateToday()
+    const minTime = isToday ? getMinTimeForToday() : '00:00'
+    
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        const isDisabled = isToday && timeString < minTime
+        
+        options.push({
+          value: timeString,
+          label: timeString,
+          disabled: isDisabled
+        })
+      }
+    }
+    
+    return options
+  }
+
   const getMapboxMapUrl = (lat: number, lon: number) =>
     `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${lon},${lat})/${lon},${lat},16/600x200?access_token=${mapboxToken}`
 
@@ -179,6 +240,17 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
 
     fetchData()
   }, [trackingId])
+
+  // Auto-adjust time when date changes
+  useEffect(() => {
+    if (form.pickup_date && form.pickup_time) {
+      if (!isDateTimeValid(form.pickup_date, form.pickup_time)) {
+        // If current time is invalid, set to minimum valid time
+        const minTime = isSelectedDateToday() ? getMinTimeForToday() : '09:00'
+        setForm(prev => ({ ...prev, pickup_time: minTime }))
+      }
+    }
+  }, [form.pickup_date])
 
   const handlePickupBlur = async () => {
     // Mark field as touched
@@ -485,7 +557,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     e.preventDefault()
     setError('')
 
-    // Validation
+    // Enhanced validation
     if (!form.contact_person.trim()) {
       setError('Contact person is required')
       return
@@ -508,6 +580,19 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
     if (!form.truck_type) {
       setError('Truck type is required')
+      return
+    }
+
+    // Validate date/time combination
+    if (!isDateTimeValid(form.pickup_date, form.pickup_time!)) {
+      const now = getCurrentManilaDateTime()
+      const selectedDateTime = dayjs.tz(`${form.pickup_date} ${form.pickup_time}`, TIMEZONE)
+      
+      if (selectedDateTime.isBefore(now)) {
+        setError('Pickup date and time cannot be in the past')
+      } else {
+        setError('Pickup must be scheduled at least 1 hour from now')
+      }
       return
     }
 
@@ -768,13 +853,15 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     // Step 5: Calculate and store travel times
-    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
+   const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
     
     setSubmitted(true)
   }
 
   if (loading) return <p className="p-6">Loading...</p>
   if (submitted) return <SuccessPopup trackingId={trackingId} />
+
+  const timeOptions = generateTimeOptions()
 
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
@@ -804,6 +891,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
           <input name="contact_number" value={form.contact_number} onChange={handleChange} placeholder="Contact Number*" className="border border-gray-400 p-3 w-full rounded text-gray-900" required />
           <input name="email" value={form.email || ''} onChange={handleChange} placeholder="Email" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
         </fieldset>
+
 
         {/* Pickup Info */}
         <fieldset className="space-y-4">
@@ -865,20 +953,31 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
                 name="pickup_date" 
                 value={form.pickup_date} 
                 onChange={handleChange} 
+                min={getMinDate()} 
                 className="border border-gray-400 p-3 w-full rounded text-gray-900" 
                 required 
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time </label>
-              <input 
-                type="time" 
+              <select 
                 name="pickup_time" 
                 value={form.pickup_time} 
                 onChange={handleChange} 
                 className="border border-gray-400 p-3 w-full rounded text-gray-900" 
-                required 
-              />
+                required
+              >
+                {timeOptions.map(option => (
+                  <option 
+                    key={option.value} 
+                    value={option.value} 
+                    disabled={option.disabled} 
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
             </div>
           </div>
           

@@ -25,7 +25,7 @@ interface Order {
   id: string
   status: string
   created_at: string
-  pickup_timestamp: string  // Changed from pickup_date and pickup_time
+  pickup_timestamp: string  
   vehicle_type: string
   special_instructions: string
   estimated_cost: number
