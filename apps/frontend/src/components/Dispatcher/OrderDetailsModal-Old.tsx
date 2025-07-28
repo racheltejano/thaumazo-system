@@ -20,7 +20,7 @@ export type Order = {
   status: string
   vehicle_type: string | null        
   tail_lift_required: boolean | null
-  estimated_total_duration: number | null // Use this instead of calculating
+  estimated_total_duration: number | null 
 }
 
 export type Client = {
@@ -69,13 +69,12 @@ export default function OrderDetailsModal({
       ? format(pickupDateTimeInManila, 'PPpp', { timeZone: TIMEZONE })
       : 'N/A'
 
-  // Get estimated time from stored data instead of calculating
+
   const getEstimatedTime = (): string => {
     if (order.estimated_total_duration) {
       return `${order.estimated_total_duration} mins`
     }
-    
-    // Fallback to sum of individual dropoff durations if available
+ 
     const totalDropoffTime = dropoffs.reduce((sum, dropoff) => {
       return sum + (dropoff.estimated_duration_mins || 0)
     }, 0)

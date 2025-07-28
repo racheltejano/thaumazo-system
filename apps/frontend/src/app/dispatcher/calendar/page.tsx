@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import DraggableOrder from '@/components/Dispatcher/DraggableOrder'
-import OrderDetailsModal from '@/components/Dispatcher/OrderDetailsModal'
+import OrderDetailsModal from '@/components/Dispatcher/OrderDetailsModal-Old'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 // Set default timezone for moment
