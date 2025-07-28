@@ -245,6 +245,197 @@ const fetchDriverData = async () => {
   }
 }
 
+  // AUTO-ASSIGN FUNCTIONALITY
+  const autoAssignOrders = async () => {
+    console.log('🤖 Starting auto-assignment process...')
+    
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (!user || userError) {
+        alert('You must be logged in to auto-assign orders.')
+        return
+      }
+
+      // Get all unassigned orders with status 'order_placed'
+      const { data: unassignedOrders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id, tracking_id, pickup_date, pickup_time, status')
+        .eq('status', 'order_placed')
+        .is('driver_id', null)
+        .order('pickup_date', { ascending: true })
+        .order('pickup_time', { ascending: true })
+
+      if (ordersError) {
+        console.error('❌ Error fetching unassigned orders:', ordersError)
+        alert('Failed to fetch unassigned orders.')
+        return
+      }
+
+      if (!unassignedOrders || unassignedOrders.length === 0) {
+        alert('No unassigned orders found to auto-assign.')
+        return
+      }
+
+      console.log(`📋 Found ${unassignedOrders.length} unassigned orders`)
+
+      // Track assignments for each driver to distribute workload
+      let driverAssignments: { [driverId: string]: number } = {}
+      let totalAssigned = 0
+      let totalFailed = 0
+
+      // Process each order
+      for (const order of unassignedOrders) {
+        try {
+          // Format the pickup time properly
+          let formattedTime = order.pickup_time
+          const timeParts = order.pickup_time.split(':')
+          if (timeParts.length === 2) {
+            formattedTime = `${order.pickup_time}:00`
+          }
+          
+          const pickupDateTime = `${order.pickup_date} ${formattedTime}`
+          
+          console.log(`🔍 Finding drivers for order ${order.tracking_id} at ${pickupDateTime}`)
+
+          // Find available drivers for this specific time
+          const { data: availabilities, error: availError } = await supabase
+            .from('driver_availability')
+            .select('driver_id, start_time, end_time')
+            .lte('start_time', pickupDateTime)
+            .gte('end_time', pickupDateTime)
+
+          if (availError || !availabilities || availabilities.length === 0) {
+            console.log(`❌ No drivers available for order ${order.tracking_id}`)
+            totalFailed++
+            continue
+          }
+
+          // Get unique driver IDs
+          const availableDriverIds = [...new Set(availabilities.map(av => av.driver_id).filter(Boolean))]
+          
+          if (availableDriverIds.length === 0) {
+            console.log(`❌ No valid driver IDs for order ${order.tracking_id}`)
+            totalFailed++
+            continue
+          }
+
+          // Sort drivers by current assignment count (least assigned first) for load balancing
+          const sortedDriverIds = availableDriverIds.sort((a, b) => {
+            const aCount = driverAssignments[a] || 0
+            const bCount = driverAssignments[b] || 0
+            return aCount - bCount
+          })
+
+          // Assign to the driver with the least assignments
+          const selectedDriverId = sortedDriverIds[0]
+
+          // Update the order with the assigned driver
+          const { data: updateData, error: updateError } = await supabase
+            .from('orders')
+            .update({ 
+              status: 'driver_assigned',
+              driver_id: selectedDriverId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', order.id)
+            .select(`
+              *,
+              profiles!orders_driver_id_fkey (
+                first_name,
+                last_name,
+                email
+              )
+            `)
+
+          if (updateError) {
+            console.error(`❌ Failed to assign order ${order.tracking_id}:`, updateError)
+            totalFailed++
+            continue
+          }
+
+          // Update assignment counter for load balancing
+          driverAssignments[selectedDriverId] = (driverAssignments[selectedDriverId] || 0) + 1
+          totalAssigned++
+
+          const driverName = updateData[0]?.profiles 
+            ? `${updateData[0].profiles.first_name || ''} ${updateData[0].profiles.last_name || ''}`.trim()
+            : 'Driver'
+
+          console.log(`✅ Assigned order ${order.tracking_id} to ${driverName}`)
+
+        } catch (error) {
+          console.error(`❌ Error processing order ${order.tracking_id}:`, error)
+          totalFailed++
+        }
+      }
+
+      // Show results
+      const message = `Auto-assignment completed!\n\n✅ Successfully assigned: ${totalAssigned} orders\n❌ Failed to assign: ${totalFailed} orders`
+      
+      if (totalAssigned > 0) {
+        // Show driver distribution
+        const distributionText = Object.entries(driverAssignments)
+          .map(([driverId, count]) => `Driver ${driverId}: ${count} order${count > 1 ? 's' : ''}`)
+          .join('\n')
+        
+        alert(`${message}\n\nDriver Distribution:\n${distributionText}`)
+        
+        // Refresh the calendar to show updated assignments
+        await fetchDriverData()
+      } else {
+        alert(message)
+      }
+
+    } catch (error) {
+      console.error('❌ Error in auto-assignment:', error)
+      alert('An error occurred during auto-assignment. Please try again.')
+    }
+  }
+
+  // AUTO-ASSIGN BUTTON COMPONENT
+  const AutoAssignButton = () => {
+    const [isAssigning, setIsAssigning] = useState(false)
+
+    const handleAutoAssign = async () => {
+      const confirmed = confirm(
+        'This will automatically assign all unassigned orders to available drivers. Continue?'
+      )
+      
+      if (!confirmed) return
+
+      setIsAssigning(true)
+      try {
+        await autoAssignOrders()
+      } finally {
+        setIsAssigning(false)
+      }
+    }
+
+    return (
+      <button
+        onClick={handleAutoAssign}
+        disabled={isAssigning}
+        className={`px-6 py-3 rounded-lg font-medium text-white transition-all duration-200 ${
+          isAssigning
+            ? 'bg-gray-400 cursor-not-allowed'
+            : 'bg-purple-600 hover:bg-purple-700 hover:shadow-lg'
+        }`}
+      >
+        {isAssigning ? (
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            Auto-Assigning...
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span>🤖</span>
+            Auto-Assign Orders
+          </div>
+        )}
+      </button>
+    )
+  }
+
   const handleEventClick = async (event: DriverEvent) => {
     if (event.type === 'order' && event.order) {
       setSelectedOrder(event.order)
@@ -272,6 +463,10 @@ const fetchDriverData = async () => {
 
   const getOrderCount = () => {
     return events.filter(e => e.type === 'order').length
+  }
+
+  const getUnassignedOrderCount = () => {
+    return events.filter(e => e.type === 'order' && !e.order?.driver_id).length
   }
 
   useEffect(() => {
@@ -354,8 +549,14 @@ const fetchDriverData = async () => {
         </div>
       )}
 
+      {/* Auto-Assign Button */}
+      <div className="mb-6 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Dispatcher Calendar</h1>
+        <AutoAssignButton />
+      </div>
+
       {/* Dashboard Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {/* Hours Scheduled */}
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
           <div className="text-3xl font-bold text-orange-600 mb-1">{getTotalHours().toFixed(1)}</div>
@@ -365,7 +566,13 @@ const fetchDriverData = async () => {
         {/* Orders Assigned */}
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
           <div className="text-3xl font-bold text-blue-600 mb-1">{getOrderCount()}</div>
-          <div className="text-sm text-gray-600 font-medium">Orders Assigned</div>
+          <div className="text-sm text-gray-600 font-medium">Total Orders</div>
+        </div>
+        
+        {/* Unassigned Orders */}
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
+          <div className="text-3xl font-bold text-purple-600 mb-1">{getUnassignedOrderCount()}</div>
+          <div className="text-sm text-gray-600 font-medium">Unassigned Orders</div>
         </div>
         
         {/* Orders Delivered */}
