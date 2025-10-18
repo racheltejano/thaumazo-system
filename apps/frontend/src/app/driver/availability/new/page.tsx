@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { addDays, startOfWeek, format } from 'date-fns'
+import { addDays, startOfWeek, endOfWeek, format } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
 
 const SHIFT_PRESETS = {
@@ -13,6 +13,7 @@ const SHIFT_PRESETS = {
 }
 
 const UNAVAILABLE_REASONS = ['vl', 'sl', 'ooo']
+const TIME_SLOT_INTERVAL_MINUTES = 30
 
 type DayEntry = {
   day: string
@@ -23,17 +24,41 @@ type DayEntry = {
 
 // Helper function to create UTC date from PH time (proper timezone conversion)
 function createUTCFromPHTime(dateString: string, timeString: string): Date {
-  // Parse the time string
   const [hours, minutes] = timeString.split(':').map(Number)
-  
-  // Parse the date string
   const [year, month, day] = dateString.split('-').map(Number)
-  
-  // Create UTC date by subtracting 8 hours from PH time
-  // When it's 8:00 AM in PH (UTC+8), it's 00:00 AM in UTC
   const utcDate = new Date(Date.UTC(year, month - 1, day, hours - 8, minutes, 0, 0))
-  
   return utcDate
+}
+
+// Helper function to generate 30-minute time slots
+function generateTimeSlots(startTime: Date, endTime: Date, driverId: string, availabilityId: string) {
+  const slots = []
+  let currentSlotStart = new Date(startTime)
+  
+  while (currentSlotStart < endTime) {
+    const currentSlotEnd = new Date(currentSlotStart.getTime() + TIME_SLOT_INTERVAL_MINUTES * 60 * 1000)
+    
+    // Don't create a slot if it would exceed the end time
+    if (currentSlotEnd > endTime) {
+      break
+    }
+    
+    slots.push({
+      id: uuidv4(),
+      driver_id: driverId,
+      driver_availability_id: availabilityId,
+      order_id: null,
+      start_time: currentSlotStart.toISOString(),
+      end_time: currentSlotEnd.toISOString(),
+      start_time_tz: currentSlotStart.toISOString(),
+      end_time_tz: currentSlotEnd.toISOString(),
+      status: 'scheduled',
+    })
+    
+    currentSlotStart = currentSlotEnd
+  }
+  
+  return slots
 }
 
 export default function DriverAvailabilityForm() {
@@ -41,6 +66,8 @@ export default function DriverAvailabilityForm() {
   const [weekData, setWeekData] = useState<DayEntry[]>([])
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [existingEntriesCount, setExistingEntriesCount] = useState(0)
+  const [checkingExisting, setCheckingExisting] = useState(false)
 
   useEffect(() => {
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 })
@@ -54,7 +81,41 @@ export default function DriverAvailabilityForm() {
       }
     })
     setWeekData(days as DayEntry[])
+    
+    // Check for existing entries when week changes
+    checkExistingEntries(weekStart)
   }, [selectedDate])
+
+  const checkExistingEntries = async (weekStart: Date) => {
+    setCheckingExisting(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      setCheckingExisting(false)
+      return
+    }
+
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
+    
+    // Convert week boundaries to UTC
+    const weekStartUTC = createUTCFromPHTime(format(weekStart, 'yyyy-MM-dd'), '00:00')
+    const weekEndUTC = createUTCFromPHTime(format(weekEnd, 'yyyy-MM-dd'), '23:59')
+
+    const { data, error } = await supabase
+      .from('driver_availability')
+      .select('id')
+      .eq('driver_id', user.id)
+      .gte('start_time', weekStartUTC.toISOString())
+      .lte('start_time', weekEndUTC.toISOString())
+
+    if (!error && data) {
+      setExistingEntriesCount(data.length)
+    } else {
+      setExistingEntriesCount(0)
+    }
+    
+    setCheckingExisting(false)
+  }
 
   const handleShiftChange = (day: string, value: keyof typeof SHIFT_PRESETS | '') => {
     setWeekData(prev =>
@@ -110,6 +171,27 @@ export default function DriverAvailabilityForm() {
       return
     }
 
+    // Step 1: Delete existing entries for this week (CASCADE will delete time_slots)
+    const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 })
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
+    
+    const weekStartUTC = createUTCFromPHTime(format(weekStart, 'yyyy-MM-dd'), '00:00')
+    const weekEndUTC = createUTCFromPHTime(format(weekEnd, 'yyyy-MM-dd'), '23:59')
+
+    const { error: deleteError } = await supabase
+      .from('driver_availability')
+      .delete()
+      .eq('driver_id', user.id)
+      .gte('start_time', weekStartUTC.toISOString())
+      .lte('start_time', weekEndUTC.toISOString())
+
+    if (deleteError) {
+      setMessage(`❌ Failed to clear existing entries: ${deleteError.message}`)
+      setLoading(false)
+      return
+    }
+
+    // Step 2: Insert new availability entries
     const entries = weekData.map(d => {
       const shift = SHIFT_PRESETS[d.shift as keyof typeof SHIFT_PRESETS]
       
@@ -117,12 +199,9 @@ export default function DriverAvailabilityForm() {
       let endTime: Date
       
       if (d.available && shift) {
-        // Convert PH time to UTC for available shifts
         startTime = createUTCFromPHTime(d.day, shift.start)
         
-        // Handle midnight end time (night shift)
         if (shift.end === '00:00') {
-          // For night shifts ending at midnight, add one day
           const nextDay = new Date(d.day)
           nextDay.setDate(nextDay.getDate() + 1)
           endTime = createUTCFromPHTime(nextDay.toISOString().split('T')[0], shift.end)
@@ -130,7 +209,6 @@ export default function DriverAvailabilityForm() {
           endTime = createUTCFromPHTime(d.day, shift.end)
         }
       } else {
-        // For unavailable days, set both start and end to start of day in UTC
         startTime = createUTCFromPHTime(d.day, '00:00')
         endTime = createUTCFromPHTime(d.day, '00:00')
       }
@@ -144,64 +222,125 @@ export default function DriverAvailabilityForm() {
       }
     })
 
-    console.log('Entries being submitted:', entries) // Debug log
+    const { data: insertedAvailability, error: insertError } = await supabase
+      .from('driver_availability')
+      .insert(entries)
+      .select('id, start_time, end_time')
 
-    const { error: insertError } = await supabase.from('driver_availability').insert(entries)
     if (insertError) {
-      setMessage(`❌ Failed to submit: ${insertError.message}`)
-    } else {
-      setMessage('✅ Availability submitted successfully!')
+      setMessage(`❌ Failed to submit availability: ${insertError.message}`)
+      setLoading(false)
+      return
     }
 
+    if (!insertedAvailability || insertedAvailability.length === 0) {
+      setMessage('❌ No availability data was inserted')
+      setLoading(false)
+      return
+    }
+
+    // Step 3: Generate and insert time slots for each availability entry
+    const allTimeSlots = []
+    
+    for (let i = 0; i < insertedAvailability.length; i++) {
+      const availability = insertedAvailability[i]
+      const dayEntry = weekData[i]
+      
+      // Only create time slots for available days with shifts
+      if (dayEntry.available && dayEntry.shift) {
+        const startTime = new Date(availability.start_time)
+        const endTime = new Date(availability.end_time)
+        
+        const slots = generateTimeSlots(
+          startTime,
+          endTime,
+          user.id,
+          availability.id
+        )
+        
+        allTimeSlots.push(...slots)
+      }
+    }
+
+    if (allTimeSlots.length > 0) {
+      const { error: slotsError } = await supabase
+        .from('driver_time_slots')
+        .insert(allTimeSlots)
+
+      if (slotsError) {
+        console.error('Failed to create time slots:', slotsError)
+        setMessage(`⚠️ Availability saved but time slots failed: ${slotsError.message}`)
+        setLoading(false)
+        return
+      }
+
+      console.log(`✅ Created ${allTimeSlots.length} time slots`)
+    }
+
+    setMessage(`✅ Availability submitted successfully! Created ${allTimeSlots.length} time slots.`)
+    setExistingEntriesCount(entries.length)
     setLoading(false)
   }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-black">📅 Driver Availability</h1>
-          <p className="text-sm text-gray-500">
-            Please schedule at least <span className="font-semibold">20 hours</span> this week.
-            <br />
-            <span className="text-xs text-gray-400">Times are in Philippine Time (UTC+8)</span>
+      <div className="text-center mb-8">
+        <h1 className="text-2xl font-bold text-black">📅 Driver Availability</h1>
+        <p className="text-sm text-gray-500">
+          Please schedule at least <span className="font-semibold">20 hours</span> this week.
+          <br />
+          <span className="text-xs text-gray-400">Times are in Philippine Time (UTC+8) • 30-min time slots</span>
+        </p>
+      </div>
+
+      <div className="mb-6 text-center">
+        <label className="block mb-2 text-sm font-medium text-gray-700">Select Week</label>
+        <input
+          type="date"
+          value={format(selectedDate, 'yyyy-MM-dd')}
+          onChange={(e) => setSelectedDate(new Date(e.target.value))}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+        />
+        
+        {checkingExisting ? (
+          <p className="text-xs text-gray-400 mt-2">Checking for existing entries...</p>
+        ) : existingEntriesCount > 0 ? (
+          <p className="text-xs text-amber-600 mt-2 font-medium">
+            ⚠️ You have {existingEntriesCount} existing entries for this week. Submitting will replace them and regenerate time slots.
           </p>
-        </div>
+        ) : (
+          <p className="text-xs text-green-600 mt-2">
+            ✓ No existing entries for this week
+          </p>
+        )}
+      </div>
 
-        <div className="mb-6 text-center">
-          <label className="block mb-2 text-sm font-medium text-gray-700">Select Week</label>
-          <input
-            type="date"
-            value={format(selectedDate, 'yyyy-MM-dd')}
-            onChange={(e) => setSelectedDate(new Date(e.target.value))}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {weekData.map((d, i) => (
+          <div
+            key={i}
+            className="bg-white rounded-xl shadow p-4 border border-gray-200 space-y-4"
+          >
+            <h2 className="text-lg font-semibold text-gray-700">
+              {new Date(d.day).toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'short',
+                day: 'numeric',
+              })}
+            </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {weekData.map((d, i) => (
-            <div
-              key={i}
-              className="bg-white rounded-xl shadow p-4 border border-gray-200 space-y-4"
-            >
-              <h2 className="text-lg font-semibold text-gray-700">
-                {new Date(d.day).toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </h2>
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={d.available}
+                onChange={(e) => handleAvailabilityToggle(d.day, e.target.checked)}
+                className="accent-orange-500"
+              />
+              Available
+            </label>
 
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={d.available}
-                  onChange={(e) => handleAvailabilityToggle(d.day, e.target.checked)}
-                  className="accent-orange-500"
-                />
-                Available
-              </label>
-
-              {d.available ? (
+            {d.available ? (
+              <>
                 <select
                   value={d.shift}
                   onChange={(e) =>
@@ -216,47 +355,59 @@ export default function DriverAvailabilityForm() {
                     </option>
                   ))}
                 </select>
-              ) : (
-                <select
-                  value={d.unavailableReason}
-                  onChange={(e) => handleReasonChange(d.day, e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  <option value="">-- Unavailable Reason --</option>
-                  {UNAVAILABLE_REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r === 'vl'
-                        ? 'Vacation Leave'
-                        : r === 'sl'
-                        ? 'Sick Leave'
-                        : 'Out of Office'}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 text-right text-sm text-gray-600">
-          Total Scheduled: <span className="font-semibold">{totalHours} hrs</span>
-        </div>
-
-        {message && (
-          <div className="mt-4 text-center text-sm font-medium text-red-600">
-            {message}
+                {d.shift && (
+                  <p className="text-xs text-gray-500">
+                    {SHIFT_PRESETS[d.shift].hours * 2} time slots will be created
+                  </p>
+                )}
+              </>
+            ) : (
+              <select
+                value={d.unavailableReason}
+                onChange={(e) => handleReasonChange(d.day, e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              >
+                <option value="">-- Unavailable Reason --</option>
+                {UNAVAILABLE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r === 'vl'
+                      ? 'Vacation Leave'
+                      : r === 'sl'
+                      ? 'Sick Leave'
+                      : 'Out of Office'}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-        )}
-
-        <div className="mt-6 text-center">
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-full text-sm font-medium transition disabled:opacity-50"
-          >
-            {loading ? 'Submitting...' : 'Submit Availability'}
-          </button>
-        </div>
+        ))}
       </div>
-    )
+
+      <div className="mt-6 text-right text-sm text-gray-600">
+        Total Scheduled: <span className="font-semibold">{totalHours} hrs</span>
+        <span className="text-xs text-gray-500 ml-2">
+          ({totalHours * 2} time slots)
+        </span>
+      </div>
+
+      {message && (
+        <div className={`mt-4 text-center text-sm font-medium ${
+          message.includes('✅') ? 'text-green-600' : 
+          message.includes('⚠️') ? 'text-amber-600' : 'text-red-600'
+        }`}>
+          {message}
+        </div>
+      )}
+
+      <div className="mt-6 text-center">
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-full text-sm font-medium transition disabled:opacity-50"
+        >
+          {loading ? 'Submitting...' : existingEntriesCount > 0 ? 'Update Availability & Time Slots' : 'Submit Availability'}
+        </button>
+      </div>
+    </div>
+  )
 }
