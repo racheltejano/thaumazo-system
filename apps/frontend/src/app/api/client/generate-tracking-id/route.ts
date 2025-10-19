@@ -168,7 +168,7 @@ export async function GET(req: Request) {
 
     await supabase.from('pending_client_emails').delete().eq('token', token)
 
-    const redirectUrl = `http://localhost:3000/track?trackingId=${trackingId}`
+    const redirectUrl = `http://localhost:3000/create-order/${trackingId}`
     return NextResponse.redirect(redirectUrl)
   } catch (error) {
     console.error('Unexpected error in GET:', error)

@@ -115,7 +115,7 @@ export default function AdminDashboard() {
     }
 
     setLoading(true)
-    setFormStatus('Generating tracking ID...')
+    setFormStatus('Preparing Email...')
 
     try {
       // 1) Generate tracking ID (your existing server endpoint)
@@ -355,7 +355,7 @@ export default function AdminDashboard() {
                     </div>
                     {generatedTrackingId && (
                       <p className="mt-2 text-sm text-gray-700">
-                        Generated Tracking ID: <code className="font-mono">{generatedTrackingId}</code>
+                        Generated Temporary Code: <code className="font-mono">{generatedTrackingId}</code>
                       </p>
                     )}
                   </div>

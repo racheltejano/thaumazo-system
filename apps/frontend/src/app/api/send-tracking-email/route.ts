@@ -61,6 +61,8 @@ export async function POST(req: Request) {
 
     // ✅ Build URLs for email
     const oneTimeOrderUrl = `http://localhost:3000/api/client/generate-tracking-id?token=${token}`
+
+    
     const registerUrl = `http://localhost:3000/client/register`
 
     // ✅ Send the email
