@@ -55,10 +55,12 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/AuthContext'
 import { Plus, Users, Package, ClipboardList, Settings, RefreshCw, Copy, Check, Mail, AlertCircle } from 'lucide-react'
 
+/**    No longer needed but just in case I break the code
 function generateTrackingId(prefix = 'TXT') {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
   return `${prefix}_${random}`
 }
+ */
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -152,33 +154,43 @@ export default function AdminDashboard() {
     fetchStats();
   }, []);
 
-  const handleGenerate = async () => {
-    setLoading(true)
-    setError('')
-    setCopied(false)
-    setEmail('')
-    setEmailStatus('')
+ const handleGenerate = async () => {
+  setLoading(true);
+  setError('');
+  setCopied(false);
+  setEmail('');
+  setEmailStatus('');
+  setShowSuccess(false);
 
-    const id = generateTrackingId()
+  try {
+    const response = await fetch('/api/client/generate-tracking-id', {
+      method: 'POST',
+    });
 
-    const { error } = await supabase.from('clients').insert({
-      tracking_id: id,
-      contact_person: '',
-      contact_number: '',
-      pickup_address: '',
-    })
-
-    if (error) {
-      setError(error.message)
-    } else {
-      setTrackingId(id)
-      setRecentTrackingIds(prev => [id, ...prev.slice(0, 4)]) // Keep last 5
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 3000)
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error('Invalid response from server — could not parse JSON.');
     }
 
-    setLoading(false)
+    if (!response.ok || !result?.success) {
+      throw new Error(result?.error || 'Failed to generate temporary tracking ID.');
+    }
+
+    const id = result.trackingId;
+    setTrackingId(id);
+    setRecentTrackingIds((prev) => [id, ...prev.slice(0, 4)]); // Keep last 5
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+  } catch (error: any) {
+    console.error('Error generating tracking ID:', error);
+    setError(error.message || 'Something went wrong while generating the ID.');
+  } finally {
+    setLoading(false);
   }
+};
+
 
   const handleCopy = () => {
     navigator.clipboard.writeText(trackingId)

@@ -1,104 +1,105 @@
-/**
- * 🎯 GenerateTrackingIdPage
- * 
- * This page allows admins to generate unique tracking IDs for new orders or clients.
- * 
- * 🧩 Features:
- * - Generates a random tracking ID with the prefix "TXT"
- * - Inserts a placeholder client record into the Supabase `clients` table
- * - Allows easy clipboard copying of the generated ID
- * - Includes fade-in animation and user feedback (loading, error, copy confirmation)
- * 
- * Path: `/admin/generate-tracking-id`
- */
-
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-function generateTrackingId(prefix = 'TXT') {
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase()
-  return `${prefix}_${random}`
-}
 
-export default function GenerateTrackingIdPage() {
-  const [trackingId, setTrackingId] = useState('')
+/**
+ * 📧 Send Client Email Page
+ * 
+ * This page lets admins send an email to a client inviting them to either:
+ *  - Create a One-Time Order, or
+ *  - Create an Account
+ * 
+ * 🧭 The tracking ID will now only be generated AFTER the client clicks
+ *     the "One-Time Order" button in the email.
+ * 
+ * Path: /admin/generate-id
+ */
+
+export default function SendClientEmailPage() {
+  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [success, setSuccess] = useState('')
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
-    // Trigger animation after component mounts
-    const timer = setTimeout(() => setIsVisible(true), 200);
-    return () => clearTimeout(timer);
-  }, []);
+    const timer = setTimeout(() => setIsVisible(true), 200)
+    return () => clearTimeout(timer)
+  }, [])
 
-  const handleGenerate = async () => {
+  // 📨 Handles sending the email through /api/send-client-email
+  const handleSendEmail = async () => {
     setLoading(true)
     setError('')
-    setCopied(false)
+    setSuccess('')
 
-    const id = generateTrackingId()
-
-    // Insert minimal row with just tracking ID (contact info will be added later)
-    const { error } = await supabase.from('clients').insert({
-      tracking_id: id,
-      contact_person: '',
-      contact_number: '',
-      pickup_address: '',
-    })
-
-    if (error) {
-      setError(error.message)
-    } else {
-      setTrackingId(id)
+    if (!email) {
+      setError('Please enter a valid client email.')
+      setLoading(false)
+      return
     }
 
-    setLoading(false)
+    try {
+      const res = await fetch('/api/send-client-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send email.')
+      }
+
+      setSuccess('Client email sent successfully! 🎉')
+      setEmail('')
+    } catch (err: any) {
+      console.error('Email send error:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(trackingId)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-   return (
-    <main 
+  return (
+    <main
       className={`p-6 transition-all duration-700 ease-out ${
-        isVisible 
-          ? 'opacity-100 transform translate-y-0' 
+        isVisible
+          ? 'opacity-100 transform translate-y-0'
           : 'opacity-0 transform translate-y-8'
       }`}
     >
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">🎯 Generate Tracking ID</h1>
-        <p className="text-gray-600">Create unique tracking IDs for new orders and client management</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">📧 Send Client Email</h1>
+        <p className="text-gray-600">
+          Send a one-time link for the client to create an order or register an account.
+        </p>
       </div>
-      <button
-        onClick={handleGenerate}
-        disabled={loading}
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        {loading ? 'Generating...' : 'Generate ID'}
-      </button>
 
-      {error && <p className="text-red-600 mt-4">{error}</p>}
+      <div className="flex flex-col space-y-3 max-w-md">
+        <label htmlFor="email" className="font-medium text-gray-700">
+          Client Email Address
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="client@example.com"
+        />
 
-      {trackingId && (
-        <div className="mt-6 p-4 border rounded bg-gray-50">
-          <p className="text-lg font-semibold">Tracking ID:</p>
-          <div className="flex items-center space-x-2 mt-2">
-            <code className="bg-white px-3 py-1 border rounded">{trackingId}</code>
-            <button
-              onClick={handleCopy}
-              className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-            >
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        </div>
-      )}
+        <button
+          onClick={handleSendEmail}
+          disabled={loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? 'Sending...' : 'Send Client Email'}
+        </button>
+
+        {error && <p className="text-red-600 mt-2">{error}</p>}
+        {success && <p className="text-green-600 mt-2">{success}</p>}
+      </div>
     </main>
   )
 }
