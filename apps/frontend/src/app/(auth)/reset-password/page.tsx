@@ -1,3 +1,24 @@
+/**
+ * 🔐 Reset Password Page
+ * 
+ * This client-side page allows users to set a new password after clicking a reset link.
+ * It uses Supabase authentication to update the user’s password and signs them out 
+ * once the change is complete.
+ * 
+ * ⚙️ Main Function:
+ * - `ResetPasswordPage()`: Handles password validation, update, and success state.
+ * 
+ * 🧩 Helper Component:
+ * - `PasswordInput`: A reusable input field with a “show/hide password” toggle using icons.
+ * 
+ * 🧠 Features:
+ * - Validates matching passwords
+ * - Checks password length
+ * - Updates password via Supabase
+ * - Signs user out after reset
+ * - Shows email of the account being reset
+ */
+
 "use client"
 
 import { useState, useEffect } from "react"

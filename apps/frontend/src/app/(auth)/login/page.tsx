@@ -1,3 +1,21 @@
+/**
+ * 🔑 Login Page
+ * 
+ * This client-side page lets users sign in using their email and password through Supabase.
+ * It checks if the user’s account is allowed to log in, remembers the email if requested,
+ * and redirects logged-in users to the dashboard.
+ * 
+ * ⚙️ Main Function:
+ * - `LoginPage()`: Handles user login, remembers email, and redirects on success.
+ * 
+ * 🧩 Features:
+ * - Validates user credentials
+ * - Checks `can_login` status in the `profiles` table
+ * - Updates `last_login` timestamp
+ * - Supports “Remember Me” functionality
+ * - Redirects existing sessions to `/dashboard`
+ */
+
 'use client'
 
 import { useState, useEffect } from 'react'
