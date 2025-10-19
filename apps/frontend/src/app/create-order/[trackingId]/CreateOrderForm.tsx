@@ -855,6 +855,49 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     // Step 5: Calculate and store travel times
    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
     
+   // Step 6: Send order confirmation email
+if (form.email) {
+  try {
+    const emailResponse = await fetch('/api/send-order-confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: form.email,
+        trackingId: trackingId,
+        orderDetails: {
+          contactPerson: form.contact_person,
+          businessName: form.business_name,
+          contactNumber: form.contact_number,
+          pickupAddress: form.pickup_address,
+          pickupDate: form.pickup_date,
+          pickupTime: form.pickup_time,
+          truckType: form.truck_type,
+          estimatedCost: form.estimated_cost,
+          specialInstructions: form.special_instructions,
+          products: orderProducts.map(op => ({
+            name: op.isNewProduct ? op.product_name : products.find(p => p.id === op.product_id)?.name || 'Unknown',
+            quantity: op.quantity,
+            weight: op.weight,
+            isFragile: op.is_fragile,
+          })),
+          dropoffs: dropoffs.map(d => ({
+            address: d.address,
+            contact: d.contact,
+            phone: d.phone,
+          })),
+        },
+      }),
+    })
+
+    if (!emailResponse.ok) {
+      console.warn('Failed to send order confirmation email')
+    }
+  } catch (emailError) {
+    console.error('Error sending confirmation email:', emailError)
+    // Don't fail the order creation if email fails
+  }
+}
+
     setSubmitted(true)
   }
 
