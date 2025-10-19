@@ -1,14 +1,3 @@
-/**
- * 🧭 AdminDashboard (Client Component)
- *
- * Reworked so "Generate Tracking ID" is replaced with "Send Order Form".
- * Clicking "Send Form" will:
- *   1. POST to /api/client/generate-tracking-id  (creates tracking ID + blank client row)
- *   2. POST to /api/send-tracking-email         (sends the email using existing route)
- *
- * Option A selected by user: keep current email message.
- */
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -157,10 +146,7 @@ export default function AdminDashboard() {
 
       setGeneratedTrackingId(trackingId)
       setFormStatus('Tracking ID generated. Sending email...')
-
-      // 2) Send email via existing route. We pass the email and trackingId.
-      // Your current /api/send-tracking-email route expects "email" only,
-      // but passing trackingId won't break it — server will ignore unknown fields.
+      // 2) Send email with tracking ID
       const mailRes = await fetch('/api/send-tracking-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -323,8 +309,7 @@ export default function AdminDashboard() {
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">Send Order Form</h2>
                   <p className="text-sm text-gray-600">
-                    Email order form link to client (this will generate a tracking ID and send the
-                    email automatically)
+                    Email order form link to client
                   </p>
                 </div>
               </div>
