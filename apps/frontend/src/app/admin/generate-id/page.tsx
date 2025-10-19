@@ -1,3 +1,17 @@
+/**
+ * 🎯 GenerateTrackingIdPage
+ * 
+ * This page allows admins to generate unique tracking IDs for new orders or clients.
+ * 
+ * 🧩 Features:
+ * - Generates a random tracking ID with the prefix "TXT"
+ * - Inserts a placeholder client record into the Supabase `clients` table
+ * - Allows easy clipboard copying of the generated ID
+ * - Includes fade-in animation and user feedback (loading, error, copy confirmation)
+ * 
+ * Path: `/admin/generate-tracking-id`
+ */
+
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'

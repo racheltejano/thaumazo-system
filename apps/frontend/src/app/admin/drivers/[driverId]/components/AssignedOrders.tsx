@@ -1,3 +1,20 @@
+/**
+ * 🚚 Assigned Orders Component
+ * 
+ * Displays a list of orders assigned to a driver in a clean, card-style layout.
+ * Each card shows tracking info, pickup and delivery addresses, and schedule details.
+ * 
+ * ⚙️ Main Function:
+ * - `AssignedOrders({ orders, formatDate, formatDateOnly })`: Renders assigned order cards or an empty state message.
+ * 
+ * 🧩 Features:
+ * - Responsive grid layout for order cards
+ * - Uses Lucide icons (`Truck`, `Package`)
+ * - Shows pickup/delivery addresses and creation date
+ * - Graceful empty state when no orders are assigned
+ */
+
+
 import { Package, Truck } from 'lucide-react';
 
 interface Order {

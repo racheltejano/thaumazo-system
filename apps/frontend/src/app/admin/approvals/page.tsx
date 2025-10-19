@@ -1,3 +1,21 @@
+/**
+ * 🧑‍💼 Admin Approvals Page
+ * 
+ * This client-side page lets admins review and approve new user registrations.
+ * It checks if the logged-in user has admin access, fetches unapproved users from Supabase, 
+ * and allows assigning roles before approval.
+ * 
+ * ⚙️ Main Function:
+ * - `AdminApprovalsPage()`: Displays a table of pending users with role assignment and approve/deny actions.
+ * 
+ * 🧩 Features:
+ * - Admin-only access check (redirects non-admins)
+ * - Fetches unapproved users via Supabase RPC
+ * - Role selection dropdown before approval
+ * - Smooth fade-in animation on load
+ * - Simple approval/denial actions for new users
+ */
+
 'use client'
 
 import { useEffect, useState } from 'react'

@@ -1,3 +1,19 @@
+/**
+ * 👨‍✈️ DriverOverview Component
+ * 
+ * Displays a driver’s profile details and performance statistics in a neat, two-column layout.
+ * 
+ * ⚙️ Main Function:
+ * - `DriverOverview({ driver, stats, formatDate, formatLastLogin })`: 
+ *    Shows the driver’s personal info, contact details, account history, and order stats.
+ * 
+ * 🧩 Features:
+ * - Profile picture with fallback initials
+ * - Contact info and membership details (joined date, last login)
+ * - Performance metrics (total, active, completed orders, success rate)
+ * - Responsive grid design for desktop and mobile
+ */
+
 import { ArrowLeft, Calendar, Clock, Package, Truck, User, Mail, Phone, Activity } from 'lucide-react';
 import Link from 'next/link';
 
