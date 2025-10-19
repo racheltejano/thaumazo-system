@@ -1,5 +1,5 @@
 /**
- * 📦 Sends Tracking ID Email (using Resend)
+ * 📦 Sends Tracking ID Email (using Resend) ----- Currently Not being used bruh
  * 
  * This API route handles POST requests to send a tracking ID email to a user.
  * It checks if the request is valid, makes sure the email is properly formatted,

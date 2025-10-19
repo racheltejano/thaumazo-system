@@ -1,3 +1,52 @@
+/**
+ * 🧭 AdminDashboard (Client Component)
+ * 
+ * The central control panel for administrators in the Thaumazo Logistics system.
+ * This page provides real-time stats, quick navigation tools, and direct access
+ * to essential operational features such as tracking ID generation, email dispatch,
+ * and system performance monitoring.
+ * 
+ * 🔒 Access Control:
+ * - Authenticates the user via `useAuth()`.
+ * - Redirects non-admin users to `/dashboard` and unauthenticated users to `/login`.
+ *
+ * ⚙️ Key Functionalities:
+ * 1. **Dashboard Metrics**
+ *    - Fetches and displays live stats from Supabase:
+ *      - Total Orders
+ *      - Active Drivers
+ *      - Total Revenue (sum of delivered orders’ estimated_cost)
+ *      - Pending Approvals (via RPC `get_unapproved_users`)
+ * 
+ * 2. **Tracking ID Management**
+ *    - Generates a new tracking ID using `generateTrackingId()`
+ *    - Inserts a blank client record into `clients` table
+ *    - Displays recent tracking IDs (up to 5)
+ *    - Allows quick copying to clipboard
+ * 
+ * 3. **Email Sending**
+ *    - Sends the generated tracking ID via `/api/send-tracking-email`
+ *    - Provides user feedback for success, failure, and validation states
+ * 
+ * 4. **UI Features**
+ *    - Smooth fade-in animation on load
+ *    - Responsive 4-column layout for stats
+ *    - Sidebar with “Quick Actions” and “System Status”
+ *    - Visual loading indicators and animated feedback for better UX
+ *
+ * 🧱 Dependencies:
+ * - `useAuth` from `@/lib/AuthContext` for authentication state
+ * - `supabase` client for database queries
+ * - `lucide-react` icons for consistent visuals
+ * - `/api/send-tracking-email` API route for email functionality
+ *
+ * 📍 Path: `/admin/dashboard`
+ * 
+ * 💡 Tip:
+ * If you add more admin tools (like reports, notifications, etc.),
+ * integrate them via the sidebar’s “Quick Actions” for seamless access.
+ */
+
 'use client'
 
 import { useState, useEffect } from 'react'

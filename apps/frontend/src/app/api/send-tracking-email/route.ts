@@ -1,3 +1,40 @@
+/**
+ * 📧 sendTrackingEmail (POST)
+ * 
+ * This API endpoint sends a customized delivery confirmation email to a client,
+ * containing their **Thaumazo Logistics Tracking ID** and next-step options.
+ *
+ * 🧭 Endpoint: `/api/send-tracking-email`
+ *
+ * 📨 Request Body:
+ * ```json
+ * {
+ *   "email": "client@example.com",
+ *   "trackingId": "TXT_ABC123"
+ * }
+ * ```
+ *
+ * ⚙️ Functionality:
+ * - Validates that both `email` and `trackingId` are provided.
+ * - Uses the **Resend API** to send a well-formatted HTML email.
+ * - The email includes:
+ *    - Thaumazo branding and thank-you message
+ *    - The generated tracking ID
+ *    - Two action buttons:
+ *      1. “Create One-Time Order” → `/track`
+ *      2. “Create Account & Order” → `/client/register`
+ * - Returns `{ success: true }` on success or an error JSON with status code.
+ *
+ * 🔐 Environment Variable:
+ * - `RESEND_API_KEY` — required for email sending.
+ *
+ * 🧱 Response Codes:
+ * - 200 → Email sent successfully
+ * - 400 → Missing required fields
+ * - 500 → Email or server error
+ */
+
+
 import { Resend } from 'resend'
 
 export async function POST(req: Request) {
