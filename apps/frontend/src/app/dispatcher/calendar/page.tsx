@@ -1,4 +1,6 @@
 'use client'
+
+// Dispatcher Calendar Page - Need to add summarized cards!
 import { useEffect, useState } from 'react'
 import {
   Calendar,
@@ -633,6 +635,65 @@ export default function DispatcherCalendarPage() {
 
           {/* Main Calendar Area */}
           <section className="flex-1 space-y-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Total Orders Card */}
+              <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium">Total Orders</p>
+                    <p className="text-2xl font-bold text-gray-800 mt-1">{orders.length}</p>
+                  </div>
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <span className="text-2xl">📦</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unassigned Orders Card */}
+              <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium">Unassigned</p>
+                    <p className="text-2xl font-bold text-orange-600 mt-1">
+                      {orders.filter(o => o.status === 'order_placed').length}
+                    </p>
+                  </div>
+                  <div className="bg-orange-100 p-3 rounded-lg">
+                    <span className="text-2xl">⚠️</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assigned Orders Card */}
+              <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium">Assigned</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">
+                      {orders.filter(o => o.status !== 'order_placed' && o.driver_id).length}
+                    </p>
+                  </div>
+                  <div className="bg-green-100 p-3 rounded-lg">
+                    <span className="text-2xl">✅</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Drivers Card */}
+              <div className="bg-white rounded-xl shadow p-4 border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium">Active Drivers</p>
+                    <p className="text-2xl font-bold text-purple-600 mt-1">{drivers.length}</p>
+                  </div>
+                  <div className="bg-purple-100 p-3 rounded-lg">
+                    <span className="text-2xl">🚛</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-4">
