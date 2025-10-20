@@ -293,12 +293,54 @@ export default function DashboardLayout({
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
   const [lastName, setLastName] = useState<string | null>(null);
+  
+  // ✨ NEW: Profile setup check
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
+  
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const displayName = firstName || userFirstName || userName || role.charAt(0).toUpperCase() + role.slice(1);
   const menus = sidebarMenus[role] || [];
   const config = roleConfigs[role] || roleConfigs.admin;
+
+  // ✨ NEW: Check if profile setup is required on mount
+  useEffect(() => {
+    const checkProfileSetup = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+
+        // Check if user needs profile setup
+        const { data, error } = await supabase.rpc('needs_profile_setup', {
+          p_user_id: user.id
+        });
+
+        if (error) {
+          console.error('Error checking profile setup:', error);
+          setIsCheckingSetup(false);
+          return;
+        }
+
+        if (data && data.length > 0 && data[0].needs_setup) {
+          // Redirect to profile setup if needed
+          router.push('/setup-profile');
+          return;
+        }
+
+        setIsCheckingSetup(false);
+      } catch (err) {
+        console.error('Unexpected error:', err);
+        setIsCheckingSetup(false);
+      }
+    };
+
+    checkProfileSetup();
+  }, [router]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -349,6 +391,18 @@ export default function DashboardLayout({
 
   // Logo path variable for dashboard navbar
   const DASHBOARD_LOGO_PATH = "/thaumazo-text-logo.png";
+
+  // ✨ NEW: Show loading screen while checking setup
+  if (isCheckingSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">

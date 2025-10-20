@@ -5,7 +5,7 @@ import { Resend } from 'resend'
 // Create a Supabase client with service role key for admin operations
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // This is the admin key
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     auth: {
       autoRefreshToken: false,
@@ -36,7 +36,6 @@ export async function POST(req: Request) {
     }
 
     // 🧪 TESTING MODE: Override email recipient for testing
-    // Set this in your .env.local to receive all emails at your personal address
     const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE
     const emailRecipient = testEmailOverride || email
 
@@ -69,7 +68,7 @@ export async function POST(req: Request) {
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: temporaryPassword,
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true,
       user_metadata: {
         created_by_admin: true
       }
@@ -83,17 +82,21 @@ export async function POST(req: Request) {
       )
     }
 
-    // Create profile with the specified role
+    // ✨ NEW: Create profile with profile completion flags
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({
         id: newUser.user.id,
+        email: email,
         role: role,
+        created_by_admin: true,        // ← Mark as admin-created
+        profile_completed: false,      // ← Needs profile setup
+        temp_password_changed: false   // ← Needs password change
       })
 
     if (profileError) {
       console.error('Error creating profile:', profileError)
-      // Optionally delete the auth user if profile creation fails
+      // Rollback: delete the auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
       return new Response(
         JSON.stringify({ error: 'Failed to create user profile' }), 
@@ -106,9 +109,9 @@ export async function POST(req: Request) {
     
     const { error: emailError } = await resend.emails.send({
       from: 'onboarding@resend.dev',
-      to: emailRecipient, // Uses override email in test mode
+      to: emailRecipient,
       subject: 'Welcome to Thaumazo Logistics - Your Account Credentials',
-      reply_to: emailRecipient, // Helps with deliverability
+      reply_to: emailRecipient,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #2c3e50; max-width: 650px; margin: auto; line-height: 1.6;">
           ${testEmailOverride ? `
@@ -128,8 +131,8 @@ export async function POST(req: Request) {
             <p>Your account has been created by the administrator. Welcome to <strong>Thaumazo Logistics</strong>!</p>
 
             <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 25px 0; border-radius: 0 6px 6px 0;">
-              <p style="margin: 0 0 10px 0; color: #e65100; font-weight: 600;">⚠️ Important: Temporary Credentials</p>
-              <p style="margin: 0; color: #666; font-size: 14px;">Please change your password immediately after your first login for security purposes.</p>
+              <p style="margin: 0 0 10px 0; color: #e65100; font-weight: 600;">⚠️ Important: First-Time Setup Required</p>
+              <p style="margin: 0; color: #666; font-size: 14px;">After your first login, you'll be asked to change your password and complete your profile before accessing the system.</p>
             </div>
 
             <div style="background: #f8f9fa; border: 2px solid #ef6c00; border-radius: 8px; padding: 20px; margin: 25px 0;">
@@ -190,12 +193,6 @@ export async function POST(req: Request) {
 
     if (emailError) {
       console.error('Email send failed:', emailError)
-      console.error('Email details:', {
-        to: emailRecipient,
-        originalEmail: email,
-        hasApiKey: !!process.env.RESEND_API_KEY
-      })
-      // Don't fail the entire operation if email fails
       return new Response(
         JSON.stringify({ 
           success: true, 
