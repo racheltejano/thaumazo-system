@@ -1,27 +1,49 @@
 import { supabase } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 
+// Helper function to generate date-based tracking ID
+async function generateDateBasedTrackingId(): Promise<string> {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  const datePrefix = `${year}${month}${day}`
+  
+  // Get all tracking IDs created today
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  
+  const { data: todayClients, error } = await supabase
+    .from('clients')
+    .select('tracking_id')
+    .gte('created_at', todayStart.toISOString())
+    .lt('created_at', todayEnd.toISOString())
+    .like('tracking_id', `TXT-${datePrefix}-%`)
+    .order('tracking_id', { ascending: false })
+  
+  if (error) {
+    console.error('Error fetching today\'s tracking IDs:', error)
+    throw new Error('Failed to generate tracking ID')
+  }
+  
+  // Calculate next sequence number
+  let nextSequence = 1
+  if (todayClients && todayClients.length > 0) {
+    // Extract the sequence number from the last tracking ID
+    const lastTrackingId = todayClients[0].tracking_id
+    const lastSequence = parseInt(lastTrackingId.split('-')[2]) || 0
+    nextSequence = lastSequence + 1
+  }
+  
+  // Format: TXT-YYYYMMDD-NNN (e.g., TXT-20251021-001)
+  const sequenceStr = String(nextSequence).padStart(3, '0')
+  return `TXT-${datePrefix}-${sequenceStr}`
+}
+
 // 🧩 1️⃣ Admin Dashboard — Generate New Tracking ID
 export async function POST() {
   try {
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase()
-    const trackingId = `TXT_${random}`
-
-    const { data: existingClient, error: checkError } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('tracking_id', trackingId)
-      .maybeSingle()
-
-    if (checkError) {
-      console.error('Database check error:', checkError)
-      return NextResponse.json({ success: false, error: 'Database check failed' }, { status: 500 })
-    }
-
-    if (existingClient) {
-      console.warn(`Duplicate tracking ID found (${trackingId}). Retrying...`)
-      return await POST()
-    }
+    const trackingId = await generateDateBasedTrackingId()
 
     const { error: insertError } = await supabase.from('clients').insert({
       tracking_id: trackingId,
@@ -136,20 +158,8 @@ export async function GET(req: Request) {
       return invalidTokenPage('This link has expired. Please request a new one from Thaumazo.')
     }
 
-    // Generate unique tracking ID
-    let trackingId: string
-    while (true) {
-      const random = Math.random().toString(36).substring(2, 8).toUpperCase()
-      trackingId = `TXT_${random}`
-
-      const { data: existing } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('tracking_id', trackingId)
-        .maybeSingle()
-
-      if (!existing) break
-    }
+    // Generate date-based tracking ID
+    const trackingId = await generateDateBasedTrackingId()
 
     // Create client record with placeholders
     const { error: insertError } = await supabase.from('clients').insert({
