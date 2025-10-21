@@ -26,7 +26,18 @@ type DayEntry = {
 function createUTCFromPHTime(dateString: string, timeString: string): Date {
   const [hours, minutes] = timeString.split(':').map(Number)
   const [year, month, day] = dateString.split('-').map(Number)
-  const utcDate = new Date(Date.UTC(year, month - 1, day, hours - 8, minutes, 0, 0))
+  
+  // PH is UTC+8, so PH 00:00 = UTC 16:00 previous day
+  // We need to subtract 8 from PH time to get UTC
+  let utcHours = hours - 8
+  let utcDay = day
+  
+  if (utcHours < 0) {
+    utcHours += 24
+    utcDay -= 1
+  }
+  
+  const utcDate = new Date(Date.UTC(year, month - 1, utcDay, utcHours, minutes, 0, 0))
   return utcDate
 }
 
@@ -52,7 +63,7 @@ function generateTimeSlots(startTime: Date, endTime: Date, driverId: string, ava
       end_time: currentSlotEnd.toISOString(),
       start_time_tz: currentSlotStart.toISOString(),
       end_time_tz: currentSlotEnd.toISOString(),
-      status: 'scheduled',
+      status: 'available',
     })
     
     currentSlotStart = currentSlotEnd
@@ -200,6 +211,10 @@ export default function DriverAvailabilityForm() {
       
       if (d.available && shift) {
         startTime = createUTCFromPHTime(d.day, shift.start)
+        console.log('📅 Day:', d.day)
+        console.log('⏰ PH Time:', shift.start)
+        console.log('🌍 UTC Time:', startTime.toISOString())
+        console.log('---')
         
         if (shift.end === '00:00') {
           const nextDay = new Date(d.day)
@@ -248,8 +263,16 @@ export default function DriverAvailabilityForm() {
       
       // Only create time slots for available days with shifts
       if (dayEntry.available && dayEntry.shift) {
-        const startTime = new Date(availability.start_time)
-        const endTime = new Date(availability.end_time)
+        // note time slots does auto convert ph to UTC so need to do this
+        const startTimeTemp = new Date(availability.start_time)
+        const startTime = new Date(startTimeTemp.getTime() + 8*60*60*1000)
+        const endTimeTemp = new Date(availability.end_time)
+        const endTime = new Date(endTimeTemp.getTime() + 8*60*60*1000)
+
+        console.log('🎯 Generating slots for:', dayEntry.day)
+        console.log('   Start:', startTime.toISOString(), '(PH:', new Date(startTime.getTime() + 8*60*60*1000).toISOString(), ')')
+        console.log('   End:', endTime.toISOString(), '(PH:', new Date(endTime.getTime() + 8*60*60*1000).toISOString(), ')')
+      
         
         const slots = generateTimeSlots(
           startTime,
@@ -257,6 +280,10 @@ export default function DriverAvailabilityForm() {
           user.id,
           availability.id
         )
+
+        console.log('   First slot:', slots[0]?.start_time)
+        console.log('   Last slot:', slots[slots.length-1]?.end_time)
+        console.log('   Total slots:', slots.length)
         
         allTimeSlots.push(...slots)
       }

@@ -4,7 +4,7 @@ import { format as formatDate } from 'date-fns'
 import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const serviceRoleKey = process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY
 
 // Constants matching your drawer
 const TIMEZONE = 'Asia/Manila'
@@ -22,7 +22,7 @@ type Order = {
   id: string
   pickup_timestamp: string
   estimated_total_duration: number
-  client_id: string // Added for proximity lookup
+  client_id: string
 }
 
 type AvailabilityBlock = {
@@ -64,6 +64,8 @@ type DriverScore = {
 }
 
 export async function POST() {
+  console.log('🚀 ===== AUTO-ASSIGNMENT STARTED =====')
+  
   if (!supabaseUrl || !serviceRoleKey) {
     console.error('[ENV ERROR] Missing Supabase credentials.')
     return NextResponse.json({ error: 'Server misconfiguration.' }, { status: 500 })
@@ -76,35 +78,50 @@ export async function POST() {
     const nowPH = utcToZonedTime(new Date(), TIMEZONE)
     const todayPH = formatDate(nowPH, 'yyyy-MM-dd')
     
-    console.log(`Processing auto-assignment for date: ${todayPH}`)
+    console.log(`📅 Current PH time: ${formatDate(nowPH, 'yyyy-MM-dd HH:mm:ss')}`)
+    console.log(`📅 Processing auto-assignment for date: ${todayPH}`)
 
     // Get unassigned orders with client_id for proximity lookup
+    console.log('🔍 Fetching unassigned orders...')
     const { data: orders, error: orderError } = await supabase
       .from('orders')
       .select('id, pickup_timestamp, estimated_total_duration, client_id')
       .eq('status', 'order_placed')
 
-    if (orderError) throw orderError
+    if (orderError) {
+      console.error('❌ Error fetching orders:', orderError)
+      throw orderError
+    }
+
+    console.log(`📦 Found ${orders?.length || 0} orders with status 'order_placed'`)
 
     if (!orders || orders.length === 0) {
+      console.log('✅ No unassigned orders found.')
       return NextResponse.json({ message: 'No unassigned orders found.' }, { status: 200 })
     }
 
     // Filter out orders that are in the past (before today)
+    console.log('🔍 Filtering out past orders...')
     const validOrders = orders.filter(order => {
-      if (!order.pickup_timestamp) return false
+      if (!order.pickup_timestamp) {
+        console.log(`⚠️  Order ${order.id}: No pickup_timestamp`)
+        return false
+      }
       
       const pickupUtc = new Date(order.pickup_timestamp)
       const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
       const pickupDateStr = formatDate(pickupPH, 'yyyy-MM-dd')
       
-      // Only include orders that are today or in the future
-      return pickupDateStr >= todayPH
+      const isValid = pickupDateStr >= todayPH
+      console.log(`  Order ${order.id}: pickup=${pickupDateStr}, valid=${isValid}`)
+      
+      return isValid
     })
 
-    console.log(`Found ${orders.length} total orders, ${validOrders.length} are not in the past`)
+    console.log(`✅ Found ${orders.length} total orders, ${validOrders.length} are not in the past`)
 
     if (validOrders.length === 0) {
+      console.log('⚠️  No valid orders found (all orders are in the past).')
       return NextResponse.json({ 
         message: 'No valid orders found (all orders are in the past).',
         totalOrders: orders.length,
@@ -115,20 +132,31 @@ export async function POST() {
     }
 
     // Get all drivers
+    console.log('🔍 Fetching drivers...')
     const { data: drivers, error: driverError } = await supabase
       .from('profiles')
       .select('id, first_name, last_name')
       .eq('role', 'driver')
 
-    if (driverError) throw driverError
+    if (driverError) {
+      console.error('❌ Error fetching drivers:', driverError)
+      throw driverError
+    }
+
+    console.log(`👥 Found ${drivers?.length || 0} drivers`)
+    drivers?.forEach(d => console.log(`  - ${d.first_name} ${d.last_name} (${d.id})`))
 
     if (!drivers || drivers.length === 0) {
+      console.error('❌ No drivers found.')
       return NextResponse.json({ error: 'No drivers found.' }, { status: 400 })
     }
 
     // Group orders by date for better processing
     const ordersByDate = groupOrdersByDate(validOrders)
-    console.log(`Orders grouped by ${Object.keys(ordersByDate).length} dates`)
+    console.log(`📊 Orders grouped by ${Object.keys(ordersByDate).length} dates`)
+    Object.entries(ordersByDate).forEach(([date, orders]) => {
+      console.log(`  ${date}: ${orders.length} orders`)
+    })
 
     const assignments: Array<{
       orderId: string
@@ -141,7 +169,8 @@ export async function POST() {
 
     // Process each date separately to ensure proper distribution
     for (const [dateStr, dateOrders] of Object.entries(ordersByDate)) {
-      console.log(`Processing ${dateOrders.length} orders for date: ${dateStr}`)
+      console.log(`\n🔄 ===== Processing date: ${dateStr} =====`)
+      console.log(`📦 ${dateOrders.length} orders to assign`)
       
       const dateAssignments = await processOrdersForDate(
         supabase,
@@ -150,20 +179,31 @@ export async function POST() {
         dateStr
       )
       
+      console.log(`✅ ${dateAssignments.length} assignments made for ${dateStr}`)
       assignments.push(...dateAssignments)
     }
+
+    console.log(`\n💾 ===== SAVING ASSIGNMENTS TO DATABASE =====`)
+    console.log(`Total assignments to save: ${assignments.length}`)
 
     // Execute all assignments in database
     let successCount = 0
     const failedAssignments: string[] = []
 
     for (const assignment of assignments) {
+      console.log(`\n💾 Processing assignment for order ${assignment.orderId}`)
+      console.log(`  Driver: ${assignment.driverName}`)
+      console.log(`  Time: ${assignment.startTime} to ${assignment.endTime}`)
+      
       try {
         const startDateTime = new Date(assignment.startTime)
         const endDateTime = new Date(assignment.endTime)
         const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
 
+        console.log(`  Duration: ${durationMins} minutes`)
+
         // Update order with assignment
+        console.log(`  📝 Updating order...`)
         const { error: orderUpdateError } = await supabase
           .from('orders')
           .update({
@@ -176,24 +216,68 @@ export async function POST() {
           })
           .eq('id', assignment.orderId)
 
-        if (orderUpdateError) throw orderUpdateError
+        if (orderUpdateError) {
+          console.error(`  ❌ Error updating order:`, orderUpdateError)
+          throw orderUpdateError
+        }
+        console.log(`  ✅ Order updated`)
 
-        // Create time slot entry
-        const { error: timeSlotError } = await supabase
+        // Check if time slot already exists for this driver and time
+        console.log(`  🔍 Checking for existing time slot...`)
+        const { data: existingSlot, error: checkError } = await supabase
           .from('driver_time_slots')
-          .insert({
-            driver_id: assignment.driverId,
-            driver_availability_id: assignment.availabilityBlockId,
-            order_id: assignment.orderId,
-            start_time: startDateTime.toISOString(),
-            end_time: endDateTime.toISOString(),
-            status: 'scheduled',
-          })
+          .select('id, status, order_id')
+          .eq('driver_id', assignment.driverId)
+          .eq('start_time', startDateTime.toISOString())
+          .eq('end_time', endDateTime.toISOString())
+          .maybeSingle()
 
-        if (timeSlotError) throw timeSlotError
+        if (checkError) {
+          console.error(`  ❌ Error checking existing slot:`, checkError)
+          throw checkError
+        }
+
+        if (existingSlot) {
+          console.log(`  🔄 Existing time slot found (ID: ${existingSlot.id}, status: ${existingSlot.status})`)
+          console.log(`  📝 Updating existing time slot...`)
+          
+          const { error: updateSlotError } = await supabase
+            .from('driver_time_slots')
+            .update({
+              order_id: assignment.orderId,
+              status: 'scheduled',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingSlot.id)
+
+          if (updateSlotError) {
+            console.error(`  ❌ Error updating time slot:`, updateSlotError)
+            throw updateSlotError
+          }
+          console.log(`  ✅ Time slot updated`)
+        } else {
+          console.log(`  ✨ No existing time slot - creating new one...`)
+          
+          const { error: timeSlotError } = await supabase
+            .from('driver_time_slots')
+            .insert({
+              driver_id: assignment.driverId,
+              driver_availability_id: assignment.availabilityBlockId,
+              order_id: assignment.orderId,
+              start_time: startDateTime.toISOString(),
+              end_time: endDateTime.toISOString(),
+              status: 'scheduled',
+            })
+
+          if (timeSlotError) {
+            console.error(`  ❌ Error creating time slot:`, timeSlotError)
+            throw timeSlotError
+          }
+          console.log(`  ✅ Time slot created`)
+        }
 
         successCount++
-        console.log(`✅ Assigned order ${assignment.orderId} to ${assignment.driverName}`)
+        console.log(`✅ Successfully assigned order ${assignment.orderId} to ${assignment.driverName}`)
       } catch (err) {
         console.error(`❌ Failed to assign order ${assignment.orderId}:`, err)
         failedAssignments.push(assignment.orderId)
@@ -210,12 +294,15 @@ export async function POST() {
       failedOrderIds: failedAssignments
     }
 
-    console.log('Final result:', response)
+    console.log('\n🎉 ===== AUTO-ASSIGNMENT COMPLETED =====')
+    console.log('📊 Final result:', JSON.stringify(response, null, 2))
     return NextResponse.json(response, { status: 200 })
 
   } catch (err: unknown) {
     const error = err as Error
-    console.error('[AUTO ASSIGN ERROR]', error.message)
+    console.error('\n💥 ===== AUTO ASSIGN ERROR =====')
+    console.error('Error message:', error.message)
+    console.error('Stack trace:', error.stack)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
@@ -241,9 +328,10 @@ async function getDriverLastDropoffs(
   drivers: Driver[], 
   beforeTimestamp: string
 ): Promise<Record<string, { latitude: number; longitude: number; timestamp: string; distance?: number }>> {
+  console.log(`  🔍 Fetching last dropoffs for ${drivers.length} drivers before ${beforeTimestamp}`)
+  
   const driverIds = drivers.map(d => d.id)
   
-  // Get the most recent completed order for each driver
   const { data: lastOrders, error } = await supabase
     .from('orders')
     .select(`
@@ -261,15 +349,16 @@ async function getDriverLastDropoffs(
     .order('estimated_end_timestamp', { ascending: false })
 
   if (error) {
-    console.error('Error fetching driver last dropoffs:', error)
+    console.error('  ❌ Error fetching driver last dropoffs:', error)
     return {}
   }
+
+  console.log(`  📍 Found ${lastOrders?.length || 0} completed orders with dropoffs`)
 
   const result: Record<string, { latitude: number; longitude: number; timestamp: string }> = {}
   
   for (const order of lastOrders || []) {
     if (!result[order.driver_id]) {
-      // Get the last dropoff (highest sequence number)
       const lastDropoff = order.order_dropoffs
         ?.sort((a: any, b: any) => b.sequence - a.sequence)[0]
       
@@ -279,10 +368,13 @@ async function getDriverLastDropoffs(
           longitude: lastDropoff.longitude,
           timestamp: order.estimated_end_timestamp
         }
+        const driver = drivers.find(d => d.id === order.driver_id)
+        console.log(`    📍 ${driver?.first_name}: Last at (${lastDropoff.latitude}, ${lastDropoff.longitude})`)
       }
     }
   }
   
+  console.log(`  ✅ Found last dropoffs for ${Object.keys(result).length} drivers`)
   return result
 }
 
@@ -296,7 +388,6 @@ function calculateDriverScore(
 ): { score: number; distance: number } {
   const lastDropoff = lastDropoffs[driverId]
   
-  // Distance component (0-100, lower is better)
   let distance = Infinity
   let distanceScore = 100
   
@@ -307,15 +398,12 @@ function calculateDriverScore(
       pickupLat,
       pickupLng
     )
-    // Normalize distance (assuming max 50km, adjust as needed)
     distanceScore = Math.min(distance * 2, 100)
   }
   
-  // Workload component (0-100, lower is better)
   const maxWorkload = Math.max(...Object.values(driverWorkload))
   const workloadScore = maxWorkload > 0 ? (driverWorkload[driverId] / maxWorkload) * 30 : 0
   
-  // Combined score: 70% distance, 30% workload
   const score = (distanceScore * 0.7) + (workloadScore * 0.3)
   
   return { score, distance }
@@ -323,7 +411,9 @@ function calculateDriverScore(
 
 // Group orders by their pickup date
 function groupOrdersByDate(orders: Order[]): Record<string, Order[]> {
-  return orders.reduce((acc, order) => {
+  console.log('📊 Grouping orders by date...')
+  
+  const grouped = orders.reduce((acc, order) => {
     const pickupUtc = new Date(order.pickup_timestamp)
     const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
     const dateStr = formatDate(pickupPH, 'yyyy-MM-dd')
@@ -335,6 +425,8 @@ function groupOrdersByDate(orders: Order[]): Record<string, Order[]> {
     
     return acc
   }, {} as Record<string, Order[]>)
+  
+  return grouped
 }
 
 // Process all orders for a specific date with proximity-based assignment
@@ -352,12 +444,18 @@ async function processOrdersForDate(
   driverName: string
 }>> {
   
-  console.log(`Processing ${orders.length} orders for ${dateStr}`)
+  console.log(`\n🔄 Processing ${orders.length} orders for ${dateStr}`)
   
-  // Sort orders by pickup time (earliest first) for chronological processing
+  // Sort orders by pickup time (earliest first)
   const sortedOrders = orders.sort((a, b) => 
     new Date(a.pickup_timestamp).getTime() - new Date(b.pickup_timestamp).getTime()
   )
+  
+  console.log('📋 Order sequence:')
+  sortedOrders.forEach((order, idx) => {
+    const pickupPH = utcToZonedTime(new Date(order.pickup_timestamp), TIMEZONE)
+    console.log(`  ${idx + 1}. Order ${order.id} - ${formatDate(pickupPH, 'HH:mm')} (${order.estimated_total_duration}min)`)
+  })
   
   const assignments: Array<{
     orderId: string
@@ -368,10 +466,8 @@ async function processOrdersForDate(
     driverName: string
   }> = []
   
-  // Track assignments within this date to prevent conflicts
   const dateAssignments: PendingAssignment[] = []
   
-  // Track workload per driver for fair distribution
   const driverWorkload: Record<string, number> = {}
   drivers.forEach(driver => {
     driverWorkload[driver.id] = 0
@@ -379,12 +475,13 @@ async function processOrdersForDate(
   
   // Process each order
   for (const order of sortedOrders) {
-    if (!order.pickup_timestamp || !order.estimated_total_duration) {
-      console.log(`Skipping order ${order.id}: missing pickup_timestamp or estimated_total_duration`)
-      continue
-    }
+    console.log(`\n🔍 Finding driver for order ${order.id}`)
     
-    // Find best driver assignment with proximity and fair distribution
+    // if (!order.pickup_timestamp || !order.estimated_total_duration) {
+    //   console.log(`  ⚠️  Skipping: missing pickup_timestamp or estimated_total_duration`)
+    //   continue
+    // }
+    
     const assignment = await findBestDriverAssignmentForDate(
       supabase,
       order,
@@ -395,13 +492,14 @@ async function processOrdersForDate(
     )
     
     if (assignment) {
+      const driverName = drivers.find(d => d.id === assignment.driverId)?.first_name + ' ' + 
+                         drivers.find(d => d.id === assignment.driverId)?.last_name || 'Unknown'
+      
       assignments.push({
         ...assignment,
-        driverName: drivers.find(d => d.id === assignment.driverId)?.first_name + ' ' + 
-                   drivers.find(d => d.id === assignment.driverId)?.last_name || 'Unknown'
+        driverName
       })
       
-      // Add to pending assignments to prevent overlaps
       dateAssignments.push({
         driverId: assignment.driverId,
         startTime: assignment.startTime,
@@ -409,18 +507,16 @@ async function processOrdersForDate(
         orderId: assignment.orderId
       })
       
-      // Update workload tracking
       const duration = (new Date(assignment.endTime).getTime() - new Date(assignment.startTime).getTime()) / 60000
       driverWorkload[assignment.driverId] += duration
       
-      console.log(`📅 ${dateStr}: Assigned order ${order.id} (${duration}min) to driver ${assignment.driverId}`)
+      console.log(`  ✅ Assigned to ${driverName} (${duration}min)`)
     } else {
-      console.log(`❌ ${dateStr}: No available driver found for order ${order.id}`)
+      console.log(`  ❌ No available driver found`)
     }
   }
   
-  // Log workload distribution
-  console.log(`📊 ${dateStr} - Driver workload distribution:`)
+  console.log(`\n📊 Driver workload distribution for ${dateStr}:`)
   Object.entries(driverWorkload).forEach(([driverId, workload]) => {
     const driver = drivers.find(d => d.id === driverId)
     console.log(`  ${driver?.first_name} ${driver?.last_name}: ${workload} minutes`)
@@ -445,10 +541,15 @@ async function findBestDriverAssignmentForDate(
   availabilityBlockId: string
 } | null> {
   
+  console.log(`  🔍 Finding best driver for order ${order.id}`)
+  
   const dayStart = zonedTimeToUtc(`${dateStr}T00:00:00`, TIMEZONE)
   const dayEnd = zonedTimeToUtc(`${dateStr}T23:59:59`, TIMEZONE)
   
-  // Get pickup location for the current order
+  console.log(`    Day range: ${dayStart.toISOString()} to ${dayEnd.toISOString()}`)
+  
+  // Get pickup location
+  console.log(`    🔍 Fetching client location (client_id: ${order.client_id})`)
   const { data: client, error: clientError } = await supabase
     .from('clients')
     .select('pickup_latitude, pickup_longitude')
@@ -456,17 +557,17 @@ async function findBestDriverAssignmentForDate(
     .single()
 
   if (clientError || !client || !client.pickup_latitude || !client.pickup_longitude) {
-    console.log(`Could not get pickup location for order ${order.id}, falling back to workload-based assignment`)
-    // Fallback to workload-based assignment
+    console.log(`    ⚠️  Could not get pickup location, using workload-based assignment`)
     return findBestDriverByWorkload(supabase, order, drivers, dayStart, dayEnd, existingAssignments, driverWorkload)
   }
 
-  // Get last drop-off locations for each driver
+  console.log(`    📍 Pickup location: (${client.pickup_latitude}, ${client.pickup_longitude})`)
+
   const driverLastDropoffs = await getDriverLastDropoffs(supabase, drivers, order.pickup_timestamp)
   
-  // Score each available driver
   const driverScores: DriverScore[] = []
   
+  console.log(`    🎯 Scoring ${drivers.length} drivers...`)
   for (const driver of drivers) {
     const timeSlot = await findAvailableTimeSlotForDriver(
       supabase,
@@ -492,15 +593,18 @@ async function findBestDriverAssignmentForDate(
         score,
         distance
       })
+      
+      console.log(`      ${driver.first_name}: score=${score.toFixed(2)}, distance=${distance === Infinity ? 'N/A' : distance.toFixed(2) + 'km'}, workload=${driverWorkload[driver.id]}min`)
+    } else {
+      console.log(`      ${driver.first_name}: No available time slot`)
     }
   }
   
-  // Sort by score (lowest is best)
   driverScores.sort((a, b) => a.score - b.score)
   
   if (driverScores.length > 0) {
     const best = driverScores[0]
-    console.log(`🎯 Best driver for order ${order.id}: ${best.driver.first_name} ${best.driver.last_name} (distance: ${best.distance === Infinity ? 'N/A' : best.distance.toFixed(2) + 'km'}, score: ${best.score.toFixed(2)})`)
+    console.log(`    🎯 Best match: ${best.driver.first_name} ${best.driver.last_name}`)
     
     return {
       orderId: order.id,
@@ -511,10 +615,11 @@ async function findBestDriverAssignmentForDate(
     }
   }
   
+  console.log(`    ❌ No drivers available`)
   return null
 }
 
-// Fallback to workload-based assignment when location data is unavailable
+// Fallback to workload-based assignment
 async function findBestDriverByWorkload(
   supabase: any,
   order: Order,
@@ -531,13 +636,19 @@ async function findBestDriverByWorkload(
   availabilityBlockId: string
 } | null> {
   
-  // Sort drivers by current workload (least busy first) for fair distribution
+  console.log(`    🔄 Using workload-based assignment`)
+  
   const sortedDrivers = [...drivers].sort((a, b) => 
     driverWorkload[a.id] - driverWorkload[b.id]
   )
   
-  // Try each driver starting with least busy
+  console.log(`    📊 Drivers sorted by workload:`)
+  sortedDrivers.forEach(d => {
+    console.log(`      ${d.first_name}: ${driverWorkload[d.id]}min`)
+  })
+  
   for (const driver of sortedDrivers) {
+    console.log(`    🔍 Checking ${driver.first_name}...`)
     const timeSlot = await findAvailableTimeSlotForDriver(
       supabase,
       driver.id,
@@ -548,6 +659,7 @@ async function findBestDriverByWorkload(
     )
     
     if (timeSlot) {
+      console.log(`      ✅ Found available slot`)
       return {
         orderId: order.id,
         driverId: driver.id,
@@ -555,13 +667,15 @@ async function findBestDriverByWorkload(
         endTime: timeSlot.end_time,
         availabilityBlockId: timeSlot.availabilityBlockId
       }
+    } else {
+      console.log(`      ❌ No available slot`)
     }
   }
   
   return null
 }
 
-// Find available time slot for specific driver on specific date
+// Find available time slot for specific driver
 async function findAvailableTimeSlotForDriver(
   supabase: any,
   driverId: string,
@@ -571,7 +685,9 @@ async function findAvailableTimeSlotForDriver(
   pendingAssignments: PendingAssignment[]
 ): Promise<TimeSlotOption | null> {
   
-  // Get driver availability for the day
+  console.log(`      🔍 Finding time slot for driver ${driverId}`)
+  
+  // Get driver availability
   const { data: availabilities, error: availError } = await supabase
     .from('driver_availability')
     .select('id, start_time, end_time')
@@ -579,27 +695,39 @@ async function findAvailableTimeSlotForDriver(
     .lte('start_time', dayEnd.toISOString())
     .gte('end_time', dayStart.toISOString())
 
-  if (availError || !availabilities || availabilities.length === 0) {
+  if (availError) {
+    console.error(`      ❌ Error fetching availability:`, availError)
     return null
   }
 
-  // Get existing database time slots for this driver on this day
+  console.log(`      📅 Found ${availabilities?.length || 0} availability blocks`)
+
+  if (!availabilities || availabilities.length === 0) {
+    console.log(`      ⚠️  No availability blocks`)
+    return null
+  }
+
+  // Get existing slots
   const { data: existingSlots, error: slotsError } = await supabase
     .from('driver_time_slots')
     .select('id, start_time, end_time, status, order_id')
     .eq('driver_id', driverId)
     .lte('start_time', dayEnd.toISOString())
     .gte('end_time', dayStart.toISOString())
-    .neq('status', 'cancelled')
+    .in('status', ['scheduled', 'completed'])
 
   if (slotsError) {
+    console.error(`      ❌ Error fetching existing slots:`, slotsError)
     return null
   }
 
-  const existingTimeSlots: ExistingTimeSlot[] = existingSlots || []
+  console.log(`      📋 Found ${existingSlots?.length || 0} existing time slots`)
 
-  // Combine existing database slots with pending assignments for this driver
+  const existingTimeSlots: ExistingTimeSlot[] = existingSlots || []
   const driverPendingAssignments = pendingAssignments.filter(pa => pa.driverId === driverId)
+  
+  console.log(`      ⏳ ${driverPendingAssignments.length} pending assignments`)
+
   const allConflictingSlots = [
     ...existingTimeSlots,
     ...driverPendingAssignments.map((pa, index) => ({
@@ -612,11 +740,15 @@ async function findAvailableTimeSlotForDriver(
     }))
   ]
 
+  console.log(`      🚫 Total conflicting slots: ${allConflictingSlots.length}`)
+
   // Process availability blocks
   const availableBlocks: AvailabilityBlock[] = availabilities
     .map((block) => {
-      const blockStart = new Date(block.start_time)
-      const blockEnd = new Date(block.end_time)
+      const blockStartStr = block.start_time.endsWith('Z') ? block.start_time : block.start_time + 'Z'
+      const blockEndStr = block.end_time.endsWith('Z') ? block.end_time : block.end_time + 'Z'
+      const blockStart = new Date(blockStartStr)
+      const blockEnd = new Date(blockEndStr)
       const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))
       const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEnd.getTime()))
       
@@ -632,6 +764,8 @@ async function findAvailableTimeSlotForDriver(
     })
     .filter(Boolean) as AvailabilityBlock[]
 
+  console.log(`      ✅ ${availableBlocks.length} valid availability blocks`)
+
   if (availableBlocks.length === 0) {
     return null
   }
@@ -645,7 +779,15 @@ async function findAvailableTimeSlotForDriver(
     dayEnd
   )
 
-  // Return the first available slot (earliest time)
+  console.log(`      🎰 Generated ${timeSlotOptions.length} possible time slots`)
+
+  if (timeSlotOptions.length > 0) {
+    const firstSlot = timeSlotOptions[0]
+    const slotStartPH = utcToZonedTime(new Date(firstSlot.start_time), TIMEZONE)
+    const slotEndPH = utcToZonedTime(new Date(firstSlot.end_time), TIMEZONE)
+    console.log(`      ✅ Returning earliest slot: ${formatDate(slotStartPH, 'HH:mm')} - ${formatDate(slotEndPH, 'HH:mm')}`)
+  }
+
   return timeSlotOptions.length > 0 ? timeSlotOptions[0] : null
 }
 
@@ -683,8 +825,10 @@ function generateTimeSlotOptionsForDriver(
   })
 
   availableBlocks.forEach(block => {
-    const blockStart = new Date(block.start_time + 'Z')
-    const blockEnd = new Date(block.end_time + 'Z')
+  const blockStartStr = block.start_time.endsWith('Z') ? block.start_time : block.start_time + 'Z'
+  const blockEndStr = block.end_time.endsWith('Z') ? block.end_time : block.end_time + 'Z'
+  const blockStart = new Date(blockStartStr)
+  const blockEnd = new Date(blockEndStr)
     
     // Calculate effective window for this day
     const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))

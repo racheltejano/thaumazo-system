@@ -462,20 +462,55 @@ export default function DispatcherCalendarPage() {
     }
   }
 
-  const handleAutoAssign = async () => {
-    const confirmed = confirm(
-      'This will automatically assign all unassigned orders to available drivers. Continue?'
-    )
-    
-    if (!confirmed) return
+const handleAutoAssign = async () => {
+  const confirmed = confirm(
+    'This will automatically assign all unassigned orders to available drivers based on proximity and workload. Continue?'
+  )
+  
+  if (!confirmed) return
 
-    setAssigning(true)
-    try {
-      await autoAssignOrders()
-    } finally {
-      setAssigning(false)
+  setAssigning(true)
+  
+  try {
+    // Call the backend API instead of frontend logic
+    const response = await fetch('/api/auto-assign', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to auto-assign orders')
     }
+
+    // Show detailed results to user
+    const message = [
+      `Auto-assignment completed!`,
+      ``,
+      `📊 Results:`,
+      `✅ Successfully assigned: ${result.successfulAssignments} orders`,
+      `📦 Total orders processed: ${result.validOrders}`,
+      result.skippedPastOrders > 0 ? `⏭️ Skipped past orders: ${result.skippedPastOrders}` : null,
+      result.failedAssignments > 0 ? `❌ Failed to assign: ${result.failedAssignments} orders` : null,
+    ].filter(Boolean).join('\n')
+
+    alert(message)
+
+    // Refresh the calendar data to show new assignments
+    if (result.successfulAssignments > 0) {
+      await fetchData()
+    }
+
+  } catch (error) {
+    console.error('❌ Error in auto-assignment:', error)
+    alert(`An error occurred during auto-assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  } finally {
+    setAssigning(false)
   }
+}
 
   const handleEventClick = (event: DriverEvent) => {
     if (event.type === 'order' && event.order) {
