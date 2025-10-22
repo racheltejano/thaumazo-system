@@ -9,7 +9,7 @@ import {
 import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
-
+import LocationTest from '@/components/LocationTest'
 
 
 moment.tz.setDefault('Asia/Manila')
@@ -569,6 +569,11 @@ export default function DriverCalendarPage() {
 
 return (
   <div className="max-w-7xl mx-auto px-4 py-8">
+
+    <div className="mb-6">
+      <LocationTest />
+    </div>
+    
     {/* Error Message */}
     {error && (
       <div className="mb-6 text-center text-sm font-medium text-red-600 bg-red-50 py-3 px-4 rounded-lg border border-red-200">
