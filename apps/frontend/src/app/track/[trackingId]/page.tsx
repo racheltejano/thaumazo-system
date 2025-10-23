@@ -10,7 +10,7 @@ import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscrip
 import TrackingHistory from '@/components/Client/TrackingHistory'
 import LiveTrackingMap from '@/components/Client/LiveTrackingMap'
 import { toast } from 'sonner'
-import { Navigation, Truck } from 'lucide-react'
+import { Navigation, Truck, Clock } from 'lucide-react'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -100,6 +100,7 @@ export default function TrackingPage() {
   const trackingId = (params as { trackingId: string })?.trackingId
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [eta, setEta] = useState<{ duration: number; distance: number } | null>(null)
 
   // Determine if we should track driver location
   const shouldTrackDriver = order?.driver_id && 
@@ -302,6 +303,26 @@ export default function TrackingPage() {
     return 'N/A'
   }
 
+  // Callback when ETA is calculated from LiveTrackingMap
+  const handleEtaCalculated = (etaData: { duration: number; distance: number } | null) => {
+    setEta(etaData)
+    if (etaData) {
+      console.log('📊 ETA received from map:', {
+        duration: `${Math.round(etaData.duration / 60)} min`,
+        distance: `${(etaData.distance / 1000).toFixed(2)} km`
+      })
+    }
+  }
+
+  // Format ETA for display
+  const formatEtaDuration = (seconds: number): string => {
+    const minutes = Math.round(seconds / 60)
+    if (minutes < 60) return `${minutes} min`
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return `${hours}h ${mins}m`
+  }
+
   if (loading) {
     return (
       <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>
@@ -333,12 +354,22 @@ export default function TrackingPage() {
               <h1 className="text-xl font-bold">Tracking ID: {trackingId}</h1>
               <p className="text-green-700 font-semibold">📦 Status: {order.status}</p>
               
-              {/* Live Driver Status */}
+              {/* Live Driver Status with ETA */}
               {shouldTrackDriver && driverLocation && lastUpdated && (
                 <div className="mt-3 pt-3 border-t border-orange-200">
-                  <div className="flex items-center gap-2 text-blue-600">
-                    <Navigation className="w-4 h-4 animate-pulse" />
-                    <span className="font-semibold">Driver En Route</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <Navigation className="w-4 h-4 animate-pulse" />
+                      <span className="font-semibold">Driver En Route</span>
+                    </div>
+                    {eta && (
+                      <div className="flex items-center gap-1 bg-blue-100 px-2 py-1 rounded">
+                        <Clock className="w-3 h-3 text-blue-700" />
+                        <span className="text-sm font-bold text-blue-700">
+                          ETA: {formatEtaDuration(eta.duration)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">
                     Last updated: {new Date(lastUpdated).toLocaleTimeString('en-US', {
@@ -351,6 +382,11 @@ export default function TrackingPage() {
                   {driverLocation.speed && driverLocation.speed > 0 && (
                     <p className="text-sm text-gray-600">
                       Speed: {Math.round(driverLocation.speed * 3.6)} km/h
+                    </p>
+                  )}
+                  {eta && (
+                    <p className="text-sm text-gray-600">
+                      Distance: {(eta.distance / 1000).toFixed(1)} km
                     </p>
                   )}
                   <p className="text-xs text-gray-500 mt-1">
@@ -397,7 +433,7 @@ export default function TrackingPage() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Live Tracking Map Component */}
+            {/* Live Tracking Map Component with Route and ETA */}
             <LiveTrackingMap
               pickupLat={order.client?.pickup_latitude}
               pickupLng={order.client?.pickup_longitude}
@@ -407,6 +443,7 @@ export default function TrackingPage() {
               fallbackMapUrl={order.mapUrl}
               style="streets-v11"
               staleThresholdMinutes={5}
+              onEtaCalculated={handleEtaCalculated}
             />
 
             {/* Dropoff Locations */}

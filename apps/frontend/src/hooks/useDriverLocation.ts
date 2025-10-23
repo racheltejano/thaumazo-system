@@ -1,6 +1,3 @@
-// For getting and refreshing driver location data
-
-// apps/frontend/src/hooks/useDriverLocation.ts
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 
