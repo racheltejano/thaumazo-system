@@ -3,12 +3,12 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { generateGoogleMapsRoute } from '@/lib/maps'
 import { exportHtmlToPdf } from '@/lib/exportHtmlToPdf'
 import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription'
 import TrackingHistory from '@/components/Client/TrackingHistory'
+import LiveTrackingMap from '@/components/Client/LiveTrackingMap'
 import { toast } from 'sonner'
 import { Navigation, Truck } from 'lucide-react'
 
@@ -102,7 +102,6 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true)
 
   // Determine if we should track driver location
-  // Only track if driver exists AND status is truck_left_warehouse or later
   const shouldTrackDriver = order?.driver_id && 
     ['truck_left_warehouse', 'arrived_at_pickup', 'delivered'].includes(
       order.status.toLowerCase().replace(/ /g, '_')
@@ -303,41 +302,6 @@ export default function TrackingPage() {
     return 'N/A'
   }
 
-  // Generate live map URL with driver location
-  const getLiveMapUrl = () => {
-    if (!MAPBOX_TOKEN) return order?.mapUrl
-
-    const pickupLat = order?.client?.pickup_latitude
-    const pickupLng = order?.client?.pickup_longitude
-    
-    // If driver location is available and tracking is enabled
-    if (shouldTrackDriver && driverLocation && lastUpdated) {
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
-      const isRecent = new Date(lastUpdated) > fiveMinutesAgo
-      
-      if (isRecent) {
-        const driverLat = driverLocation.latitude
-        const driverLng = driverLocation.longitude
-        
-        console.log('🗺️ Generating live map with driver location:', {
-          pickup: { lat: pickupLat, lng: pickupLng },
-          driver: { lat: driverLat, lng: driverLng }
-        })
-        
-        // Show both pickup location (red pin) and driver location (blue truck)
-        if (pickupLat && pickupLng) {
-          return `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-l+ff0000(${pickupLng},${pickupLat}),pin-s-triangle+0080ff(${driverLng},${driverLat})/auto/700x300?access_token=${MAPBOX_TOKEN}`
-        }
-        
-        // Just show driver location if no pickup coordinates
-        return `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-triangle+0080ff(${driverLng},${driverLat})/${driverLng},${driverLat},15/700x300?access_token=${MAPBOX_TOKEN}`
-      }
-    }
-    
-    // Fallback to static pickup map
-    return order?.mapUrl
-  }
-
   if (loading) {
     return (
       <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>
@@ -351,7 +315,6 @@ export default function TrackingPage() {
   }
 
   const { pickupDate, pickupTime } = getPickupDateAndTime(order.pickup_timestamp)
-  const liveMapUrl = getLiveMapUrl()
 
   return (
     <div style={{ width: '80%', maxWidth: '1800px', margin: '0 auto' }}>
@@ -370,7 +333,7 @@ export default function TrackingPage() {
               <h1 className="text-xl font-bold">Tracking ID: {trackingId}</h1>
               <p className="text-green-700 font-semibold">📦 Status: {order.status}</p>
               
-              {/* Live Driver Status - Only show if tracking is active */}
+              {/* Live Driver Status */}
               {shouldTrackDriver && driverLocation && lastUpdated && (
                 <div className="mt-3 pt-3 border-t border-orange-200">
                   <div className="flex items-center gap-2 text-blue-600">
@@ -396,7 +359,7 @@ export default function TrackingPage() {
                 </div>
               )}
 
-              {/* Show waiting message if driver assigned but not started */}
+              {/* Waiting message if driver assigned but not started */}
               {order.driver && !shouldTrackDriver && (
                 <div className="mt-3 pt-3 border-t border-orange-200">
                   <div className="flex items-center gap-2 text-gray-600">
@@ -434,37 +397,17 @@ export default function TrackingPage() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Live/Static Map */}
-            {liveMapUrl ? (
-              <div className="no-print rounded-lg overflow-hidden border aspect-[2/1] relative w-full">
-                <Image
-                  src={liveMapUrl}
-                  alt={shouldTrackDriver ? "Live Delivery Tracking" : "Pickup Map"}
-                  fill
-                  className="object-cover"
-                  key={liveMapUrl} // Force re-render when URL changes
-                  unoptimized // Required for dynamic Mapbox URLs
-                />
-                {shouldTrackDriver && driverLocation && lastUpdated && (
-                  <div className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 shadow-lg">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    Live Tracking
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded-lg border aspect-[2/1] flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <p className="text-sm">📍 Map not available</p>
-                  <p className="text-xs mt-1">
-                    {!order.client?.pickup_latitude || !order.client?.pickup_longitude 
-                      ? 'Coordinates not available for this address'
-                      : 'Mapbox token not configured'
-                    }
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* Live Tracking Map Component */}
+            <LiveTrackingMap
+              pickupLat={order.client?.pickup_latitude}
+              pickupLng={order.client?.pickup_longitude}
+              driverLocation={driverLocation}
+              lastUpdated={lastUpdated}
+              isTrackingEnabled={!!shouldTrackDriver}
+              fallbackMapUrl={order.mapUrl}
+              style="streets-v11"
+              staleThresholdMinutes={5}
+            />
 
             {/* Dropoff Locations */}
             <div className="bg-white p-5 rounded-lg shadow">
