@@ -102,16 +102,49 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true)
   const [eta, setEta] = useState<{ duration: number; distance: number } | null>(null)
 
+  // Determine destination based on order status
+  const getDestinationCoordinates = () => {
+    if (!order) return null
+
+    const normalizedStatus = order.status.toLowerCase().replace(/ /g, '_')
+    
+    // After pickup confirmation, track to first dropoff
+    if (['items_being_delivered', 'in_transit', 'arrived_at_dropoff'].includes(normalizedStatus)) {
+      const firstDropoff = order.dropoffs.find(d => d.sequence === 1 || d.sequence === null)
+      if (firstDropoff?.latitude && firstDropoff?.longitude) {
+        return {
+          lat: firstDropoff.latitude,
+          lng: firstDropoff.longitude,
+          label: `Dropoff: ${firstDropoff.dropoff_name || firstDropoff.dropoff_address}`
+        }
+      }
+    }
+    
+    // Before pickup confirmation, track to pickup location
+    if (order.client?.pickup_latitude && order.client?.pickup_longitude) {
+      return {
+        lat: order.client.pickup_latitude,
+        lng: order.client.pickup_longitude,
+        label: 'Pickup Location'
+      }
+    }
+    
+    return null
+  }
+
+  const destination = getDestinationCoordinates()
+
   // Determine if we should track driver location
   const shouldTrackDriver = order?.driver_id && 
-    ['truck_left_warehouse', 'arrived_at_pickup', 'delivered'].includes(
+    ['truck_left_warehouse', 'arrived_at_pickup', 'items_being_delivered', 'in_transit'].includes(
       order.status.toLowerCase().replace(/ /g, '_')
     )
 
-  console.log('🚚 Should track driver:', shouldTrackDriver, {
+  console.log('🚚 Tracking configuration:', {
+    shouldTrackDriver,
     driverId: order?.driver_id,
     status: order?.status,
-    statusNormalized: order?.status.toLowerCase().replace(/ /g, '_')
+    destination: destination?.label
   })
 
   // Subscribe to driver location updates
@@ -119,6 +152,47 @@ export default function TrackingPage() {
     order?.driver_id,
     !!shouldTrackDriver
   )
+
+  // Subscribe to order status changes in real-time
+  useEffect(() => {
+    if (!order?.id) return
+
+    const channel = supabase
+      .channel(`order-${order.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${order.id}`
+        },
+        (payload) => {
+          console.log('📦 Order updated:', payload)
+          // Refetch order data when status changes
+          fetchOrderData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'order_status_logs',
+          filter: `order_id=eq.${order.id}`
+        },
+        (payload) => {
+          console.log('📝 New status log:', payload)
+          // Refetch order data when new log is added
+          fetchOrderData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [order?.id])
 
   useEffect(() => {
     if (driverLocation) {
@@ -131,138 +205,138 @@ export default function TrackingPage() {
     }
   }, [driverLocation, lastUpdated])
 
-  useEffect(() => {
+  const fetchOrderData = async () => {
     if (!trackingId) return
 
-    const fetchData = async () => {
-      try {
-        // Get client by tracking_id
-        const { data: clientData, error: clientError } = await supabase
-          .from('clients')
-          .select('id')
-          .eq('tracking_id', trackingId)
-          .single()
+    try {
+      // Get client by tracking_id
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('tracking_id', trackingId)
+        .single()
 
-        if (clientError || !clientData) {
-          console.warn(`[TrackingPage] Invalid tracking ID "${trackingId}"`)
-          toast.error('Tracking ID not found. Redirecting in 2 seconds...')
-          setTimeout(() => {
-            router.replace('/track')
-          }, 2000)
-          return
-        }
-
-        // Get latest order by that client
-        const { data: rawOrder, error: orderError } = await supabase
-          .from('orders')
-          .select(`
-            *,
-            estimated_total_duration,
-            pickup_timestamp,
-            driver_id
-          `)
-          .eq('client_id', clientData.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-
-        if (orderError || !rawOrder) {
-          console.error('[TrackingPage] No order found for client:', orderError)
-          setLoading(false)
-          return
-        }
-
-        const [driverData, fullClientData, dropoffs] = await Promise.all([
-          rawOrder.driver_id
-            ? supabase
-                .from('profiles')
-                .select('first_name, last_name, contact_number')
-                .eq('id', rawOrder.driver_id)
-                .single()
-            : Promise.resolve({ data: null }),
-
-          rawOrder.client_id
-            ? supabase
-                .from('clients')
-                .select('*')
-                .eq('id', rawOrder.client_id)
-                .single()
-            : Promise.resolve({ data: null }),
-
-          supabase
-            .from('order_dropoffs')
-            .select('*')
-            .eq('order_id', rawOrder.id)
-            .order('sequence', { ascending: true }),
-        ])
-
-        const logsResponse = await supabase
-          .from('order_status_logs')
-          .select('id, order_id, status, description, timestamp')
-          .eq('order_id', rawOrder.id)
-          .order('timestamp', { ascending: true })
-
-        const rawLogs = logsResponse.data || []
-
-        const groupedTimeline = rawLogs.reduce((acc, log) => {
-          const date = formatTimestampInManila(log.timestamp, {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-          })
-          const time = formatTimestampInManila(log.timestamp, {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          })
-          const label = log.description || log.status.replace(/_/g, ' ').toUpperCase()
-
-          if (!acc[date]) acc[date] = []
-          acc[date].push({ time, label })
-
-          return acc
-        }, {} as Record<string, { time: string; label: string }[]>)
-
-        const timeline = Object.entries(groupedTimeline).map(([date, items]) => ({
-          date,
-          entries: items.map(({ time, label }) => ({ time, label }))
-        }))
-
-        const pickupLat = fullClientData.data?.pickup_latitude
-        const pickupLng = fullClientData.data?.pickup_longitude
-        
-        const mapUrl =
-          pickupLat && pickupLng && MAPBOX_TOKEN
-            ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${pickupLng},${pickupLat})/${pickupLng},${pickupLat},15/700x300?access_token=${MAPBOX_TOKEN}`
-            : undefined
-
-        setOrder({
-          id: rawOrder.id,
-          status: rawOrder.status.replace(/_/g, ' ').toUpperCase(),
-          driver_id: rawOrder.driver_id,
-          driver: driverData.data
-            ? { ...driverData.data, plate_number: 'To Be Added' }
-            : null,
-          client: fullClientData.data || null,
-          vehicle_type: rawOrder.vehicle_type,
-          pickup_timestamp: rawOrder.pickup_timestamp,
-          priority_level: rawOrder.priority_level,
-          special_instructions: rawOrder.special_instructions,
-          timeline,
-          dropoffs: dropoffs.data || [],
-          order_status_logs: rawLogs, 
-          mapUrl,
-          estimated_total_duration: rawOrder.estimated_total_duration || null,
-        })
-
-      } catch (err) {
-        console.error('Error loading tracking page:', err)
-      } finally {
-        setLoading(false)
+      if (clientError || !clientData) {
+        console.warn(`[TrackingPage] Invalid tracking ID "${trackingId}"`)
+        toast.error('Tracking ID not found. Redirecting in 2 seconds...')
+        setTimeout(() => {
+          router.replace('/track')
+        }, 2000)
+        return
       }
-    }
 
-    fetchData()
+      // Get latest order by that client
+      const { data: rawOrder, error: orderError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          estimated_total_duration,
+          pickup_timestamp,
+          driver_id
+        `)
+        .eq('client_id', clientData.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (orderError || !rawOrder) {
+        console.error('[TrackingPage] No order found for client:', orderError)
+        setLoading(false)
+        return
+      }
+
+      const [driverData, fullClientData, dropoffs] = await Promise.all([
+        rawOrder.driver_id
+          ? supabase
+              .from('profiles')
+              .select('first_name, last_name, contact_number')
+              .eq('id', rawOrder.driver_id)
+              .single()
+          : Promise.resolve({ data: null }),
+
+        rawOrder.client_id
+          ? supabase
+              .from('clients')
+              .select('*')
+              .eq('id', rawOrder.client_id)
+              .single()
+          : Promise.resolve({ data: null }),
+
+        supabase
+          .from('order_dropoffs')
+          .select('*')
+          .eq('order_id', rawOrder.id)
+          .order('sequence', { ascending: true }),
+      ])
+
+      const logsResponse = await supabase
+        .from('order_status_logs')
+        .select('id, order_id, status, description, timestamp')
+        .eq('order_id', rawOrder.id)
+        .order('timestamp', { ascending: true })
+
+      const rawLogs = logsResponse.data || []
+
+      const groupedTimeline = rawLogs.reduce((acc, log) => {
+        const date = formatTimestampInManila(log.timestamp, {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        })
+        const time = formatTimestampInManila(log.timestamp, {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+        const label = log.description || log.status.replace(/_/g, ' ').toUpperCase()
+
+        if (!acc[date]) acc[date] = []
+        acc[date].push({ time, label })
+
+        return acc
+      }, {} as Record<string, { time: string; label: string }[]>)
+
+      const timeline = Object.entries(groupedTimeline).map(([date, items]) => ({
+        date,
+        entries: items.map(({ time, label }) => ({ time, label }))
+      }))
+
+      const pickupLat = fullClientData.data?.pickup_latitude
+      const pickupLng = fullClientData.data?.pickup_longitude
+      
+      const mapUrl =
+        pickupLat && pickupLng && MAPBOX_TOKEN
+          ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${pickupLng},${pickupLat})/${pickupLng},${pickupLat},15/700x300?access_token=${MAPBOX_TOKEN}`
+          : undefined
+
+      setOrder({
+        id: rawOrder.id,
+        status: rawOrder.status.replace(/_/g, ' ').toUpperCase(),
+        driver_id: rawOrder.driver_id,
+        driver: driverData.data
+          ? { ...driverData.data, plate_number: 'To Be Added' }
+          : null,
+        client: fullClientData.data || null,
+        vehicle_type: rawOrder.vehicle_type,
+        pickup_timestamp: rawOrder.pickup_timestamp,
+        priority_level: rawOrder.priority_level,
+        special_instructions: rawOrder.special_instructions,
+        timeline,
+        dropoffs: dropoffs.data || [],
+        order_status_logs: rawLogs, 
+        mapUrl,
+        estimated_total_duration: rawOrder.estimated_total_duration || null,
+      })
+
+    } catch (err) {
+      console.error('Error loading tracking page:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchOrderData()
   }, [trackingId, router])
 
   const handleViewRoute = () => {
@@ -355,12 +429,12 @@ export default function TrackingPage() {
               <p className="text-green-700 font-semibold">📦 Status: {order.status}</p>
               
               {/* Live Driver Status with ETA */}
-              {shouldTrackDriver && driverLocation && lastUpdated && (
+              {shouldTrackDriver && driverLocation && lastUpdated && destination && (
                 <div className="mt-3 pt-3 border-t border-orange-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-blue-600">
                       <Navigation className="w-4 h-4 animate-pulse" />
-                      <span className="font-semibold">Driver En Route</span>
+                      <span className="font-semibold">En Route to {destination.label}</span>
                     </div>
                     {eta && (
                       <div className="flex items-center gap-1 bg-blue-100 px-2 py-1 rounded">
@@ -423,9 +497,12 @@ export default function TrackingPage() {
               </ul>
             </div>
 
-            {/* Tracking History */}
+            {/* Tracking History with QR Code */}
             <TrackingHistory
               logs={order.order_status_logs}
+              orderId={order.id}
+              trackingId={trackingId}
+              currentStatus={order.status}
               onViewRoute={handleViewRoute}
               onDownloadReport={() => exportHtmlToPdf('report-page')}
             />
@@ -433,10 +510,10 @@ export default function TrackingPage() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Live Tracking Map Component with Route and ETA */}
+            {/* Live Tracking Map Component with Dynamic Destination */}
             <LiveTrackingMap
-              pickupLat={order.client?.pickup_latitude}
-              pickupLng={order.client?.pickup_longitude}
+              pickupLat={destination?.lat}
+              pickupLng={destination?.lng}
               driverLocation={driverLocation}
               lastUpdated={lastUpdated}
               isTrackingEnabled={!!shouldTrackDriver}
