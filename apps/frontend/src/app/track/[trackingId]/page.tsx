@@ -1,14 +1,16 @@
+// apps/frontend/src/app/track/[trackingId]/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { generateGoogleMapsRoute } from '@/lib/maps'
 import { exportHtmlToPdf } from '@/lib/exportHtmlToPdf'
+import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscription'
 import TrackingHistory from '@/components/Client/TrackingHistory'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Navigation, Truck } from 'lucide-react'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -30,13 +32,14 @@ type OrderStatusLog = {
   order_id: string
   status: string
   description: string | null
-  timestamp: string // ISO timestamp
+  timestamp: string
 }
 
 type Order = {
   id: string
   status: string
   estimated_total_duration?: number | null
+  driver_id?: string | null
   driver: {
     first_name: string
     last_name: string
@@ -55,7 +58,7 @@ type Order = {
     pickup_area?: string
   } | null
   vehicle_type: string
-  pickup_timestamp: string // Combined timestamp
+  pickup_timestamp: string
   priority_level: string
   special_instructions: string
   timeline: {
@@ -67,7 +70,6 @@ type Order = {
   mapUrl?: string
 }
 
-// Helper function to format timestamp in Asia/Manila timezone
 const formatTimestampInManila = (timestamp: string, options: Intl.DateTimeFormatOptions) => {
   const date = new Date(timestamp)
   return date.toLocaleString('en-US', {
@@ -76,7 +78,6 @@ const formatTimestampInManila = (timestamp: string, options: Intl.DateTimeFormat
   })
 }
 
-// Helper function to get pickup date and time separately for display
 const getPickupDateAndTime = (pickup_timestamp: string) => {
   const pickupDate = formatTimestampInManila(pickup_timestamp, {
     month: 'long',
@@ -94,18 +95,48 @@ const getPickupDateAndTime = (pickup_timestamp: string) => {
 }
 
 export default function TrackingPage() {
-  const router = useRouter(); 
+  const router = useRouter()
   const params = useParams()
   const trackingId = (params as { trackingId: string })?.trackingId
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Determine if we should track driver location
+  // Only track if driver exists AND status is truck_left_warehouse or later
+  const shouldTrackDriver = order?.driver_id && 
+    ['truck_left_warehouse', 'arrived_at_pickup', 'delivered'].includes(
+      order.status.toLowerCase().replace(/ /g, '_')
+    )
+
+  console.log('🚚 Should track driver:', shouldTrackDriver, {
+    driverId: order?.driver_id,
+    status: order?.status,
+    statusNormalized: order?.status.toLowerCase().replace(/ /g, '_')
+  })
+
+  // Subscribe to driver location updates
+  const { driverLocation, lastUpdated, loading: locationLoading } = useDriverLocationSubscription(
+    order?.driver_id,
+    !!shouldTrackDriver
+  )
+
+  useEffect(() => {
+    if (driverLocation) {
+      console.log('📍 Driver location received:', {
+        lat: driverLocation.latitude,
+        lng: driverLocation.longitude,
+        speed: driverLocation.speed,
+        lastUpdated
+      })
+    }
+  }, [driverLocation, lastUpdated])
 
   useEffect(() => {
     if (!trackingId) return
 
     const fetchData = async () => {
       try {
-        // STEP 1: Get client by tracking_id
+        // Get client by tracking_id
         const { data: clientData, error: clientError } = await supabase
           .from('clients')
           .select('id')
@@ -113,21 +144,22 @@ export default function TrackingPage() {
           .single()
 
         if (clientError || !clientData) {
-          console.warn(`[TrackingPage] Invalid tracking ID "${trackingId}" — no client found.`);
-          toast.error('Tracking ID not found. Redirecting in 2 seconds...');
+          console.warn(`[TrackingPage] Invalid tracking ID "${trackingId}"`)
+          toast.error('Tracking ID not found. Redirecting in 2 seconds...')
           setTimeout(() => {
-            router.replace('/track');
-          }, 2000);
-          return;
+            router.replace('/track')
+          }, 2000)
+          return
         }
 
-        // STEP 2: Get latest order by that client - using pickup_timestamp instead of pickup_date/pickup_time
+        // Get latest order by that client
         const { data: rawOrder, error: orderError } = await supabase
           .from('orders')
           .select(`
             *,
             estimated_total_duration,
-            pickup_timestamp
+            pickup_timestamp,
+            driver_id
           `)
           .eq('client_id', clientData.id)
           .order('created_at', { ascending: false })
@@ -164,7 +196,6 @@ export default function TrackingPage() {
             .order('sequence', { ascending: true }),
         ])
 
-        // Separate logs fetch (with logging)
         const logsResponse = await supabase
           .from('order_status_logs')
           .select('id, order_id, status, description, timestamp')
@@ -173,13 +204,6 @@ export default function TrackingPage() {
 
         const rawLogs = logsResponse.data || []
 
-        if (logsResponse.error) {
-          console.error('[TrackingPage] Error fetching logs:', logsResponse.error)
-        } else {
-          console.log('[TrackingPage] Logs fetched successfully:', rawLogs)
-        }
-
-        // Build timeline - using Asia/Manila timezone for consistency
         const groupedTimeline = rawLogs.reduce((acc, log) => {
           const date = formatTimestampInManila(log.timestamp, {
             month: 'long',
@@ -207,31 +231,21 @@ export default function TrackingPage() {
         const pickupLat = fullClientData.data?.pickup_latitude
         const pickupLng = fullClientData.data?.pickup_longitude
         
-        console.log('📍 Map coordinates:', { pickupLat, pickupLng })
-        console.log('🗺️ Mapbox token available:', !!MAPBOX_TOKEN)
-        console.log('📊 Full client data:', fullClientData.data)
-        console.log('🏪 Client pickup address:', fullClientData.data?.pickup_address)
-        console.log('📍 Client coordinates from DB:', {
-          latitude: fullClientData.data?.pickup_latitude,
-          longitude: fullClientData.data?.pickup_longitude
-        })
-        
         const mapUrl =
           pickupLat && pickupLng && MAPBOX_TOKEN
             ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff0000(${pickupLng},${pickupLat})/${pickupLng},${pickupLat},15/700x300?access_token=${MAPBOX_TOKEN}`
             : undefined
 
-        console.log('🗺️ Generated map URL:', mapUrl ? 'Available' : 'Not available')
-
         setOrder({
           id: rawOrder.id,
           status: rawOrder.status.replace(/_/g, ' ').toUpperCase(),
+          driver_id: rawOrder.driver_id,
           driver: driverData.data
             ? { ...driverData.data, plate_number: 'To Be Added' }
             : null,
           client: fullClientData.data || null,
           vehicle_type: rawOrder.vehicle_type,
-          pickup_timestamp: rawOrder.pickup_timestamp, // Use combined timestamp
+          pickup_timestamp: rawOrder.pickup_timestamp,
           priority_level: rawOrder.priority_level,
           special_instructions: rawOrder.special_instructions,
           timeline,
@@ -249,7 +263,7 @@ export default function TrackingPage() {
     }
 
     fetchData()
-  }, [trackingId])
+  }, [trackingId, router])
 
   const handleViewRoute = () => {
     if (
@@ -273,13 +287,11 @@ export default function TrackingPage() {
     window.open(routeUrl, '_blank')
   }
 
-  // Helper function to format estimated travel time
   const getFormattedTravelTime = () => {
     if (order?.estimated_total_duration != null) {
       return `${order.estimated_total_duration} mins`
     }
     
-    // Fallback: sum up individual dropoff durations if available
     const totalDropoffTime = order?.dropoffs
       ?.filter(d => d.estimated_duration_mins != null)
       ?.reduce((sum, d) => sum + (d.estimated_duration_mins || 0), 0)
@@ -291,11 +303,55 @@ export default function TrackingPage() {
     return 'N/A'
   }
 
-  if (loading) return <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>;
-  if (!order) return <p className="text-center py-10 text-red-500">Tracking information not found.</p>;
+  // Generate live map URL with driver location
+  const getLiveMapUrl = () => {
+    if (!MAPBOX_TOKEN) return order?.mapUrl
 
-  // Extract pickup date and time for display
+    const pickupLat = order?.client?.pickup_latitude
+    const pickupLng = order?.client?.pickup_longitude
+    
+    // If driver location is available and tracking is enabled
+    if (shouldTrackDriver && driverLocation && lastUpdated) {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+      const isRecent = new Date(lastUpdated) > fiveMinutesAgo
+      
+      if (isRecent) {
+        const driverLat = driverLocation.latitude
+        const driverLng = driverLocation.longitude
+        
+        console.log('🗺️ Generating live map with driver location:', {
+          pickup: { lat: pickupLat, lng: pickupLng },
+          driver: { lat: driverLat, lng: driverLng }
+        })
+        
+        // Show both pickup location (red pin) and driver location (blue truck)
+        if (pickupLat && pickupLng) {
+          return `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-l+ff0000(${pickupLng},${pickupLat}),pin-s-triangle+0080ff(${driverLng},${driverLat})/auto/700x300?access_token=${MAPBOX_TOKEN}`
+        }
+        
+        // Just show driver location if no pickup coordinates
+        return `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-triangle+0080ff(${driverLng},${driverLat})/${driverLng},${driverLat},15/700x300?access_token=${MAPBOX_TOKEN}`
+      }
+    }
+    
+    // Fallback to static pickup map
+    return order?.mapUrl
+  }
+
+  if (loading) {
+    return (
+      <p className="text-center py-10 text-gray-500 animate-pulse">Loading...</p>
+    )
+  }
+
+  if (!order) {
+    return (
+      <p className="text-center py-10 text-red-500">Tracking information not found.</p>
+    )
+  }
+
   const { pickupDate, pickupTime } = getPickupDateAndTime(order.pickup_timestamp)
+  const liveMapUrl = getLiveMapUrl()
 
   return (
     <div style={{ width: '80%', maxWidth: '1800px', margin: '0 auto' }}>
@@ -304,7 +360,7 @@ export default function TrackingPage() {
         className="p-6 text-black bg-white mt-4 mx-auto shadow-lg rounded-2xl"
       >
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Left Column: Tracking, Client, Tracking History */}
+          {/* Left Column */}
           <div className="space-y-6">
             {/* Tracking Status */}
             <div
@@ -313,6 +369,45 @@ export default function TrackingPage() {
             >
               <h1 className="text-xl font-bold">Tracking ID: {trackingId}</h1>
               <p className="text-green-700 font-semibold">📦 Status: {order.status}</p>
+              
+              {/* Live Driver Status - Only show if tracking is active */}
+              {shouldTrackDriver && driverLocation && lastUpdated && (
+                <div className="mt-3 pt-3 border-t border-orange-200">
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <Navigation className="w-4 h-4 animate-pulse" />
+                    <span className="font-semibold">Driver En Route</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Last updated: {new Date(lastUpdated).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                      timeZone: 'Asia/Manila'
+                    })}
+                  </p>
+                  {driverLocation.speed && driverLocation.speed > 0 && (
+                    <p className="text-sm text-gray-600">
+                      Speed: {Math.round(driverLocation.speed * 3.6)} km/h
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    📍 Accuracy: ±{Math.round(driverLocation.accuracy)}m
+                  </p>
+                </div>
+              )}
+
+              {/* Show waiting message if driver assigned but not started */}
+              {order.driver && !shouldTrackDriver && (
+                <div className="mt-3 pt-3 border-t border-orange-200">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Truck className="w-4 h-4" />
+                    <span className="font-semibold">Driver Assigned</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Waiting for driver to start delivery...
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Client Info */}
@@ -337,17 +432,25 @@ export default function TrackingPage() {
             />
           </div>
 
-          {/* Right Column: Map, Dropoffs, Order + Driver Info */}
+          {/* Right Column */}
           <div className="space-y-6">
-            {/* Pickup Map */}
-            {order.mapUrl ? (
+            {/* Live/Static Map */}
+            {liveMapUrl ? (
               <div className="no-print rounded-lg overflow-hidden border aspect-[2/1] relative w-full">
                 <Image
-                  src={order.mapUrl}
-                  alt="Pickup Map"
+                  src={liveMapUrl}
+                  alt={shouldTrackDriver ? "Live Delivery Tracking" : "Pickup Map"}
                   fill
                   className="object-cover"
+                  key={liveMapUrl} // Force re-render when URL changes
+                  unoptimized // Required for dynamic Mapbox URLs
                 />
+                {shouldTrackDriver && driverLocation && lastUpdated && (
+                  <div className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 shadow-lg">
+                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    Live Tracking
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-gray-100 rounded-lg border aspect-[2/1] flex items-center justify-center">
@@ -386,9 +489,9 @@ export default function TrackingPage() {
               )}
             </div>
 
-            {/* Side-by-side Order + Driver Info */}
+            {/* Order and Driver Info */}
             <div className="flex flex-col lg:flex-row gap-6">
-              {/* Order Info */}
+              {/* Order Details */}
               <div className="bg-white p-5 rounded-lg shadow w-full lg:w-1/2">
                 <h2 className="font-semibold text-lg mb-3">Order Details</h2>
                 <ul className="text-sm space-y-1">
@@ -420,5 +523,5 @@ export default function TrackingPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
