@@ -166,41 +166,50 @@ export default function DriverAvailabilityForm() {
   }, 0)
 
   const handleSubmit = async () => {
-    setMessage('')
-    setLoading(true)
+  setMessage('')
+  setLoading(true)
 
-    if (totalHours < 20) {
-      setMessage('❌ Please schedule at least 20 hours this week.')
-      setLoading(false)
-      return
-    }
+  if (totalHours < 20) {
+    setMessage('❌ Please schedule at least 20 hours this week.')
+    setLoading(false)
+    return
+  }
 
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (!user || error) {
-      setMessage('❌ You must be logged in to submit availability.')
-      setLoading(false)
-      return
-    }
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (!user || error) {
+    setMessage('❌ You must be logged in to submit availability.')
+    setLoading(false)
+    return
+  }
 
-    // Step 1: Delete existing entries for this week (CASCADE will delete time_slots)
-    const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 })
-    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
-    
-    const weekStartUTC = createUTCFromPHTime(format(weekStart, 'yyyy-MM-dd'), '00:00')
-    const weekEndUTC = createUTCFromPHTime(format(weekEnd, 'yyyy-MM-dd'), '23:59')
+  // Step 1: Delete existing entries for this week using the actual days in weekData
+  const firstDay = weekData[0].day // First day of the week (Monday)
+  const lastDay = weekData[6].day // Last day of the week (Sunday)
+  
+  // Convert to UTC - from start of first day to start of day after last day
+  const weekStartUTC = createUTCFromPHTime(firstDay, '00:00')
+  const dayAfterLastDay = new Date(lastDay)
+  dayAfterLastDay.setDate(dayAfterLastDay.getDate() + 1)
+  const weekEndUTC = createUTCFromPHTime(dayAfterLastDay.toISOString().split('T')[0], '00:00')
 
-    const { error: deleteError } = await supabase
-      .from('driver_availability')
-      .delete()
-      .eq('driver_id', user.id)
-      .gte('start_time', weekStartUTC.toISOString())
-      .lte('start_time', weekEndUTC.toISOString())
+  console.log('🗑️ Deleting entries between:')
+  console.log('   First day:', firstDay, '→ UTC:', weekStartUTC.toISOString())
+  console.log('   Last day:', lastDay, '→ Next day UTC:', weekEndUTC.toISOString())
 
-    if (deleteError) {
-      setMessage(`❌ Failed to clear existing entries: ${deleteError.message}`)
-      setLoading(false)
-      return
-    }
+  const { error: deleteError, count } = await supabase
+    .from('driver_availability')
+    .delete({ count: 'exact' })
+    .eq('driver_id', user.id)
+    .gte('start_time', weekStartUTC.toISOString())
+    .lt('start_time', weekEndUTC.toISOString())
+
+  console.log(`🗑️ Deleted ${count} existing entries`)
+
+  if (deleteError) {
+    setMessage(`❌ Failed to clear existing entries: ${deleteError.message}`)
+    setLoading(false)
+    return
+  }
 
     // Step 2: Insert new availability entries
     const entries = weekData.map(d => {
