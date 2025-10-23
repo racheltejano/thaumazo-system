@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import QRScanner from '@/components/Driver/QRScanner'
-import { CheckCircle, Package, QrCode } from 'lucide-react'
+import { CheckCircle, Package, QrCode, X } from 'lucide-react'
 
 export default function DriverScanPickupPage() {
   const router = useRouter()
@@ -21,8 +21,13 @@ export default function DriverScanPickupPage() {
 
   useEffect(() => {
     checkAuth()
-    loadRecentScans()
   }, [])
+
+  useEffect(() => {
+    if (driverId) {
+      loadRecentScans()
+    }
+  }, [driverId])
 
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -57,11 +62,9 @@ export default function DriverScanPickupPage() {
   }
 
   const loadRecentScans = async () => {
-    // Load recent pickups confirmed by this driver
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!driverId) return
 
-    const { data: logs } = await supabase
+    const { data: logs, error } = await supabase
       .from('order_status_logs')
       .select(`
         order_id,
@@ -69,35 +72,46 @@ export default function DriverScanPickupPage() {
         orders!inner(tracking_id, driver_id)
       `)
       .eq('status', 'items_being_delivered')
-      .eq('orders.driver_id', user.id)
+      .eq('orders.driver_id', driverId)
       .order('timestamp', { ascending: false })
       .limit(5)
+
+    if (error) {
+      console.error('Failed to load recent scans:', error)
+      return
+    }
 
     if (logs) {
       setRecentScans(logs.map(log => ({
         orderId: log.order_id,
         trackingId: (log.orders as any).tracking_id,
-        timestamp: log.timestamp
+        timestamp: new Date(log.timestamp).toLocaleString()
       })))
     }
   }
 
   const handleScanSuccess = (orderId: string) => {
-    setShowScanner(false)
+    console.log('Scan successful for order:', orderId)
+    
+    // Reload recent scans
     loadRecentScans()
     
-    // Show success message
+    // Close scanner
+    setShowScanner(false)
+    
+    // Show success notification
     setTimeout(() => {
       alert('✅ Pickup confirmed! Status updated to "Items Being Delivered"')
-      // Optionally redirect to driver dashboard or order details
-      // router.push(`/driver/orders/${orderId}`)
-    }, 500)
+    }, 300)
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     )
   }
@@ -133,19 +147,35 @@ export default function DriverScanPickupPage() {
         </div>
 
         {/* Scan Button */}
-        <div className="bg-white rounded-lg shadow-md p-8 mb-6">
-          <button
-            onClick={() => setShowScanner(true)}
-            className="w-full flex items-center justify-center gap-3 bg-orange-500 hover:bg-orange-600 text-white font-bold py-6 rounded-lg transition transform hover:scale-105 shadow-lg"
-          >
-            <QrCode className="w-8 h-8" />
-            <span className="text-xl">Scan Pickup QR Code</span>
-          </button>
-        </div>
+        {!showScanner && (
+          <div className="bg-white rounded-lg shadow-md p-8 mb-6">
+            <button
+              onClick={() => setShowScanner(true)}
+              className="w-full flex items-center justify-center gap-3 bg-orange-500 hover:bg-orange-600 text-white font-bold py-6 rounded-lg transition transform hover:scale-105 shadow-lg"
+            >
+              <QrCode className="w-8 h-8" />
+              <span className="text-xl">Scan Pickup QR Code</span>
+            </button>
+          </div>
+        )}
 
-        {/* QR Scanner */}
-        {showScanner && (
-          <QRScanner onScanSuccess={handleScanSuccess} />
+        {/* QR Scanner Modal */}
+        {showScanner && driverId && (
+          <div className="bg-white rounded-lg shadow-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">QR Code Scanner</h2>
+              <button
+                onClick={() => setShowScanner(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            <QRScanner 
+              onScanSuccess={handleScanSuccess}
+              driverId={driverId}
+            />
+          </div>
         )}
 
         {/* Recent Scans */}
@@ -157,15 +187,32 @@ export default function DriverScanPickupPage() {
             </h2>
             <div className="space-y-3">
               {recentScans.map((scan, index) => (
-                <div key={index} className="flex items-center justify-between">
+                <div 
+                  key={index} 
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+                >
                   <div>
                     <p className="text-sm font-medium text-gray-900">{scan.trackingId}</p>
                     <p className="text-xs text-gray-500">{scan.timestamp}</p>
                   </div>
-                  <span className="text-sm text-gray-600">Order ID: {scan.orderId}</span>
+                  <span className="text-xs text-gray-600 bg-green-100 px-2 py-1 rounded">
+                    Confirmed
+                  </span>
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {recentScans.length === 0 && !showScanner && (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Package className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-600 text-sm">
+              No pickups confirmed yet. Scan your first QR code to get started!
+            </p>
           </div>
         )}
       </div>
