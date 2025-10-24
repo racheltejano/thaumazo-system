@@ -10,7 +10,9 @@ import moment from 'moment-timezone'
 import { supabase } from '@/lib/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import LocationTest from '@/components/LocationTest'
-
+import QRScanner from '@/components/Driver/QRScanner'
+import { QrCode, X } from 'lucide-react'
+import { PickupConfirmation } from '@/components/Driver/PickupConfirmation'
 
 moment.tz.setDefault('Asia/Manila')
 const localizer = momentLocalizer(moment)
@@ -77,9 +79,11 @@ const ORDER_STATUSES = [
   { value: 'driver_assigned', label: 'Driver Assigned', color: '#3182ce' },
   { value: 'truck_left_warehouse', label: 'Truck Left Warehouse', color: '#d69e2e' },
   { value: 'arrived_at_pickup', label: 'Arrived at Pickup', color: '#ed8936' },
+  { value: 'items_being_delivered', label: 'Items Being Delivered', color: '#9333ea' }, 
   { value: 'delivered', label: 'Delivered', color: '#38a169' },
   { value: 'cancelled', label: 'Cancelled', color: '#e53e3e' },
 ]
+
 
 function getWeatherDescription(code: number): string {
   const weatherCodes: Record<number, string> = {
@@ -145,6 +149,7 @@ export default function DriverCalendarPage() {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState('')
+  const [showPickupConfirmation, setShowPickupConfirmation] = useState(false)
 
   useEffect(() => {
     const fetchSessionThenData = async () => {
@@ -450,6 +455,13 @@ export default function DriverCalendarPage() {
     }
   }
 
+  const handlePickupScanSuccess = async (orderId: string) => {
+  console.log('✅ Pickup confirmed for order:', orderId)
+  setShowPickupConfirmation(false)
+  await fetchDriverData()
+  alert('Pickup confirmed! Order status updated to Items Being Delivered.')
+  setSelectedOrder(null)
+}
   
 
   const getStatusColor = (status: string) => {
@@ -463,18 +475,18 @@ export default function DriverCalendarPage() {
   }
 
   const getAvailableNextStatuses = (currentStatus: string) => {
-    // Define logical progression of statuses
-    const statusFlow = {
-      'order_placed': ['driver_assigned', 'cancelled'],
-      'driver_assigned': ['truck_left_warehouse', 'cancelled'],
-      'truck_left_warehouse': ['arrived_at_pickup', 'cancelled'],
-      'arrived_at_pickup': ['delivered', 'cancelled'],
-      'delivered': [], // Final state
-      'cancelled': [] // Final state
-    }
-
-    return statusFlow[currentStatus as keyof typeof statusFlow] || []
+  const statusFlow = {
+    'order_placed': ['driver_assigned', 'cancelled'],
+    'driver_assigned': ['truck_left_warehouse', 'cancelled'],
+    'truck_left_warehouse': ['arrived_at_pickup', 'cancelled'],
+    'arrived_at_pickup': ['cancelled'],
+    'items_being_delivered': ['delivered', 'cancelled'], 
+    'delivered': [], 
+    'cancelled': [] 
   }
+
+  return statusFlow[currentStatus as keyof typeof statusFlow] || []
+}
 
   const getTotalHours = () => {
     return events
@@ -967,6 +979,51 @@ return (
                     </div>
                   </div>
                 )}
+
+               {/* Pickup Confirmation Section - Only show when status is 'arrived_at_pickup' */}
+{selectedOrder.status === 'arrived_at_pickup' && (
+  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+    <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-orange-800">
+      <QrCode className="w-5 h-5" />
+      Confirm Pickup with QR Code
+    </h4>
+    
+    {!showPickupConfirmation ? (
+      <div>
+        <p className="text-sm text-orange-700 mb-3">
+          Ask the client to show their pickup QR code and scan it to confirm pickup.
+        </p>
+        <button
+          onClick={() => setShowPickupConfirmation(true)}
+          className="w-full px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+        >
+          <QrCode className="w-4 h-4" />
+          Open QR Scanner
+        </button>
+      </div>
+    ) : (
+      <div className="space-y-3">
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-orange-700 font-medium">
+            Point camera at client's QR code
+          </p>
+          <button
+            onClick={() => setShowPickupConfirmation(false)}
+            className="p-1 hover:bg-orange-100 rounded-full transition"
+          >
+            <X className="w-4 h-4 text-orange-600" />
+          </button>
+        </div>
+        <div className="bg-white rounded-lg p-3 border border-orange-200">
+          <QRScanner 
+            onScanSuccess={handlePickupScanSuccess}
+            driverId={selectedOrder.driver_id || null}
+          />
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
                 {/* Status Update Section */}
                 <div className="bg-gray-50 rounded-lg p-4">
