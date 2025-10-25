@@ -84,7 +84,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
   })
   const [products, setProducts] = useState<Product[]>([])
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([
-    { product_id: null, product_name: '', quantity: 1, isNewProduct: false, weight: undefined, volume: undefined, is_fragile: false }
+    { product_id: null, product_name: '', quantity: 1, isNewProduct: true, weight: undefined, volume: undefined, is_fragile: false }
   ])
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([{ name: '', address: '', contact: '', phone: '' }])
   const [submitted, setSubmitted] = useState(false)
@@ -407,8 +407,15 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       dropoffs: [...prev.dropoffs, { isValid: false, isValidating: false }]
     }))
   }
-  const addOrderProduct = () => setOrderProducts([...orderProducts, { product_id: null, product_name: '', quantity: 1, isNewProduct: false, weight: undefined, volume: undefined, is_fragile: false }])
-
+  const addOrderProduct = () => setOrderProducts([...orderProducts, { 
+    product_id: null, 
+    product_name: '', 
+    quantity: 1, 
+    isNewProduct: true, // Always true now
+    weight: undefined, 
+    volume: undefined, 
+    is_fragile: false 
+  }])
   const removeOrderProduct = (index: number) => {
     if (orderProducts.length > 1) {
       setOrderProducts(orderProducts.filter((_, i) => i !== index))
@@ -608,12 +615,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     // Validate order products
     for (let i = 0; i < orderProducts.length; i++) {
       const op = orderProducts[i]
-      if (op.isNewProduct && !op.product_name.trim()) {
+      if (!op.product_name.trim()) {
         setError(`Product #${i + 1} name is required`)
-        return
-      }
-      if (!op.isNewProduct && !op.product_id) {
-        setError(`Please select a product for item #${i + 1}`)
         return
       }
       if (op.quantity <= 0) {
@@ -769,8 +772,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     const orderProductEntries = []
 
     for (const op of orderProducts) {
-      if (op.isNewProduct && op.product_name.trim()) {
-        // Create new product first
+      if (op.product_name.trim()) {
+        // Create new product
         const newProductData = {
           name: op.product_name,
           weight: op.weight || null,
@@ -796,13 +799,6 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
             quantity: op.quantity,
           })
         }
-      } else if (!op.isNewProduct && op.product_id) {
-        // Use existing product
-        orderProductEntries.push({
-          order_id: order.id,
-          product_id: op.product_id,
-          quantity: op.quantity,
-        })
       }
     }
 
@@ -1042,10 +1038,17 @@ if (form.email) {
               <div className="flex justify-between items-center">
                 <h3 className="font-semibold text-sm text-gray-700">Product #{i + 1}</h3>
                 {orderProducts.length > 1 && (
-                  <button type="button" onClick={() => removeOrderProduct(i)} className="text-sm text-red-600 hover:underline">x Remove</button>
+                  <button 
+                    type="button" 
+                    onClick={() => removeOrderProduct(i)} 
+                    className="text-sm text-red-600 hover:underline"
+                  >
+                    x Remove
+                  </button>
                 )}
               </div>
               
+              {/* COMMENTED OUT: Radio button selection between existing/new product
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2">
                   <input
@@ -1066,7 +1069,29 @@ if (form.email) {
                   <span className="text-sm text-gray-700">Create new product</span>
                 </label>
               </div>
+              */}
 
+              {/* NEW PRODUCT INPUT - Always shown, no toggle */}
+              <div className="flex gap-2">
+                <input
+                  value={op.product_name}
+                  onChange={e => updateOrderProduct(i, 'product_name', e.target.value)}
+                  placeholder="Product Name*"
+                  className="border border-gray-400 p-3 flex-1 rounded text-gray-900"
+                  required
+                />
+                <input
+                  type="number"
+                  value={op.quantity}
+                  onChange={e => updateOrderProduct(i, 'quantity', +e.target.value)}
+                  placeholder="Qty"
+                  min="1"
+                  className="border border-gray-400 p-3 w-24 rounded text-gray-900"
+                  required
+                />
+              </div>
+
+              {/* COMMENTED OUT: Conditional rendering based on isNewProduct
               <div className="flex gap-2">
                 {op.isNewProduct ? (
                   <input
@@ -1100,48 +1125,58 @@ if (form.email) {
                   className="border border-gray-400 p-3 w-24 rounded text-gray-900"
                 />
               </div>
+              */}
 
+              {/* Additional product details - Always shown */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={op.weight || ''}
+                    onChange={e => updateOrderProduct(i, 'weight', e.target.value ? +e.target.value : undefined)}
+                    placeholder="0.0"
+                    className="border border-gray-400 p-2 w-full rounded text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Volume (m³)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={op.volume || ''}
+                    onChange={e => updateOrderProduct(i, 'volume', e.target.value ? +e.target.value : undefined)}
+                    placeholder="0.00"
+                    className="border border-gray-400 p-2 w-full rounded text-gray-900"
+                  />
+                </div>
+                <div className="flex items-center">
+                  <label className="flex items-center gap-2 text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={op.is_fragile || false}
+                      onChange={e => updateOrderProduct(i, 'is_fragile', e.target.checked)}
+                    />
+                    <span className="text-sm">Fragile Item</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* COMMENTED OUT: Conditional rendering of additional fields
               {op.isNewProduct && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={op.weight || ''}
-                      onChange={e => updateOrderProduct(i, 'weight', e.target.value ? +e.target.value : undefined)}
-                      placeholder="0.0"
-                      className="border border-gray-400 p-2 w-full rounded text-gray-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Volume (m³)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={op.volume || ''}
-                      onChange={e => updateOrderProduct(i, 'volume', e.target.value ? +e.target.value : undefined)}
-                      placeholder="0.00"
-                      className="border border-gray-400 p-2 w-full rounded text-gray-900"
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <label className="flex items-center gap-2 text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={op.is_fragile || false}
-                        onChange={e => updateOrderProduct(i, 'is_fragile', e.target.checked)}
-                      />
-                      <span className="text-sm">Fragile Item</span>
-                    </label>
-                  </div>
+                  // ... same fields as above ...
                 </div>
               )}
+              */}
             </div>
           ))}
-          <button type="button" onClick={addOrderProduct} className="text-orange-600 hover:underline">+ Add Product</button>
+          <button type="button" onClick={addOrderProduct} className="text-orange-600 hover:underline">
+            + Add Product
+          </button>
         </fieldset>
 
         {/* Drop-offs */}
