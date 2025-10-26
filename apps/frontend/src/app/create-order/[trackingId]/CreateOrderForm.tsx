@@ -10,6 +10,7 @@ import { createSupabaseWithTracking } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { geocodePhilippineAddress } from '@/lib/maps'
 import SuccessPopup from '@/components/Client/SuccessPopup'
+import { usePricingCalculator, PriceBreakdown } from '@/components/PricingCalculator'
 
 // Initialize dayjs plugins
 dayjs.extend(utc)
@@ -58,7 +59,7 @@ type ClientForm = {
   truck_type?: string
   tail_lift_required?: boolean
   special_instructions?: string
-  estimated_cost?: number
+  // estimated_cost?: number
   pickup_latitude?: number
   pickup_longitude?: number
 }
@@ -80,7 +81,6 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     truck_type: '',
     tail_lift_required: false,
     special_instructions: '',
-    estimated_cost: 2500,
   })
   const [products, setProducts] = useState<Product[]>([])
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([
@@ -197,6 +197,15 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
   }
 
+  const { estimatedCost, distanceBreakdown } = usePricingCalculator({
+        pickupLatitude: form.pickup_latitude,
+        pickupLongitude: form.pickup_longitude,
+        dropoffs,
+        orderProducts,
+        truckType: form.truck_type,
+        tailLiftRequired: form.tail_lift_required
+      })
+
   useEffect(() => {
     const fetchData = async () => {
       // Fetch client data
@@ -222,6 +231,8 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
           pickup_longitude: clientData.pickup_longitude,
         }))
       }
+
+      
 
       // Fetch existing products
       const { data: productsData, error: productsError } = await supabase
@@ -744,7 +755,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       vehicle_type: form.truck_type,
       tail_lift_required: form.tail_lift_required || false,
       special_instructions: form.special_instructions,
-      estimated_cost: form.estimated_cost,
+      estimated_cost: estimatedCost,
       status: 'order_placed',
       tracking_id: trackingId,
       estimated_total_duration: null, // Will be calculated and updated
@@ -868,7 +879,7 @@ if (form.email) {
           pickupDate: form.pickup_date,
           pickupTime: form.pickup_time,
           truckType: form.truck_type,
-          estimatedCost: form.estimated_cost,
+          estimatedCost:estimatedCost,
           specialInstructions: form.special_instructions,
           products: orderProducts.map(op => ({
             name: op.isNewProduct ? op.product_name : products.find(p => p.id === op.product_id)?.name || 'Unknown',
@@ -1255,7 +1266,15 @@ if (form.email) {
             Tail Lift Required
           </label>
           <textarea name="special_instructions" value={form.special_instructions || ''} onChange={handleChange} placeholder="Special Instructions" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
-          <p className="text-sm text-gray-700">Estimated Cost: ₱{form.estimated_cost?.toFixed(2)}</p>
+          <PriceBreakdown
+            pickupLatitude={form.pickup_latitude}
+            pickupLongitude={form.pickup_longitude}
+            dropoffs={dropoffs}
+            orderProducts={orderProducts}
+            truckType={form.truck_type}
+            tailLiftRequired={form.tail_lift_required}
+            estimatedCost={estimatedCost}
+          />
         </fieldset>
 
         <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded shadow">
