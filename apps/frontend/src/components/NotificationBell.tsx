@@ -1,57 +1,60 @@
-import { useState, useEffect, useRef } from 'react';
-import { Bell, X, Check, Trash2 } from 'lucide-react';
+'use client';
 
-// Mock notification type - you'll replace this with your actual data
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Bell, Check, Trash2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
 type Notification = {
   id: string;
+  user_id: string;
   title: string;
   message: string;
   type: 'order' | 'status' | 'reminder' | 'system';
   read: boolean;
-  timestamp: string;
   link?: string;
+  created_at: string;
 };
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      title: 'New Order Assigned',
-      message: 'Tracking #12345 - Pickup at 2:00 PM today',
-      type: 'order',
-      read: false,
-      timestamp: new Date(Date.now() - 5 * 60000).toISOString(),
-      link: '/driver/calendar'
-    },
-    {
-      id: '2',
-      title: 'Order Status Updated',
-      message: 'Tracking #12344 marked as delivered',
-      type: 'status',
-      read: false,
-      timestamp: new Date(Date.now() - 30 * 60000).toISOString(),
-    },
-    {
-      id: '3',
-      title: 'Pickup Reminder',
-      message: 'Pickup scheduled in 30 minutes',
-      type: 'reminder',
-      read: true,
-      timestamp: new Date(Date.now() - 2 * 60 * 60000).toISOString(),
-    },
-    {
-      id: '4',
-      title: 'System Update',
-      message: 'New features available in your dashboard',
-      type: 'system',
-      read: true,
-      timestamp: new Date(Date.now() - 24 * 60 * 60000).toISOString(),
-    }
-  ]);
-
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Fetch notifications from Supabase
+  const fetchNotifications = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        return;
+      }
+
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Unexpected error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load notifications on mount
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -70,18 +73,60 @@ export default function NotificationBell() {
     };
   }, [isOpen]);
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+  // Mark notification as read and redirect
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read if not already
+    if (!notification.read) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notification.id);
+
+      // Update local state
+      setNotifications(prev =>
+        prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+      );
+    }
+
+    // Close dropdown
+    setIsOpen(false);
+
+    // Redirect if link exists
+    if (notification.link) {
+      router.push(notification.link);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+  const deleteNotification = async (id: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent notification click
+
+    try {
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', id);
+
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+    }
   };
 
   const getTimeAgo = (timestamp: string) => {
@@ -141,7 +186,12 @@ export default function NotificationBell() {
 
           {/* Notifications List */}
           <div className="max-h-[500px] overflow-y-auto">
-            {notifications.length === 0 ? (
+            {loading ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                <p className="text-gray-500 text-sm">Loading...</p>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="p-8 text-center">
                 <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm">No notifications</p>
@@ -151,7 +201,8 @@ export default function NotificationBell() {
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-4 hover:bg-gray-50 transition-colors ${
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                       !notification.read ? 'bg-blue-50' : ''
                     }`}
                   >
@@ -176,25 +227,15 @@ export default function NotificationBell() {
                         </p>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-500">
-                            {getTimeAgo(notification.timestamp)}
+                            {getTimeAgo(notification.created_at)}
                           </span>
-                          <div className="flex items-center gap-2">
-                            {!notification.read && (
-                              <button
-                                onClick={() => markAsRead(notification.id)}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                              >
-                                Mark read
-                              </button>
-                            )}
-                            <button
-                              onClick={() => deleteNotification(notification.id)}
-                              className="text-gray-400 hover:text-red-600 transition-colors"
-                              aria-label="Delete notification"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <button
+                            onClick={(e) => deleteNotification(notification.id, e)}
+                            className="text-gray-400 hover:text-red-600 transition-colors"
+                            aria-label="Delete notification"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -207,7 +248,13 @@ export default function NotificationBell() {
           {/* Footer */}
           {notifications.length > 0 && (
             <div className="p-3 border-t border-gray-200 text-center">
-              <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+              <button 
+                onClick={() => {
+                  setIsOpen(false);
+                  // You can create a notifications page later
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
                 View all notifications
               </button>
             </div>
