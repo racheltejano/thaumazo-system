@@ -55,14 +55,14 @@ const sidebarMenus: SidebarMenus = {
       href: '/admin/drivers',
     },
     {
-      label: 'Pending Approvals',
+      label: 'Create User Accounts',
       icon: (
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M9 12l2 2l4 -4" />
           <circle cx="12" cy="12" r="10" />
         </svg>
       ),
-      href: '/admin/approvals',
+      href: '/admin/new-user',
     },
     {
       label: 'Orders Management',

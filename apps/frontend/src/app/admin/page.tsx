@@ -270,7 +270,7 @@ export default function AdminDashboard() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Pending Approvals</p>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Create User Accounts</p>
                     {statsLoading ? (
                       <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                     ) : dashboardStats.pendingApprovals === 0 ? (
@@ -403,7 +403,7 @@ export default function AdminDashboard() {
                   Inventory Check
                 </button>
                 <button
-                  onClick={() => router.push('/admin/approvals')}
+                  onClick={() => router.push('/admin/new-user')}
                   className={`w-full py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md ${
                     dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0
                       ? 'bg-red-600 hover:bg-red-700 text-white'
