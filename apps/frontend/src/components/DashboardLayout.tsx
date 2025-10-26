@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from "next/image";
+import NotificationBell from '@/components/NotificationBell';
 
 
 type SidebarMenuItem = {
@@ -461,12 +462,7 @@ export default function DashboardLayout({
             </span>
 
             {/* Notification bell - only show if enabled for role */}
-            {config.showNotifications && (
-              <button className="relative p-2 rounded-full hover:bg-gray-800 transition-colors">
-                <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 2v1h16v-1l-2-2z"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-                <span className={`absolute top-1 right-1 w-2 h-2 bg-${config.accentColor} rounded-full`} />
-              </button>
-            )}
+            <NotificationBell />
 
             {/* Profile picture / menu */}
             <div className="relative" ref={profileMenuRef}>
