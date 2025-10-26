@@ -581,10 +581,6 @@ export default function DriverCalendarPage() {
 
 return (
   <div className="max-w-7xl mx-auto px-4 py-8">
-
-    <div className="mb-6">
-      <LocationTest />
-    </div>
     
     {/* Error Message */}
     {error && (
@@ -620,6 +616,8 @@ return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
       {/* Left Sidebar */}
       <div className="lg:col-span-1 space-y-6">
+         {/* Location Tracking - NEW */}
+          <LocationTest />
         {/* Current Weather */}
         <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
           <h2 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
