@@ -6,6 +6,10 @@ import { DropoffInfo } from './DropoffInfo'
 import { StatusUpdate } from './StatusUpdate'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+const TIMEZONE = 'Asia/Manila'
+const SLOT_INTERVAL_MINUTES = 30
+const BUFFER_MINUTES = 10
+const ROUND_UP_TO_MINUTES = 10
 
 type Order = {
   id: string
@@ -46,6 +50,47 @@ type Dropoff = {
   longitude: number | null
 }
 
+type Driver = {
+  id: string
+  first_name: string
+  last_name: string
+}
+
+type TimeSlotOption = {
+  id: string
+  start_time: string
+  end_time: string
+  availabilityBlockId: string
+}
+
+type DriverWithSlots = Driver & {
+  availableSlots: TimeSlotOption[]
+  distance?: number
+  workload: number
+  lastDropoff?: {
+    latitude: number
+    longitude: number
+    timestamp: string
+  }
+}
+
+// Helper functions
+function roundUpDuration(minutes: number): number {
+  return Math.ceil(minutes / ROUND_UP_TO_MINUTES) * ROUND_UP_TO_MINUTES
+}
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (x: number) => x * Math.PI / 180
+  const R = 6371
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) ** 2
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
 interface OrderDetailsModalProps {
   selectedOrder: Order
   onClose: () => void
@@ -58,6 +103,13 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
   const [updatedOrder, setUpdatedOrder] = useState<Order>(selectedOrder)
+  // Driver assignment state
+  const [availableDrivers, setAvailableDrivers] = useState<DriverWithSlots[]>([])
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('')
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('')
+  const [loadingDrivers, setLoadingDrivers] = useState(false)
+  const [assigning, setAssigning] = useState(false)
+  const [pickupLocation, setPickupLocation] = useState<{ latitude: number; longitude: number } | null>(null)
 
   useEffect(() => {
     setUpdatedOrder(selectedOrder)
@@ -70,27 +122,78 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
     }
   }, [client, dropoffs])
 
+
   const fetchOrderDetails = async (order: Order) => {
-    try {
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('tracking_id', order.tracking_id)
-        .single()
+  try {
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('tracking_id', order.tracking_id)
+      .single()
 
-      setClient(clientData)
-
-      const { data: dropoffData } = await supabase
-        .from('order_dropoffs')
-        .select('*')
-        .eq('order_id', order.id)
-        .order('sequence', { ascending: true })
-
-      setDropoffs(dropoffData || [])
-    } catch (err) {
-      console.error('❌ Error fetching order details:', err)
+    setClient(clientData)
+    
+    // Set pickup location for driver assignment
+    if (clientData?.pickup_latitude && clientData?.pickup_longitude) {
+      setPickupLocation({
+        latitude: clientData.pickup_latitude,
+        longitude: clientData.pickup_longitude
+      })
     }
+
+    const { data: dropoffData } = await supabase
+      .from('order_dropoffs')
+      .select('*')
+      .eq('order_id', order.id)
+      .order('sequence', { ascending: true })
+
+    setDropoffs(dropoffData || [])
+    
+    // ✨ NEW: Calculate accurate route duration
+    if (clientData?.pickup_latitude && clientData?.pickup_longitude && dropoffData && dropoffData.length > 0) {
+      await calculateRouteAndUpdateOrder(order.id, clientData, dropoffData)
+    }
+  } catch (err) {
+    console.error('❌ Error fetching order details:', err)
   }
+}
+
+const calculateRouteAndUpdateOrder = async (
+  orderId: string,
+  clientData: Client,
+  dropoffData: Dropoff[]
+) => {
+  if (!MAPBOX_TOKEN) return
+
+  const filtered = dropoffData.filter(d => d.latitude && d.longitude)
+  if (filtered.length === 0) return
+
+  const coords = [
+    `${clientData.pickup_longitude},${clientData.pickup_latitude}`,
+    ...filtered.map(d => `${d.longitude},${d.latitude}`)
+  ]
+
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords.join(';')}?access_token=${MAPBOX_TOKEN}&overview=false`
+
+  try {
+    const res = await fetch(url)
+    const data = await res.json()
+    
+    if (data.routes?.[0]?.duration) {
+      const durationMinutes = Math.round(data.routes[0].duration / 60)
+      
+      // Update the local state with accurate duration
+      setUpdatedOrder(prev => ({
+        ...prev,
+        estimated_total_duration: durationMinutes
+      }))
+      
+      console.log('✅ Route duration calculated:', durationMinutes, 'minutes (pickup → dropoffs)')
+    }
+  } catch (error) {
+    console.error('❌ Error calculating route duration:', error)
+  }
+}
 
   const fetchEstimatedTravelTime = async (clientData: Client, dropoffData: Dropoff[]) => {
     if (
@@ -129,6 +232,379 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
     }
   }
 
+  const fetchAvailableDrivers = async () => {
+  setLoadingDrivers(true)
+  
+  try {
+    const pickupTimestamp = updatedOrder.pickup_timestamp || 
+      `${updatedOrder.pickup_date}T${updatedOrder.pickup_time}`
+    
+    const pickupDate = new Date(pickupTimestamp)
+    const dateStr = pickupDate.toISOString().split('T')[0]
+    const dayStart = new Date(`${dateStr}T00:00:00Z`)
+    const dayEnd = new Date(`${dateStr}T23:59:59Z`)
+
+    // Warehouse coordinates (from pricing config)
+    const WAREHOUSE_COORDS = { lat: 14.8506156, lon: 120.8238576 }
+
+    // Fetch all drivers
+    const { data: drivers } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name')
+      .eq('role', 'driver')
+
+    if (!drivers || drivers.length === 0) {
+      setAvailableDrivers([])
+      setLoadingDrivers(false)
+      return
+    }
+
+    // Fetch driver availability
+    const { data: availabilities } = await supabase
+      .from('driver_availability')
+      .select('id, driver_id, start_time, end_time')
+      .lte('start_time', dayEnd.toISOString())
+      .gte('end_time', dayStart.toISOString())
+
+    // Fetch existing time slots for this day
+    const { data: existingSlots } = await supabase
+      .from('driver_time_slots')
+      .select('driver_id, start_time, end_time, status, order_id')
+      .lte('start_time', dayEnd.toISOString())
+      .gte('end_time', dayStart.toISOString())
+      .in('status', ['scheduled', 'completed'])
+
+    // Fetch last dropoffs and workload for ALL previous orders (not just today)
+    const driverIds = drivers.map(d => d.id)
+    const { data: lastOrders } = await supabase
+      .from('orders')
+      .select(`
+        driver_id,
+        estimated_end_timestamp,
+        estimated_total_duration,
+        order_dropoffs (
+          latitude,
+          longitude,
+          sequence
+        )
+      `)
+      .in('driver_id', driverIds)
+      .lt('estimated_end_timestamp', pickupTimestamp)
+      .in('status', ['driver_assigned', 'truck_left_warehouse', 'arrived_at_pickup', 'delivered'])
+      .order('estimated_end_timestamp', { ascending: false })
+
+    // Process last dropoffs and workload
+const driverLastDropoffs: Record<string, any> = {}
+const driverLastDropoffToday: Record<string, any> = {} // NEW: Track today's last dropoff specifically
+const driverWorkload: Record<string, number> = {}
+
+drivers.forEach(d => {
+  driverWorkload[d.id] = 0
+})
+
+for (const order of lastOrders || []) {
+  // Track overall last dropoff (for display purposes)
+  if (!driverLastDropoffs[order.driver_id]) {
+    const lastDropoff = order.order_dropoffs
+      ?.sort((a: any, b: any) => b.sequence - a.sequence)[0]
+    
+    if (lastDropoff) {
+      driverLastDropoffs[order.driver_id] = {
+        latitude: lastDropoff.latitude,
+        longitude: lastDropoff.longitude,
+        timestamp: order.estimated_end_timestamp
+      }
+    }
+  }
+  
+  // NEW: Track last dropoff specifically from TODAY's orders
+  const orderEndDate = new Date(order.estimated_end_timestamp).toISOString().split('T')[0]
+  if (orderEndDate === dateStr && !driverLastDropoffToday[order.driver_id]) {
+    const lastDropoff = order.order_dropoffs
+      ?.sort((a: any, b: any) => b.sequence - a.sequence)[0]
+    
+    if (lastDropoff) {
+      driverLastDropoffToday[order.driver_id] = {
+        latitude: lastDropoff.latitude,
+        longitude: lastDropoff.longitude,
+        timestamp: order.estimated_end_timestamp
+      }
+    }
+  }
+  
+  if (order.estimated_total_duration) {
+    driverWorkload[order.driver_id] += order.estimated_total_duration
+  }
+}
+
+    // Process each driver
+    const driversWithSlots: DriverWithSlots[] = []
+
+    for (const driver of drivers) {
+      const driverAvailabilities = availabilities?.filter(a => a.driver_id === driver.id) || []
+      const driverExistingSlots = existingSlots?.filter(s => s.driver_id === driver.id) || []
+
+      if (driverAvailabilities.length === 0) continue
+
+      // Check if driver has any scheduled orders BEFORE this pickup on the same day
+      const pickupTimestamp = updatedOrder.pickup_timestamp || 
+        `${updatedOrder.pickup_date}T${updatedOrder.pickup_time}`
+      const pickupTime = new Date(pickupTimestamp)
+
+      const hasOrdersBeforeThisPickup = driverExistingSlots.some(slot => {
+        const slotDate = new Date(slot.start_time).toISOString().split('T')[0]
+        const slotEndTime = new Date(slot.end_time)
+        return slotDate === dateStr && slotEndTime < pickupTime
+      })
+
+      let travelTimeToPickup = 0
+      let travelDistanceToPickup = 0
+
+      if (pickupLocation) {
+        if (hasOrdersBeforeThisPickup && driverLastDropoffToday[driver.id]) {
+          // Driver has orders TODAY that end before this pickup - calculate from today's last dropoff
+          travelDistanceToPickup = haversineDistance(
+            driverLastDropoffToday[driver.id].latitude,
+            driverLastDropoffToday[driver.id].longitude,
+            pickupLocation.latitude,
+            pickupLocation.longitude
+          )
+        } else {
+          // First order of the day OR no orders before this pickup - calculate from warehouse
+          travelDistanceToPickup = haversineDistance(
+            WAREHOUSE_COORDS.lat,
+            WAREHOUSE_COORDS.lon,
+            pickupLocation.latitude,
+            pickupLocation.longitude
+          )
+        }
+        
+        // Estimate 40 km/h average speed in city traffic
+        travelTimeToPickup = Math.ceil((travelDistanceToPickup / 40) * 60) // minutes
+      }
+     
+
+      // Calculate total duration needed for time slot
+      const orderDuration = updatedOrder.estimated_total_duration || 120
+      const totalDurationNeeded = orderDuration + travelTimeToPickup
+
+      const timeSlots = generateTimeSlotOptionsForDriver(
+        driverAvailabilities,
+        driverExistingSlots,
+        totalDurationNeeded,
+        dayStart,
+        dayEnd,
+        travelTimeToPickup // Pass travel time to show in UI
+      )
+
+      if (timeSlots.length > 0) {
+        driversWithSlots.push({
+          ...driver,
+          availableSlots: timeSlots,
+          distance: travelDistanceToPickup,
+          workload: driverWorkload[driver.id] || 0,
+          lastDropoff: driverLastDropoffs[driver.id]
+        })
+      }
+    }
+
+    // Sort by distance then workload
+    driversWithSlots.sort((a, b) => {
+      if (a.distance !== undefined && b.distance !== undefined) {
+        if (Math.abs(a.distance - b.distance) > 5) {
+          return a.distance - b.distance
+        }
+      }
+      return a.workload - b.workload
+    })
+
+    setAvailableDrivers(driversWithSlots)
+    
+    // Auto-select first driver and slot
+    if (driversWithSlots.length > 0) {
+      setSelectedDriverId(driversWithSlots[0].id)
+      setSelectedTimeSlot(driversWithSlots[0].availableSlots[0].id)
+    }
+  } catch (error) {
+    console.error('Error fetching available drivers:', error)
+  } finally {
+    setLoadingDrivers(false)
+  }
+}
+
+  const generateTimeSlotOptionsForDriver = (
+  availabilities: any[],
+  existingSlots: any[],
+  estimatedDuration: number,
+  dayStart: Date,
+  dayEnd: Date,
+  travelTimeToPickup: number = 0
+): TimeSlotOption[] => {
+  const roundedDuration = roundUpDuration(estimatedDuration)
+  const durationMs = roundedDuration * 60 * 1000
+  const bufferMs = BUFFER_MINUTES * 60 * 1000
+
+  const options: TimeSlotOption[] = []
+
+  // Create buffered existing slots with 10-minute buffer on BOTH sides
+  const bufferedExistingSlots = existingSlots.map(slot => {
+    const existingStart = new Date(slot.start_time.endsWith('Z') ? slot.start_time : slot.start_time + 'Z')
+    const existingEnd = new Date(slot.end_time.endsWith('Z') ? slot.end_time : slot.end_time + 'Z')
+    
+    return {
+      bufferedStart: new Date(existingStart.getTime() - bufferMs),
+      bufferedEnd: new Date(existingEnd.getTime() + bufferMs),
+      originalStart: existingStart,
+      originalEnd: existingEnd
+    }
+  })
+
+  availabilities.forEach(block => {
+    const blockStart = new Date(block.start_time.endsWith('Z') ? block.start_time : block.start_time + 'Z')
+    const blockEnd = new Date(block.end_time.endsWith('Z') ? block.end_time : block.end_time + 'Z')
+    
+    const effectiveStart = new Date(Math.max(blockStart.getTime(), dayStart.getTime()))
+    const effectiveEnd = new Date(Math.min(blockEnd.getTime(), dayEnd.getTime()))
+    
+    if (effectiveStart >= effectiveEnd) return
+
+    let currentSlotStart = new Date(effectiveStart)
+    
+    // Round to nearest slot interval
+    const startMinutes = currentSlotStart.getMinutes()
+    const remainder = startMinutes % SLOT_INTERVAL_MINUTES
+    if (remainder !== 0) {
+      currentSlotStart.setMinutes(startMinutes + (SLOT_INTERVAL_MINUTES - remainder), 0, 0)
+    }
+
+    while (currentSlotStart < effectiveEnd) {
+      const slotEnd = new Date(currentSlotStart.getTime() + durationMs)
+      
+      if (slotEnd <= effectiveEnd) {
+        // Check for conflicts with 10-minute buffer
+        const hasConflict = bufferedExistingSlots.some(existingSlot => {
+          return currentSlotStart < existingSlot.bufferedEnd && existingSlot.bufferedStart < slotEnd
+        })
+
+        if (!hasConflict) {
+          options.push({
+            id: `${currentSlotStart.getTime()}_${slotEnd.getTime()}`,
+            start_time: currentSlotStart.toISOString(),
+            end_time: slotEnd.toISOString(),
+            availabilityBlockId: block.id
+          })
+        }
+      }
+      
+      currentSlotStart = new Date(currentSlotStart.getTime() + (SLOT_INTERVAL_MINUTES * 60 * 1000))
+    }
+  })
+
+  options.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  
+  return options
+}
+
+  const handleAssignDriver = async () => {
+    if (!selectedDriverId || !selectedTimeSlot) {
+      alert('Please select a driver and time slot')
+      return
+    }
+
+    setAssigning(true)
+
+    try {
+      const driver = availableDrivers.find(d => d.id === selectedDriverId)
+      const timeSlot = driver?.availableSlots.find(s => s.id === selectedTimeSlot)
+
+      if (!driver || !timeSlot) {
+        throw new Error('Invalid driver or time slot selection')
+      }
+
+      const startDateTime = new Date(timeSlot.start_time)
+      const endDateTime = new Date(timeSlot.end_time)
+      const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
+
+      // Update order
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          driver_id: driver.id,
+          pickup_timestamp: startDateTime.toISOString(),
+          estimated_total_duration: durationMins,
+          estimated_end_timestamp: endDateTime.toISOString(),
+          status: 'driver_assigned',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', updatedOrder.id)
+
+      if (orderUpdateError) throw orderUpdateError
+
+      // Check for existing time slot
+      const { data: existingSlot } = await supabase
+        .from('driver_time_slots')
+        .select('id, status, order_id')
+        .eq('driver_id', driver.id)
+        .eq('start_time', startDateTime.toISOString())
+        .eq('end_time', endDateTime.toISOString())
+        .maybeSingle()
+
+      if (existingSlot) {
+        const { error: updateSlotError } = await supabase
+          .from('driver_time_slots')
+          .update({
+            order_id: updatedOrder.id,
+            status: 'scheduled',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingSlot.id)
+
+        if (updateSlotError) throw updateSlotError
+      } else {
+        const { error: timeSlotError } = await supabase
+          .from('driver_time_slots')
+          .insert({
+            driver_id: driver.id,
+            driver_availability_id: timeSlot.availabilityBlockId,
+            order_id: updatedOrder.id,
+            start_time: startDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            status: 'scheduled',
+          })
+
+        if (timeSlotError) throw timeSlotError
+      }
+
+      alert(`Successfully assigned order to ${driver.first_name} ${driver.last_name}`)
+      onOrderUpdate()
+      onClose()
+    } catch (error) {
+      console.error('Error assigning driver:', error)
+      alert(`Failed to assign driver: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: TIMEZONE
+    })
+  }
+
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+  }
+
+  const selectedDriver = availableDrivers.find(d => d.id === selectedDriverId)
+  const selectedSlot = selectedDriver?.availableSlots.find(s => s.id === selectedTimeSlot)
+
   const googleMapsUrl = client && dropoffs.length > 0
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
         client.pickup_address
@@ -161,20 +637,152 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-6">
-              <OrderInfo order={updatedOrder} estimatedTime={estimatedTime} />
-              <StatusUpdate 
-                currentStatus={updatedOrder.status} 
-                order={updatedOrder} 
-                onStatusUpdate={() => {}} 
-                loading={statusLoading} 
-              />
+  <OrderInfo order={updatedOrder} estimatedTime={estimatedTime} />
+  
+  {/* MOVED: Driver Assignment Section HERE (was at bottom) */}
+  {updatedOrder.status === 'order_placed' && (
+    <div className="space-y-4">
+      {/* Driver Assignment Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+      {!loadingDrivers && availableDrivers.length === 0 ? (
+        <button
+          onClick={fetchAvailableDrivers}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
+        >
+          <span>🚛</span>
+          <span>Assign Driver</span>
+        </button>
+      ) : loadingDrivers ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="text-gray-500 mt-4">Finding available drivers...</p>
+        </div>
+      ) : availableDrivers.length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-800">🚛 Assign Driver</h4>
+            <button
+              onClick={() => setAvailableDrivers([])}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Driver
+            </label>
+            <select
+              value={selectedDriverId}
+              onChange={(e) => {
+                setSelectedDriverId(e.target.value)
+                const driver = availableDrivers.find(d => d.id === e.target.value)
+                if (driver && driver.availableSlots.length > 0) {
+                  setSelectedTimeSlot(driver.availableSlots[0].id)
+                }
+              }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {availableDrivers.map(driver => (
+                <option key={driver.id} value={driver.id}>
+                  {driver.first_name} {driver.last_name}
+                  {driver.distance !== undefined && ` • ${driver.distance.toFixed(1)}km to pickup`}
+                  {` • ${formatDuration(driver.workload)} workload • ${driver.availableSlots.length} slots`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedDriver && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Time Slot ({selectedDriver.availableSlots.length} available)
+              </label>
+              <select
+                value={selectedTimeSlot}
+                onChange={(e) => setSelectedTimeSlot(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {selectedDriver.availableSlots.map(slot => (
+                  <option key={slot.id} value={slot.id}>
+                    {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                  </option>
+                ))}
+              </select>
             </div>
+          )}
+
+          {selectedDriver && selectedSlot && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h5 className="font-semibold text-blue-900 mb-2">Assignment Summary</h5>
+              <div className="space-y-1 text-sm text-blue-800">
+                <p><strong>Driver:</strong> {selectedDriver.first_name} {selectedDriver.last_name}</p>
+                
+                {selectedDriver.distance !== undefined && (
+                  <p><strong>Travel to pickup:</strong> {selectedDriver.distance.toFixed(1)} km 
+                    {selectedDriver.lastDropoff ? ' from last dropoff' : ' from warehouse'}
+                  </p>
+                )}
+                
+                <p><strong>Current workload:</strong> {formatDuration(selectedDriver.workload)}</p>
+                <p><strong>Scheduled time:</strong> {formatTime(selectedSlot.start_time)} - {formatTime(selectedSlot.end_time)}</p>
+                
+                {(() => {
+                  if (pickupLocation && selectedDriver.distance) {
+                    const travelTime = Math.ceil((selectedDriver.distance / 40) * 60)
+                    const orderDuration = updatedOrder.estimated_total_duration || 120
+                    
+                    return (
+                      <div className="mt-2 pt-2 border-t border-blue-300 space-y-1">
+                        <p className="text-xs text-blue-700 font-semibold">Time Breakdown:</p>
+                        <p className="text-xs text-blue-600">
+                          🚗 Travel time: {travelTime} mins ({selectedDriver.distance.toFixed(1)} km)
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          📦 Order duration: {formatDuration(orderDuration)}
+                        </p>
+                        <p className="text-xs text-blue-600 font-semibold">
+                          ⏱️ Total slot: {formatDuration(travelTime + orderDuration)}
+                        </p>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handleAssignDriver}
+            disabled={assigning || !selectedDriverId || !selectedTimeSlot}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {assigning ? 'Assigning...' : 'Assign Driver'}
+          </button>
+        </div>
+      ) : null}
+    </div>
+    
+    {/* Cancel Order Button */}
+    <button
+      className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg transition"
+    >
+      Cancel Order
+    </button>
+  </div>
+)}
+
+</div>
             <div className="space-y-6">
               {client && <ClientInfo client={client} mapboxToken={MAPBOX_TOKEN} />}
               {dropoffs.length > 0 && <DropoffInfo dropoffs={dropoffs} mapboxToken={MAPBOX_TOKEN} />}
             </div>
           </div>
-        </div>
+
+          </div>
+
 
         {/* FOOTER - Fixed at bottom */}
         <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-end gap-3">
@@ -195,7 +803,6 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
             Close
           </button>
         </div>
-
       </div>
     </div>
   )
