@@ -303,6 +303,27 @@ export default function DriverAssignmentDrawer({
         throw timeSlotError
       }
 
+      // 🔔 CREATE NOTIFICATION FOR THE DRIVER
+      const { data: orderDetails } = await supabase
+        .from('orders')
+        .select('tracking_id')
+        .eq('id', orderId)
+        .single()
+
+      const startPH = utcToZonedTime(startDateTime, TIMEZONE)
+      const pickupTimeFormatted = formatDate(startPH, 'MMM dd, yyyy h:mm a')
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: selectedDriverId,
+          title: 'New Order Assigned',
+          message: `Tracking #${orderDetails?.tracking_id || orderId.slice(0, 8)} - Pickup at ${pickupTimeFormatted}`,
+          type: 'order',
+          read: false,
+          link: '/driver/calendar',
+        })
+
       // Success - show success popup
       const selectedDriver = drivers.find(d => d.id === selectedDriverId)
       setPopupMessage(`Driver ${selectedDriver?.first_name} ${selectedDriver?.last_name} has been successfully assigned to the order!`)

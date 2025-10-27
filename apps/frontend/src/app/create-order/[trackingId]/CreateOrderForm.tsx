@@ -863,47 +863,84 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
     
    // Step 6: Send order confirmation email
-if (form.email) {
-  try {
-    const emailResponse = await fetch('/api/send-order-confirmation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: form.email,
-        trackingId: trackingId,
-        orderDetails: {
-          contactPerson: form.contact_person,
-          businessName: form.business_name,
-          contactNumber: form.contact_number,
-          pickupAddress: form.pickup_address,
-          pickupDate: form.pickup_date,
-          pickupTime: form.pickup_time,
-          truckType: form.truck_type,
-          estimatedCost:estimatedCost,
-          specialInstructions: form.special_instructions,
-          products: orderProducts.map(op => ({
-            name: op.isNewProduct ? op.product_name : products.find(p => p.id === op.product_id)?.name || 'Unknown',
-            quantity: op.quantity,
-            weight: op.weight,
-            isFragile: op.is_fragile,
-          })),
-          dropoffs: dropoffs.map(d => ({
-            address: d.address,
-            contact: d.contact,
-            phone: d.phone,
-          })),
-        },
-      }),
-    })
+    if (form.email) {
+      try {
+        const emailResponse = await fetch('/api/send-order-confirmation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: form.email,
+            trackingId: trackingId,
+            orderDetails: {
+              contactPerson: form.contact_person,
+              businessName: form.business_name,
+              contactNumber: form.contact_number,
+              pickupAddress: form.pickup_address,
+              pickupDate: form.pickup_date,
+              pickupTime: form.pickup_time,
+              truckType: form.truck_type,
+              estimatedCost:estimatedCost,
+              specialInstructions: form.special_instructions,
+              products: orderProducts.map(op => ({
+                name: op.isNewProduct ? op.product_name : products.find(p => p.id === op.product_id)?.name || 'Unknown',
+                quantity: op.quantity,
+                weight: op.weight,
+                isFragile: op.is_fragile,
+              })),
+              dropoffs: dropoffs.map(d => ({
+                address: d.address,
+                contact: d.contact,
+                phone: d.phone,
+              })),
+            },
+          }),
+        })
 
-    if (!emailResponse.ok) {
-      console.warn('Failed to send order confirmation email')
+        if (!emailResponse.ok) {
+          console.warn('Failed to send order confirmation email')
+        }
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError)
+        // Don't fail the order creation if email fails
+      }
     }
-  } catch (emailError) {
-    console.error('Error sending confirmation email:', emailError)
-    // Don't fail the order creation if email fails
-  }
-}
+
+    // 🔔 Step 7: Notify all dispatchers about new order
+    try {
+      // Get all dispatcher user IDs
+      const { data: dispatchers, error: dispatcherError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'dispatcher')
+
+      if (dispatcherError) {
+        console.error('Failed to fetch dispatchers:', dispatcherError)
+      } else if (dispatchers && dispatchers.length > 0) {
+        // Create notification for each dispatcher
+        const notifications = dispatchers.map(dispatcher => ({
+          user_id: dispatcher.id,
+          order_id: order.id,
+          title: 'New Order Created',
+          message: 'Click here to assign a driver and schedule delivery',
+          type: 'order',
+          read: false,
+          link: '/dispatcher/calendar',
+        }))
+
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert(notifications)
+
+        if (notificationError) {
+          console.error('Failed to create notifications:', notificationError)
+        } else {
+          console.log(`✅ Created notifications for ${dispatchers.length} dispatchers`)
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to create dispatcher notifications:', notificationError)
+      // Don't fail order creation if notifications fail
+    }
 
     setSubmitted(true)
   }
