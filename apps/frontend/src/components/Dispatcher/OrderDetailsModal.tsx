@@ -110,6 +110,7 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
   const [loadingDrivers, setLoadingDrivers] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [pickupLocation, setPickupLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [noDriversFound, setNoDriversFound] = useState(false)
 
   useEffect(() => {
     setUpdatedOrder(selectedOrder)
@@ -418,13 +419,18 @@ for (const order of lastOrders || []) {
       return a.workload - b.workload
     })
 
-    setAvailableDrivers(driversWithSlots)
+   
     
-    // Auto-select first driver and slot
-    if (driversWithSlots.length > 0) {
-      setSelectedDriverId(driversWithSlots[0].id)
-      setSelectedTimeSlot(driversWithSlots[0].availableSlots[0].id)
-    }
+    setAvailableDrivers(driversWithSlots)
+
+      // Auto-select first driver and slot
+      if (driversWithSlots.length > 0) {
+        setSelectedDriverId(driversWithSlots[0].id)
+        setSelectedTimeSlot(driversWithSlots[0].availableSlots[0].id)
+        setNoDriversFound(false)
+      } else {
+        setNoDriversFound(true)
+      }
   } catch (error) {
     console.error('Error fetching available drivers:', error)
   } finally {
@@ -620,10 +626,18 @@ for (const order of lastOrders || []) {
       <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] shadow-2xl flex flex-col">
 
         {/* HEADER - Fixed at top */}
+        
         <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl flex justify-between items-center">
           <div>
             <h3 className="text-2xl font-bold text-gray-800">📝 Order Details</h3>
-            <p className="text-sm text-gray-600 mt-1">Tracking ID: <span className="font-semibold text-blue-600">{updatedOrder.tracking_id}</span></p>
+            <p className="text-sm text-gray-600 mt-1">
+              Tracking ID: <span className="font-semibold text-blue-600">{updatedOrder.tracking_id}</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Status: <span className="inline-block px-2 py-1 bg-gray-500 text-white rounded-full text-xs font-medium">
+                {updatedOrder.status.replace(/_/g, ' ').toUpperCase()}
+              </span>
+            </p>
           </div>
           <button 
             onClick={onClose} 
@@ -639,12 +653,16 @@ for (const order of lastOrders || []) {
             <div className="space-y-6">
   <OrderInfo order={updatedOrder} estimatedTime={estimatedTime} />
   
-  {/* MOVED: Driver Assignment Section HERE (was at bottom) */}
+  {/* UPDATE STATUS Section */}
   {updatedOrder.status === 'order_placed' && (
-    <div className="space-y-4">
-      {/* Driver Assignment Section */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-      {!loadingDrivers && availableDrivers.length === 0 ? (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <h4 className="text-sm font-semibold text-blue-900 mb-4 flex items-center gap-2">
+        <span>📊</span>
+        <span>Update Status</span>
+      </h4>
+      
+      <div className="space-y-3">
+      {!loadingDrivers && availableDrivers.length === 0 && !noDriversFound ? (
         <button
           onClick={fetchAvailableDrivers}
           className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
@@ -762,17 +780,43 @@ for (const order of lastOrders || []) {
             {assigning ? 'Assigning...' : 'Assign Driver'}
           </button>
         </div>
+      ) : noDriversFound ? (
+        <div className="text-center py-6">
+          <div className="mb-4">
+            <p className="text-gray-600 mb-2">😔 No available drivers found</p>
+            <p className="text-sm text-gray-500">All drivers are fully booked for this time slot.</p>
+          </div>
+          <button
+            onClick={() => {
+              // Component to be imported later
+              console.log('Request reschedule clicked')
+            }}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
+          >
+            <span>📅</span>
+            <span>Request Reschedule to Client</span>
+          </button>
+          <button
+            onClick={() => {
+              setNoDriversFound(false)
+              setAvailableDrivers([])
+            }}
+            className="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition"
+          >
+            Back
+          </button>
+        </div>
       ) : null}
+        
+        {/* Cancel Order Button */}
+        <button
+          className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 rounded-lg transition"
+        >
+          Cancel Order
+        </button>
+      </div>
     </div>
-    
-    {/* Cancel Order Button */}
-    <button
-      className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg transition"
-    >
-      Cancel Order
-    </button>
-  </div>
-)}
+  )}
 
 </div>
             <div className="space-y-6">
@@ -781,7 +825,7 @@ for (const order of lastOrders || []) {
             </div>
           </div>
 
-          </div>
+        </div>  
 
 
         {/* FOOTER - Fixed at bottom */}
@@ -804,6 +848,6 @@ for (const order of lastOrders || []) {
           </button>
         </div>
       </div>
-    </div>
+    </div> 
   )
 }
