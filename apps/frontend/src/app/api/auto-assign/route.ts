@@ -323,11 +323,57 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 // Get last drop-off locations for each driver
+async function getDriverLastDropoffToday(
+  supabase: any,
+  driverId: string,
+  dateStr: string,
+  beforeTimestamp: string
+): Promise<{ latitude: number; longitude: number; timestamp: string } | null> {
+  
+  const dayStart = zonedTimeToUtc(`${dateStr}T00:00:00`, TIMEZONE)
+  const dayEnd = zonedTimeToUtc(`${dateStr}T23:59:59`, TIMEZONE)
+  
+  const { data: lastOrders, error } = await supabase
+    .from('orders')
+    .select(`
+      estimated_end_timestamp,
+      order_dropoffs (
+        latitude,
+        longitude,
+        sequence
+      )
+    `)
+    .eq('driver_id', driverId)
+    .gte('estimated_end_timestamp', dayStart.toISOString())
+    .lt('estimated_end_timestamp', beforeTimestamp)
+    .in('status', ['driver_assigned', 'truck_left_warehouse', 'arrived_at_pickup', 'item_being_delivered','delivered'])
+    .order('estimated_end_timestamp', { ascending: false })
+    .limit(1)
+
+  if (error || !lastOrders || lastOrders.length === 0) {
+    return null
+  }
+
+  const lastDropoff = lastOrders[0].order_dropoffs
+    ?.sort((a: any, b: any) => b.sequence - a.sequence)[0]
+  
+  if (lastDropoff) {
+    return {
+      latitude: lastDropoff.latitude,
+      longitude: lastDropoff.longitude,
+      timestamp: lastOrders[0].estimated_end_timestamp
+    }
+  }
+  
+  return null
+}
+
+// Get last drop-off locations for each driver (for scoring)
 async function getDriverLastDropoffs(
   supabase: any, 
   drivers: Driver[], 
   beforeTimestamp: string
-): Promise<Record<string, { latitude: number; longitude: number; timestamp: string; distance?: number }>> {
+): Promise<Record<string, { latitude: number; longitude: number; timestamp: string }>> {
   console.log(`  🔍 Fetching last dropoffs for ${drivers.length} drivers before ${beforeTimestamp}`)
   
   const driverIds = drivers.map(d => d.id)
@@ -345,7 +391,7 @@ async function getDriverLastDropoffs(
     `)
     .in('driver_id', driverIds)
     .lt('estimated_end_timestamp', beforeTimestamp)
-    .eq('status', 'completed')
+    .in('status', ['driver_assigned', 'truck_left_warehouse', 'arrived_at_pickup', 'item_being_delivered', 'delivered'])
     .order('estimated_end_timestamp', { ascending: false })
 
   if (error) {
@@ -353,7 +399,7 @@ async function getDriverLastDropoffs(
     return {}
   }
 
-  console.log(`  📍 Found ${lastOrders?.length || 0} completed orders with dropoffs`)
+  console.log(`  📍 Found ${lastOrders?.length || 0} orders with dropoffs`)
 
   const result: Record<string, { latitude: number; longitude: number; timestamp: string }> = {}
   
@@ -377,6 +423,7 @@ async function getDriverLastDropoffs(
   console.log(`  ✅ Found last dropoffs for ${Object.keys(result).length} drivers`)
   return result
 }
+
 
 // Calculate driver score based on distance and workload
 function calculateDriverScore(
@@ -575,7 +622,8 @@ async function findBestDriverAssignmentForDate(
       order,
       dayStart,
       dayEnd,
-      existingAssignments
+      existingAssignments,
+      { latitude: client.pickup_latitude, longitude: client.pickup_longitude }
     )
     
     if (timeSlot) {
@@ -655,7 +703,8 @@ async function findBestDriverByWorkload(
       order,
       dayStart,
       dayEnd,
-      existingAssignments
+      existingAssignments,
+      null
     )
     
     if (timeSlot) {
@@ -682,7 +731,8 @@ async function findAvailableTimeSlotForDriver(
   order: Order,
   dayStart: Date,
   dayEnd: Date,
-  pendingAssignments: PendingAssignment[]
+  pendingAssignments: PendingAssignment[],
+  pickupLocation: { latitude: number; longitude: number } | null
 ): Promise<TimeSlotOption | null> {
   
   console.log(`      🔍 Finding time slot for driver ${driverId}`)
@@ -770,11 +820,50 @@ async function findAvailableTimeSlotForDriver(
     return null
   }
 
-  // Generate time slot options
+  let travelTimeToPickup = 0
+  const WAREHOUSE_COORDS = { lat: 14.8506156, lon: 120.8238576 }
+
+  if (pickupLocation) {
+    const pickupTime = new Date(order.pickup_timestamp)
+    const dateStr = formatDate(utcToZonedTime(pickupTime, TIMEZONE), 'yyyy-MM-dd')
+
+    const hasOrdersBeforeThisPickup = allConflictingSlots.some(slot => {
+      const slotDate = formatDate(utcToZonedTime(new Date(slot.start_time), TIMEZONE), 'yyyy-MM-dd')
+      const slotEndTime = new Date(slot.end_time)
+      return slotDate === dateStr && slotEndTime < pickupTime && slot.status !== 'pending'
+    })
+
+    if (hasOrdersBeforeThisPickup) {
+      const driverLastDropoffToday = await getDriverLastDropoffToday(supabase, driverId, dateStr, order.pickup_timestamp)
+      if (driverLastDropoffToday) {
+        const distance = haversineDistance(
+          driverLastDropoffToday.latitude,
+          driverLastDropoffToday.longitude,
+          pickupLocation.latitude,
+          pickupLocation.longitude
+        )
+        travelTimeToPickup = Math.ceil((distance / 40) * 60)
+        console.log(`      🚗 Travel from last dropoff: ${distance.toFixed(2)}km = ${travelTimeToPickup}min`)
+      }
+    } else {
+      const distance = haversineDistance(
+        WAREHOUSE_COORDS.lat,
+        WAREHOUSE_COORDS.lon,
+        pickupLocation.latitude,
+        pickupLocation.longitude
+      )
+      travelTimeToPickup = Math.ceil((distance / 40) * 60)
+      console.log(`      🏭 Travel from warehouse: ${distance.toFixed(2)}km = ${travelTimeToPickup}min`)
+    }
+  }
+
+  const totalDurationNeeded = order.estimated_total_duration + travelTimeToPickup
+  console.log(`      ⏱️  Total duration: ${order.estimated_total_duration}min (order) + ${travelTimeToPickup}min (travel) = ${totalDurationNeeded}min`)
+
   const timeSlotOptions = generateTimeSlotOptionsForDriver(
     availableBlocks,
     allConflictingSlots,
-    order.estimated_total_duration,
+    totalDurationNeeded,
     dayStart,
     dayEnd
   )
