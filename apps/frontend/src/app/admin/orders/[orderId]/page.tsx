@@ -20,6 +20,7 @@ import {
   FileText
 } from 'lucide-react'
 import Link from 'next/link'
+import EditOrder from '@/components/Admin/EditOrder'
 
 interface Order {
   id: string
@@ -106,6 +107,9 @@ export default function OrderDetailsPage() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+
+  
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -571,7 +575,6 @@ export default function OrderDetailsPage() {
                 </div>
               </div>
             )}
-
             {/* Products */}
             {order.order_products && order.order_products.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border">
@@ -714,9 +717,21 @@ export default function OrderDetailsPage() {
                 >
                   Track Order
                 </button>
-                <button className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
+                <button 
+                  onClick={() => setShowEditModal(true)}
+                  className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
+                >
                   Edit Order
                 </button>
+
+                {showEditModal && (
+                  <EditOrder
+                    order={order}
+                    onClose={() => setShowEditModal(false)}
+                    onSuccess={() => window.location.reload()}
+                  />
+                )}
+
                 <button 
                   onClick={() => setShowCancelModal(true)}
                   disabled={order.status === 'cancelled' || order.status === 'delivered'}
