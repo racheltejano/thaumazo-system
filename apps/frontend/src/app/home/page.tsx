@@ -17,7 +17,7 @@ export default function HomePage() {
   if (footerInView && !footerLoaded) setFooterLoaded(true);
 
   return (
-    <div style={{ background: "#fff" }}>
+    <div style={{ background: "#fff", overflow: "hidden" }}>
       <HomeNavbar />
       <div ref={sectionARef} style={{ minHeight: 10 }} />
       <SectionA inView={sectionAInView} />

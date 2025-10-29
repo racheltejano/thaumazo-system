@@ -1,3 +1,20 @@
+/**
+ * 🗓️ ScheduleAvailability Component
+ * 
+ * Displays a driver’s available working schedule in a clean, filterable card layout.
+ * 
+ * ⚙️ Main Function:
+ * - `ScheduleAvailability({ availabilityData, filteredAvailabilityData, showDateFilter, startDate, endDate, setShowDateFilter, setStartDate, setEndDate, formatDateOnly, formatTime })`:
+ *    Shows all available time slots, with date filtering and duration calculations.
+ * 
+ * 🧩 Features:
+ * - Date range filtering with start & end inputs
+ * - “Reset to 30 days” quick filter button
+ * - Card-based layout showing date, time, and duration
+ * - Empty state when no availability matches filter
+ * - Smooth hover transitions and responsive grid
+ */
+
 import { Calendar, Filter } from 'lucide-react';
 
 interface AvailabilityEntry {

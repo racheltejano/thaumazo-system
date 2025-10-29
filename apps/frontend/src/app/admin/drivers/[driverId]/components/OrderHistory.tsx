@@ -1,3 +1,20 @@
+/**
+ * 📦 OrderHistory Component
+ * 
+ * Displays a driver's or user's past orders in a simple, scrollable list format.
+ * 
+ * ⚙️ Main Function:
+ * - `OrderHistory({ orders, formatDate, formatDateOnly, getStatusColor })`:
+ *    Renders a list of completed or past orders with tracking info, delivery details, and status badges.
+ * 
+ * 🧩 Features:
+ * - Clean card layout for each order
+ * - Colored status tags using `getStatusColor`
+ * - Shows pickup & delivery addresses, schedule, and last updated date
+ * - Graceful empty state when no order history is available
+ */
+
+
 import { Package } from 'lucide-react';
 
 interface Order {

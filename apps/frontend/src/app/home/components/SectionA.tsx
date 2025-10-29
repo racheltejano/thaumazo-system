@@ -10,186 +10,287 @@ interface SectionProps {
 }
 
 function SectionA({ inView }: SectionProps) {
-  // Animation state for staged loading
-  const [showTitle, setShowTitle] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showTrack, setShowTrack] = useState(false);
-  const [showDesc, setShowDesc] = useState(false);
+  const [showHero, setShowHero] = useState(false);
+  const [showSubtitle, setShowSubtitle] = useState(false);
+  const [showButton, setShowButton] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
+  const [showDescription, setShowDescription] = useState(false);
 
   useEffect(() => {
     if (inView) {
-      setTimeout(() => setShowTitle(true), 80);
-      setTimeout(() => setShowCreate(true), 350);
-      setTimeout(() => setShowTrack(true), 600);
-      setTimeout(() => setShowDesc(true), 900);
+      setTimeout(() => setShowHero(true), 100);
+      setTimeout(() => setShowSubtitle(true), 400);
+      setTimeout(() => setShowButton(true), 700);
+      setTimeout(() => setShowFeatures(true), 1000);
+      setTimeout(() => setShowDescription(true), 1300);
     }
   }, [inView]);
 
-  // Info box data - easy to add more boxes
   const infoBoxes = [
     {
       icon: "/mission-icon.svg",
       title: "Mission",
       description: "To help products and services providers become profitable while we make every vehicle for Filipino become available.",
-      delay: 1200
+      delay: 1600
     },
     {
       icon: "/vision-icon.svg",
       title: "Vision",
       description: "To help online sellers and startups earn more while giving buyers smarter, money-saving options.",
-      delay: 1400
+      delay: 1800
     },
     {
       icon: "/commitment-icon.svg",
       title: "Commitments",
       description: "To make every vehicle accessible to Bulakenyos and help more Filipinos move toward their goals.",
-      delay: 1600
+      delay: 2000
     },
     {
       icon: "/people-icon.svg",
       title: "Our People",
-      description: "We equip our taeam with the right skills to deliver each brand's promise—safely, consistently, and efficiently.",
-      delay: 1800
+      description: "We equip our team with the right skills to deliver each brand's promise—safely, consistently, and efficiently.",
+      delay: 2200
     }
   ];
 
   return (
     <section
       style={{
-        background: "#fff",
+        background: "linear-gradient(135deg, #F8FAFF 0%, #F0F5FF 100%)",
         display: "block",
-        paddingTop: 48,
-        paddingBottom: 72,
-        fontSize: 24,
-        fontWeight: 400,
+        paddingTop: 80,
+        paddingBottom: 100,
         position: "relative",
+        overflow: "hidden",
       }}
     >
+      {/* Decorative background elements */}
+      <div style={{
+        position: "absolute",
+        top: -100,
+        right: -100,
+        width: 400,
+        height: 400,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(255,60,2,0.08) 0%, transparent 70%)",
+        filter: "blur(60px)",
+        pointerEvents: "none",
+      }} />
+      <div style={{
+        position: "absolute",
+        bottom: -150,
+        left: -150,
+        width: 500,
+        height: 500,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(17,17,17,0.05) 0%, transparent 70%)",
+        filter: "blur(80px)",
+        pointerEvents: "none",
+      }} />
+
       <div style={{
         width: "100vw",
         boxSizing: "border-box",
-        paddingLeft: "15vw",
-        paddingRight: "15vw",
-        textAlign: "center",
-        margin: 0,
+        paddingLeft: "10vw",
+        paddingRight: "10vw",
+        position: "relative",
+        zIndex: 1,
       }}>
-        <h1
-          style={{
-            fontFamily: "Poppins, sans-serif",
-            fontSize: 32,
-            fontWeight: 700,
-            marginBottom: 18,
-            textAlign: "center",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            width: "100%",
-            maxWidth: "100%",
-            lineHeight: 1.2,
-            marginLeft: "auto",
-            marginRight: "auto",
-            opacity: showTitle ? 1 : 0,
-            transform: showTitle ? "translateY(0)" : "translateY(40px)",
-            transition: "opacity 0.6s cubic-bezier(.4,0,.2,1), transform 0.6s cubic-bezier(.4,0,.2,1)",
-          }}
-          title="Fast, Safe, and Reliable Delivery Across the Philippines"
-        >
-          Fast, Safe, and Reliable Delivery Across the Philippines
-        </h1>
-        <div
-          style={{
-            fontFamily: "Poppins, sans-serif",
-            fontSize: 20,
-            fontWeight: 400,
-            marginBottom: 36,
-            textAlign: "center",
-            color: "#222",
-            opacity: showTitle ? 1 : 0,
-            transform: showTitle ? "translateY(0)" : "translateY(40px)",
-            transition: "opacity 0.6s cubic-bezier(.4,0,.2,1), transform 0.6s cubic-bezier(.4,0,.2,1)",
-            transitionDelay: showTitle ? "0.1s" : "0s",
-          }}
-        >
-          Real-time tracking • Flexible fleet • Transparent pricing
+        {/* Hero Section */}
+        <div style={{
+          maxWidth: 1200,
+          margin: "0 auto",
+          textAlign: "center",
+          marginBottom: 80,
+        }}>
+          <h1
+            style={{
+              fontFamily: "Poppins, sans-serif",
+              fontSize: "clamp(36px, 5vw, 64px)",
+              fontWeight: 800,
+              marginBottom: 24,
+              lineHeight: 1.2,
+              background: "linear-gradient(135deg, #111 0%, #333 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              opacity: showHero ? 1 : 0,
+              transform: showHero ? "translateY(0)" : "translateY(60px)",
+              transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+          >
+            Fast, Safe, and Reliable Delivery<br />Across the Philippines
+          </h1>
+          
+          <p
+            style={{
+              fontFamily: "Poppins, sans-serif",
+              fontSize: "clamp(18px, 2vw, 24px)",
+              fontWeight: 400,
+              color: "#555",
+              marginBottom: 48,
+              lineHeight: 1.6,
+              opacity: showSubtitle ? 1 : 0,
+              transform: showSubtitle ? "translateY(0)" : "translateY(40px)",
+              transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+          >
+            Real-time tracking • Flexible fleet • Transparent pricing
+          </p>
+
+          {/* CTA Button */}
+          <div style={{
+            opacity: showButton ? 1 : 0,
+            transform: showButton ? "translateY(0) scale(1)" : "translateY(20px) scale(0.95)",
+            transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}>
+            <a href="/track" style={{ textDecoration: "none" }}>
+              <button
+                style={{
+                  background: `linear-gradient(135deg, ${ORANGE} 0%, #FF5722 100%)`,
+                  color: "#fff",
+                  fontFamily: "Poppins, sans-serif",
+                  fontWeight: 600,
+                  fontSize: 20,
+                  border: "none",
+                  borderRadius: 16,
+                  boxShadow: "0 8px 32px rgba(255,60,2,0.3)",
+                  padding: "18px 48px",
+                  cursor: "pointer",
+                  outline: "none",
+                  transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 48px rgba(255,60,2,0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(255,60,2,0.3)";
+                }}
+              >
+                Track Your Order Now →
+              </button>
+            </a>
+          </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 10 }}>
-          <a href="/create-order">
-            <button
-              className="sectiona-btn sectiona-create"
-              id="create-order-btn"
-              style={{
-                background: "#111",
-                color: "#fff",
-                fontFamily: "var(--font-geist-sans), Arial, sans-serif",
-                fontWeight: 400,
-                fontSize: 20,
-                border: "none",
-                borderRadius: 10,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.14)",
-                padding: "0.7em 2.2em",
-                marginRight: 8,
-                cursor: "pointer",
-                outline: "none",
-                opacity: showCreate ? 1 : 0,
-                transform: showCreate ? "scale(1)" : "scale(0.8)",
-                transitionDelay: showCreate ? "0.1s" : "0s",
-              }}
-            >
-              Create Order
-            </button>
-          </a>
-          <a href="/track">
-            <button
-              className="sectiona-btn sectiona-track"
-              id="track-order-btn"
-              style={{
-                background: ORANGE,
-                color: "#fff",
-                fontFamily: "var(--font-geist-sans), Arial, sans-serif",
-                fontWeight: 400,
-                fontSize: 20,
-                border: "none",
-                borderRadius: 10,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.14)",
-                padding: "0.7em 2.2em",
-                marginLeft: 8,
-                cursor: "pointer",
-                outline: "none",
-                opacity: showTrack ? 1 : 0,
-                transform: showTrack ? "scale(1)" : "scale(0.8)",
-                transitionDelay: showTrack ? "0.1s" : "0s",
-              }}
-            >
-              Track Order
-            </button>
-          </a>
-        </div>
-        <div
-          style={{
-            fontFamily: "Poppins, sans-serif",
-            fontSize: 20,
-            fontWeight: 400,
-            marginTop: 36,
-            textAlign: "left",
-            color: "#222",
-            width: "100%",
-            boxSizing: "border-box",
-            opacity: showDesc ? 1 : 0,
-            transform: showDesc ? "translateY(0)" : "translateY(40px)",
-            transition: "opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1)",
-          }}
-        >
-          We trust and give value to your business through our technology, this is why we are making ourselves different from those immersing businesses as we heavily invest with the real-time milestone tracking and GPS Integration. This is where we take bold steps in providing assurance to our client how time-critical delivery updates them until it reaches its final destination. Securing trust of clients through our state of the art process both agreed by our stakeholders and partners.
-        </div>
-        
-        {/* Info boxes grid */}
+
+        {/* Feature Cards - 3 columns */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-            gap: "2rem",
-            marginTop: "2rem",
-            width: "100%",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "32px",
+            marginBottom: 80,
+            maxWidth: 1200,
+            margin: "0 auto 80px auto",
+            opacity: showFeatures ? 1 : 0,
+            transform: showFeatures ? "translateY(0)" : "translateY(40px)",
+            transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          {[
+            { icon: "📍", title: "GPS Tracking", desc: "Real-time location updates at every milestone" },
+            { icon: "🚚", title: "Flexible Fleet", desc: "Right vehicle for every delivery need" },
+            { icon: "💰", title: "Smart Pricing", desc: "Transparent rates with no hidden fees" },
+          ].map((feature, idx) => (
+            <div
+              key={idx}
+              style={{
+                background: "rgba(255, 255, 255, 0.8)",
+                backdropFilter: "blur(10px)",
+                borderRadius: 20,
+                padding: "32px 28px",
+                textAlign: "center",
+                border: "1px solid rgba(17, 17, 17, 0.08)",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+                transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-8px)";
+                e.currentTarget.style.boxShadow = "0 12px 40px rgba(0,0,0,0.12)";
+                e.currentTarget.style.borderColor = ORANGE;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.06)";
+                e.currentTarget.style.borderColor = "rgba(17, 17, 17, 0.08)";
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 16 }}>{feature.icon}</div>
+              <h3 style={{
+                fontFamily: "Poppins, sans-serif",
+                fontSize: 22,
+                fontWeight: 700,
+                marginBottom: 12,
+                color: "#111",
+              }}>
+                {feature.title}
+              </h3>
+              <p style={{
+                fontFamily: "Poppins, sans-serif",
+                fontSize: 15,
+                color: "#666",
+                lineHeight: 1.6,
+                margin: 0,
+              }}>
+                {feature.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Value Proposition */}
+        <div
+          style={{
+            maxWidth: 900,
+            margin: "0 auto 80px auto",
+            padding: "48px 40px",
+            background: "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)",
+            backdropFilter: "blur(20px)",
+            borderRadius: 24,
+            border: "1px solid rgba(17, 17, 17, 0.08)",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.08)",
+            opacity: showDescription ? 1 : 0,
+            transform: showDescription ? "translateY(0)" : "translateY(40px)",
+            transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <h2 style={{
+            fontFamily: "Poppins, sans-serif",
+            fontSize: 28,
+            fontWeight: 700,
+            marginBottom: 24,
+            color: "#111",
+            textAlign: "center",
+          }}>
+            Technology-Driven Trust
+          </h2>
+          <p
+            style={{
+              fontFamily: "Poppins, sans-serif",
+              fontSize: 17,
+              fontWeight: 400,
+              color: "#444",
+              lineHeight: 1.8,
+              textAlign: "center",
+              margin: 0,
+            }}
+          >
+            We trust and give value to your business through our technology. Our real-time milestone tracking and GPS integration provide assurance with time-critical delivery updates from pickup to final destination. We secure client trust through state-of-the-art processes agreed upon by stakeholders and partners, making us different from traditional delivery services.
+          </p>
+        </div>
+
+        {/* Info boxes grid - 4 columns */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: "28px",
+            maxWidth: 1200,
+            margin: "0 auto",
           }}
         >
           {infoBoxes.map((box, index) => (
@@ -208,4 +309,4 @@ function SectionA({ inView }: SectionProps) {
   );
 }
 
-export default SectionA; 
+export default SectionA;

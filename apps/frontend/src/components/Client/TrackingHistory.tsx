@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Download, MapPin, MoreHorizontal } from 'lucide-react'
 import { Clock } from 'lucide-react'
-import { useEffect } from 'react'
+import ReactQRCode from 'react-qr-code'  // Importing the new library
+import { generatePickupQRData } from '@/lib/qrCodeUtils' // Assuming you have this utility
 
 type Log = {
   id: string
@@ -16,6 +17,7 @@ type TrackingHistoryProps = {
   logs: Log[] // <-- Accept logs from parent
   onViewRoute: () => void
   onDownloadReport: () => void
+  orderId: string // Pass the orderId to generate the QR code
 }
 
 function getFriendlyDescription(log: Log): string {
@@ -53,13 +55,20 @@ function getFriendlyDescription(log: Log): string {
   }
 }
 
-
 export default function TrackingHistory({
   logs,
   onViewRoute,
   onDownloadReport,
+  orderId, // New prop for orderId
 }: TrackingHistoryProps) {
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [qrCodeData, setQrCodeData] = useState<string | null>(null) // State for QR code
+
+  // Generate the QR code when the button is clicked
+  const handleGenerateQRCode = async () => {
+    const qrData = await generatePickupQRData(orderId)
+    setQrCodeData(qrData)
+  }
 
   useEffect(() => {
     console.log('[TrackingHistory.tsx] Received logs from parent:', logs)
@@ -100,63 +109,69 @@ export default function TrackingHistory({
       )}
 
       {/* Buttons */}
-      {/* Action Buttons */}
-    {/* Action Buttons */}
-<div className="mt-8 flex justify-end gap-3 relative">
-  {/* Primary Buttons */}
-  <button
-    onClick={onViewRoute}
-    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-  >
-    <MapPin className="w-4 h-4" />
-    View Route
-  </button>
-
-  <button
-    onClick={onDownloadReport}
-    className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-  >
-    <Download className="w-4 h-4" />
-    Download Report
-  </button>
-
-  {/* Dropdown Toggle */}
-  <div className="relative">
-    <button
-      onClick={() => setShowDropdown(prev => !prev)}
-      className="flex items-center gap-2 bg-neutral-200 hover:bg-neutral-300 text-gray-800 px-4 py-2 rounded"
-    >
-      <MoreHorizontal className="w-4 h-4" />
-      More Actions
-    </button>
-
-    {/* Dropdown Menu */}
-    {showDropdown && (
-      <div className="absolute right-0 mt-2 bg-white border rounded shadow-lg z-50 w-56">
+      <div className="mt-8 flex justify-end gap-3 relative">
+        {/* Primary Buttons */}
         <button
-          onClick={() => {
-            setShowDropdown(false)
-            alert('QR code generation coming soon!')
-          }}
-          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+          onClick={onViewRoute}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
         >
-          📲 Confirm Pickup via QR Code
+          <MapPin className="w-4 h-4" />
+          View Route
         </button>
+
         <button
-          onClick={() => {
-            setShowDropdown(false)
-            alert('Reschedule request form coming soon!')
-          }}
-          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+          onClick={onDownloadReport}
+          className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
         >
-          🗓️ Request Reschedule
+          <Download className="w-4 h-4" />
+          Download Report
         </button>
+
+        {/* Dropdown Toggle */}
+        <div className="relative">
+          <button
+            onClick={() => setShowDropdown(prev => !prev)}
+            className="flex items-center gap-2 bg-neutral-200 hover:bg-neutral-300 text-gray-800 px-4 py-2 rounded"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+            More Actions
+          </button>
+
+          {/* Dropdown Menu */}
+          {showDropdown && (
+            <div className="absolute right-0 mt-2 bg-white border rounded shadow-lg z-50 w-56">
+              <button
+                onClick={() => {
+                  setShowDropdown(false);
+                  handleGenerateQRCode();
+                  console.log('QR Code button clicked!');
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+              >
+                📲 Confirm Pickup via QR Code
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowDropdown(false)
+                  alert('Reschedule request form coming soon!')
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+              >
+                🗓️ Request Reschedule
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    )}
-  </div>
-</div>
 
-      {/* End of Buttons */}
+      {/* QR Code Section */}
+      {qrCodeData && (
+        <div className="mt-8 p-5 bg-white rounded-lg shadow">
+          <h2 className="font-semibold text-lg mb-3">Pickup Confirmation QR Code</h2>
+          <ReactQRCode value={qrCodeData} size={256} />
+        </div>
+      )}
     </div>
   )
 }

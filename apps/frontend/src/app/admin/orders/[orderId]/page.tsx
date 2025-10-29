@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { 
   Calendar, 
@@ -101,6 +101,11 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const router = useRouter()
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -259,6 +264,63 @@ export default function OrderDetailsPage() {
 
   const totalCost = order.order_pricing_components.reduce((sum, component) => sum + Number(component.amount), 0)
 
+
+    const handleTrackOrder = () => {
+    router.push(`/track/${order.tracking_id}`)
+  }
+
+  const handleCancelOrder = async () => {
+    if (!cancelReason.trim()) {
+      alert('Please provide a reason for cancellation')
+      return
+    }
+
+    setCancelling(true)
+    try {
+      // Update order status to cancelled
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+
+      if (updateError) throw updateError
+
+      // Add status log
+      const { error: logError } = await supabase
+        .from('order_status_logs')
+        .insert({
+          order_id: orderId,
+          status: 'cancelled',
+          description: `Order cancelled by admin. Reason: ${cancelReason}`,
+          timestamp: new Date().toISOString()
+        })
+
+      if (logError) throw logError
+
+      // Send cancellation email to client
+      if (order.clients?.email) {
+        await fetch('/api/send-cancellation-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: order.clients.email,
+            trackingId: order.tracking_id,
+            contactPerson: order.clients.contact_person,
+            reason: cancelReason
+          })
+        })
+      }
+
+      // Refresh order data
+      window.location.reload()
+    } catch (err) {
+      console.error('Error cancelling order:', err)
+      alert('Failed to cancel order. Please try again.')
+    } finally {
+      setCancelling(false)
+      setShowCancelModal(false)
+    }
+  }
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -646,20 +708,72 @@ export default function OrderDetailsPage() {
                 <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
               </div>
               <div className="p-6 space-y-3">
-                <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                <button 
+                  onClick={handleTrackOrder}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                >
                   Track Order
                 </button>
                 <button className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
                   Edit Order
                 </button>
-                <button className="w-full bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition-colors">
+                <button 
+                  onClick={() => setShowCancelModal(true)}
+                  disabled={order.status === 'cancelled' || order.status === 'delivered'}
+                  className="w-full bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   Cancel Order
                 </button>
               </div>
             </div>
+
+
+            
           </div>
         </div>
       </div>
+
+      {/* Cancel Order Modal */}
+        {showCancelModal && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}>
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Cancel Order</h3>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-gray-600 mb-4">
+                  Please provide a reason for cancelling this order. An email notification will be sent to the client.
+                </p>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Enter cancellation reason..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                  rows={4}
+                />
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false)
+                    setCancelReason('')
+                  }}
+                  disabled={cancelling}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={handleCancelOrder}
+                  disabled={cancelling || !cancelReason.trim()}
+                  className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   )
 }

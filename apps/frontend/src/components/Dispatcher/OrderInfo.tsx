@@ -89,20 +89,7 @@ export function OrderInfo({ order, estimatedTime }: OrderInfoProps) {
         </div>
       </div>
 
-      {/* Current Status */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h4 className="text-md font-semibold mb-3 flex items-center gap-2 text-gray-900">
-          <span>🔄</span> Current Status
-        </h4>
-        <div className="flex items-center gap-3">
-          <span
-            className="px-3 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ backgroundColor: getStatusColor(order.status) }}
-          >
-            {getStatusLabel(order.status)}
-          </span>
-        </div>
-      </div>
+      
 
       {/* Special Instructions */}
       {order.special_instructions && (

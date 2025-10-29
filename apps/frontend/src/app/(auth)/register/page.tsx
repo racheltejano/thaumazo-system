@@ -1,3 +1,20 @@
+/**
+ * 🧾 Register Page
+ * 
+ * This client-side page lets new users create an account using Supabase authentication.
+ * It validates the email and password, handles signup requests, and shows a success message 
+ * prompting users to verify their email before logging in.
+ * 
+ * ⚙️ Main Function:
+ * - `RegisterPage()`: Renders the registration form, validates input, and creates a new account.
+ * 
+ * 🧩 Features:
+ * - Email + password validation
+ * - “Show/Hide Password” toggle
+ * - Redirects logged-in users to `/dashboard`
+ * - Displays confirmation after successful signup
+ */
+
 'use client'
 
 import { useState, useEffect } from 'react'

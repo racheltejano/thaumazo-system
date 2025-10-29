@@ -1,4 +1,21 @@
-// pages/api/send-tracking-email.ts
+/**
+ * 📦 Sends Tracking ID Email (using Resend) ----- Currently Not being used bruh
+ * 
+ * This API route handles POST requests to send a tracking ID email to a user.
+ * It checks if the request is valid, makes sure the email is properly formatted,
+ * and then uses the Resend API to send a nice HTML + text email with the tracking details.
+ * 
+ * 🔧 Main Function:
+ * - `handler(req, res)`: Checks request method, validates input, and sends the email.
+ * 
+ * 📨 Required body:
+ * {
+ *   email: string,
+ *   trackingId: string
+ * }
+ */
+
+
 import { NextApiRequest, NextApiResponse } from 'next'
 import { Resend } from 'resend'
 

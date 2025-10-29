@@ -1,4 +1,18 @@
-// src/app/(auth)/layout.tsx
+/**
+ * 🧭 Auth Layout
+ * 
+ * Layout component for all authentication-related pages (Login, Register, Forgot Password, etc.).
+ * It displays the TEXTS logo and content box on the left, and an avatar image on the right (for larger screens).
+ * 
+ * ⚙️ Main Function:
+ * - `AuthLayout({ children })`: Wraps auth pages with a consistent layout and styling.
+ * 
+ * 🧩 Includes:
+ * - Logo + tagline section
+ * - Responsive two-column design
+ * - Image display for desktop view
+ */
+
 import Image from 'next/image'
 import React from 'react'
 import type { Metadata } from "next";

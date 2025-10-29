@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from "next/image";
+import NotificationBell from '@/components/NotificationBell';
 
 
 type SidebarMenuItem = {
@@ -55,14 +56,14 @@ const sidebarMenus: SidebarMenus = {
       href: '/admin/drivers',
     },
     {
-      label: 'Pending Approvals',
+      label: 'Create User Accounts',
       icon: (
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M9 12l2 2l4 -4" />
           <circle cx="12" cy="12" r="10" />
         </svg>
       ),
-      href: '/admin/approvals',
+      href: '/admin/new-user',
     },
     {
       label: 'Orders Management',
@@ -293,12 +294,54 @@ export default function DashboardLayout({
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
   const [lastName, setLastName] = useState<string | null>(null);
+  
+  // ✨ NEW: Profile setup check
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
+  
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const displayName = firstName || userFirstName || userName || role.charAt(0).toUpperCase() + role.slice(1);
   const menus = sidebarMenus[role] || [];
   const config = roleConfigs[role] || roleConfigs.admin;
+
+  // ✨ NEW: Check if profile setup is required on mount
+  useEffect(() => {
+    const checkProfileSetup = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+
+        // Check if user needs profile setup
+        const { data, error } = await supabase.rpc('needs_profile_setup', {
+          p_user_id: user.id
+        });
+
+        if (error) {
+          console.error('Error checking profile setup:', error);
+          setIsCheckingSetup(false);
+          return;
+        }
+
+        if (data && data.length > 0 && data[0].needs_setup) {
+          // Redirect to profile setup if needed
+          router.push('/setup-profile');
+          return;
+        }
+
+        setIsCheckingSetup(false);
+      } catch (err) {
+        console.error('Unexpected error:', err);
+        setIsCheckingSetup(false);
+      }
+    };
+
+    checkProfileSetup();
+  }, [router]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -349,6 +392,18 @@ export default function DashboardLayout({
 
   // Logo path variable for dashboard navbar
   const DASHBOARD_LOGO_PATH = "/thaumazo-text-logo.png";
+
+  // ✨ NEW: Show loading screen while checking setup
+  if (isCheckingSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -407,12 +462,7 @@ export default function DashboardLayout({
             </span>
 
             {/* Notification bell - only show if enabled for role */}
-            {config.showNotifications && (
-              <button className="relative p-2 rounded-full hover:bg-gray-800 transition-colors">
-                <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 2v1h16v-1l-2-2z"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-                <span className={`absolute top-1 right-1 w-2 h-2 bg-${config.accentColor} rounded-full`} />
-              </button>
-            )}
+            <NotificationBell />
 
             {/* Profile picture / menu */}
             <div className="relative" ref={profileMenuRef}>

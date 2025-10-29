@@ -1,3 +1,18 @@
+/**
+ * 🔒 Forgot Password Page
+ * 
+ * This client-side page lets users request a password reset link via email.
+ * It uses Supabase authentication to send the reset email and gives feedback 
+ * if the request succeeds or fails.
+ * 
+ * ⚙️ Main Function:
+ * - `ForgotPasswordPage()`: Renders the password reset form and handles the submission.
+ * 
+ * 🧩 Other Function:
+ * - `isValidEmail(email)`: Checks if the provided email has a valid format.
+ */
+
+
 'use client'
 
 import { useState } from "react"
