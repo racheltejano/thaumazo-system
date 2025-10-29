@@ -20,6 +20,7 @@ type Driver = {
 
 type Order = {
   id: string
+  tracking_id: string
   pickup_timestamp: string
   estimated_total_duration: number
   client_id: string
@@ -63,6 +64,47 @@ type DriverScore = {
   distance: number
 }
 
+// Add this AFTER your imports and BEFORE export async function POST()
+async function notifyDriverAssignment(
+  supabase: any,
+  driverId: string,
+  orderId: string,
+  orderTrackingId: string,
+  pickupTime: string
+) {
+  try {
+    const pickupPH = utcToZonedTime(new Date(pickupTime), TIMEZONE)
+    const formattedTime = formatDate(pickupPH, 'MMM dd, yyyy h:mm a')
+    
+    console.log(`  🔔 Creating notification for driver ${driverId}`)
+    
+    const notification = {
+      user_id: driverId,
+      order_id: orderId,
+      title: 'New Order Assigned',
+      message: `You have been assigned to order ${orderTrackingId}. Pickup scheduled for ${formattedTime}`,
+      type: 'assignment',
+      read: false,
+      link: `/driver/calendar`,
+    }
+
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert([notification])
+
+    if (notificationError) {
+      console.error('  ❌ Failed to create driver notification:', notificationError)
+      return false
+    }
+
+    console.log(`  ✅ Notification created successfully`)
+    return true
+  } catch (error) {
+    console.error('  ❌ Error in notifyDriverAssignment:', error)
+    return false
+  }
+}
+
 export async function POST() {
   console.log('🚀 ===== AUTO-ASSIGNMENT STARTED =====')
   
@@ -84,9 +126,9 @@ export async function POST() {
     // Get unassigned orders with client_id for proximity lookup
     console.log('🔍 Fetching unassigned orders...')
     const { data: orders, error: orderError } = await supabase
-      .from('orders')
-      .select('id, pickup_timestamp, estimated_total_duration, client_id')
-      .eq('status', 'order_placed')
+    .from('orders')
+    .select('id, tracking_id, pickup_timestamp, estimated_total_duration, client_id')
+    .eq('status', 'order_placed')
 
     if (orderError) {
       console.error('❌ Error fetching orders:', orderError)
@@ -160,6 +202,7 @@ export async function POST() {
 
     const assignments: Array<{
       orderId: string
+      orderTrackingId: string 
       driverId: string
       startTime: string
       endTime: string
@@ -276,6 +319,19 @@ export async function POST() {
           console.log(`  ✅ Time slot created`)
         }
 
+        console.log(`  🔔 Sending notification to driver...`)
+        const notificationSent = await notifyDriverAssignment(
+          supabase,
+          assignment.driverId,
+          assignment.orderId,
+          assignment.orderTrackingId,
+          assignment.startTime
+        )
+
+        if (notificationSent) {
+          console.log(`  ✅ Driver notified successfully`)
+        }
+
         successCount++
         console.log(`✅ Successfully assigned order ${assignment.orderId} to ${assignment.driverName}`)
       } catch (err) {
@@ -321,6 +377,8 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+
 
 // Get last drop-off locations for each driver
 async function getDriverLastDropoffToday(
@@ -484,6 +542,7 @@ async function processOrdersForDate(
   dateStr: string
 ): Promise<Array<{
   orderId: string
+  orderTrackingId: string
   driverId: string
   startTime: string
   endTime: string
@@ -506,6 +565,7 @@ async function processOrdersForDate(
   
   const assignments: Array<{
     orderId: string
+    orderTrackingId: string
     driverId: string
     startTime: string
     endTime: string
@@ -544,7 +604,8 @@ async function processOrdersForDate(
       
       assignments.push({
         ...assignment,
-        driverName
+         orderTrackingId: order.tracking_id,  
+         driverName
       })
       
       dateAssignments.push({

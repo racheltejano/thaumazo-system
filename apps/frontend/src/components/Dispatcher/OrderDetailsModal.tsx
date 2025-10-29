@@ -91,6 +91,55 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c
 }
 
+// Add this after haversineDistance function and before OrderDetailsModal component
+async function notifyDriverAssignment(
+  supabase: any,
+  driverId: string,
+  orderId: string,
+  orderTrackingId: string,
+  pickupTime: string
+) {
+  try {
+    const pickupPH = new Date(pickupTime)
+    const formattedTime = pickupPH.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: TIMEZONE
+    })
+    
+    console.log(`🔔 Creating notification for driver ${driverId}`)
+    
+    const notification = {
+      user_id: driverId,
+      order_id: orderId,
+      title: 'New Order Assigned',
+      message: `You have been assigned to order ${orderTrackingId}. Pickup scheduled for ${formattedTime}`,
+      type: 'assignment',
+      read: false,
+      link: `/driver/calendar`,
+    }
+
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert([notification])
+
+    if (notificationError) {
+      console.error('❌ Failed to create driver notification:', notificationError)
+      return false
+    }
+
+    console.log(`✅ Notification sent to driver`)
+    return true
+  } catch (error) {
+    console.error('❌ Error sending notification:', error)
+    return false
+  }
+}
+
 interface OrderDetailsModalProps {
   selectedOrder: Order
   onClose: () => void
@@ -511,86 +560,110 @@ for (const order of lastOrders || []) {
   return options
 }
 
-  const handleAssignDriver = async () => {
-    if (!selectedDriverId || !selectedTimeSlot) {
-      alert('Please select a driver and time slot')
-      return
+ const handleAssignDriver = async () => {
+  if (!selectedDriverId || !selectedTimeSlot) {
+    alert('Please select a driver and time slot')
+    return
+  }
+
+  setAssigning(true)
+
+  try {
+    const driver = availableDrivers.find(d => d.id === selectedDriverId)
+    const timeSlot = driver?.availableSlots.find(s => s.id === selectedTimeSlot)
+
+    if (!driver || !timeSlot) {
+      throw new Error('Invalid driver or time slot selection')
     }
 
-    setAssigning(true)
+    const startDateTime = new Date(timeSlot.start_time)
+    const endDateTime = new Date(timeSlot.end_time)
+    const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
 
-    try {
-      const driver = availableDrivers.find(d => d.id === selectedDriverId)
-      const timeSlot = driver?.availableSlots.find(s => s.id === selectedTimeSlot)
+    console.log('📝 Updating order with driver assignment...')
 
-      if (!driver || !timeSlot) {
-        throw new Error('Invalid driver or time slot selection')
-      }
+    // Update order
+    const { error: orderUpdateError } = await supabase
+      .from('orders')
+      .update({
+        driver_id: driver.id,
+        pickup_timestamp: startDateTime.toISOString(),
+        estimated_total_duration: durationMins,
+        estimated_end_timestamp: endDateTime.toISOString(),
+        status: 'driver_assigned',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', updatedOrder.id)
 
-      const startDateTime = new Date(timeSlot.start_time)
-      const endDateTime = new Date(timeSlot.end_time)
-      const durationMins = (endDateTime.getTime() - startDateTime.getTime()) / 60000
+    if (orderUpdateError) throw orderUpdateError
+    console.log('✅ Order updated successfully')
 
-      // Update order
-      const { error: orderUpdateError } = await supabase
-        .from('orders')
+    // Check for existing time slot
+    const { data: existingSlot } = await supabase
+      .from('driver_time_slots')
+      .select('id, status, order_id')
+      .eq('driver_id', driver.id)
+      .eq('start_time', startDateTime.toISOString())
+      .eq('end_time', endDateTime.toISOString())
+      .maybeSingle()
+
+    if (existingSlot) {
+      console.log('🔄 Updating existing time slot...')
+      const { error: updateSlotError } = await supabase
+        .from('driver_time_slots')
         .update({
-          driver_id: driver.id,
-          pickup_timestamp: startDateTime.toISOString(),
-          estimated_total_duration: durationMins,
-          estimated_end_timestamp: endDateTime.toISOString(),
-          status: 'driver_assigned',
+          order_id: updatedOrder.id,
+          status: 'scheduled',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', updatedOrder.id)
+        .eq('id', existingSlot.id)
 
-      if (orderUpdateError) throw orderUpdateError
-
-      // Check for existing time slot
-      const { data: existingSlot } = await supabase
+      if (updateSlotError) throw updateSlotError
+      console.log('✅ Time slot updated')
+    } else {
+      console.log('✨ Creating new time slot...')
+      const { error: timeSlotError } = await supabase
         .from('driver_time_slots')
-        .select('id, status, order_id')
-        .eq('driver_id', driver.id)
-        .eq('start_time', startDateTime.toISOString())
-        .eq('end_time', endDateTime.toISOString())
-        .maybeSingle()
+        .insert({
+          driver_id: driver.id,
+          driver_availability_id: timeSlot.availabilityBlockId,
+          order_id: updatedOrder.id,
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
+          status: 'scheduled',
+        })
 
-      if (existingSlot) {
-        const { error: updateSlotError } = await supabase
-          .from('driver_time_slots')
-          .update({
-            order_id: updatedOrder.id,
-            status: 'scheduled',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingSlot.id)
-
-        if (updateSlotError) throw updateSlotError
-      } else {
-        const { error: timeSlotError } = await supabase
-          .from('driver_time_slots')
-          .insert({
-            driver_id: driver.id,
-            driver_availability_id: timeSlot.availabilityBlockId,
-            order_id: updatedOrder.id,
-            start_time: startDateTime.toISOString(),
-            end_time: endDateTime.toISOString(),
-            status: 'scheduled',
-          })
-
-        if (timeSlotError) throw timeSlotError
-      }
-
-      alert(`Successfully assigned order to ${driver.first_name} ${driver.last_name}`)
-      onOrderUpdate()
-      onClose()
-    } catch (error) {
-      console.error('Error assigning driver:', error)
-      alert(`Failed to assign driver: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
-      setAssigning(false)
+      if (timeSlotError) throw timeSlotError
+      console.log('✅ Time slot created')
     }
+
+    // 🔔 NEW: Send notification to driver
+    console.log('🔔 Sending notification to driver...')
+    const notificationSent = await notifyDriverAssignment(
+      supabase,
+      driver.id,
+      updatedOrder.id,
+      updatedOrder.tracking_id,
+      startDateTime.toISOString()
+    )
+
+    if (notificationSent) {
+      console.log('✅ Driver notification sent successfully')
+      alert(`✅ Successfully assigned order to ${driver.first_name} ${driver.last_name}\n🔔 Driver has been notified`)
+    } else {
+      console.warn('⚠️ Driver assignment successful but notification failed')
+      alert(`✅ Order assigned to ${driver.first_name} ${driver.last_name}\n⚠️ But notification failed to send`)
+    }
+
+    onOrderUpdate()
+    onClose()
+  } catch (error) {
+    console.error('❌ Error assigning driver:', error)
+    alert(`Failed to assign driver: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  } finally {
+    setAssigning(false)
   }
+}
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr)
