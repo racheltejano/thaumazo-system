@@ -8,11 +8,12 @@ import {
   Plus,
   Users,
   Package,
-  Settings,
   RefreshCw,
   Check,
   Mail,
-  AlertCircle,
+  Download,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react'
 
 export default function AdminDashboard() {
@@ -26,6 +27,10 @@ export default function AdminDashboard() {
   const [email, setEmail] = useState('')
   const [generatedTrackingId, setGeneratedTrackingId] = useState<string | null>(null)
   const [isVisible, setIsVisible] = useState(false)
+  // Export states
+  const [exportLoading, setExportLoading] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string>('')
+  const [exportSuccess, setExportSuccess] = useState<string>('')
 
   // auth
   const auth = useAuth()
@@ -179,7 +184,68 @@ export default function AdminDashboard() {
       setLoading(false)
     }
   }
+  // Handle export data
+  const handleExport = async (exportType: string) => {
+    setExportLoading(exportType)
+    setExportError('')
+    setExportSuccess('')
 
+    try {
+      // Get the current session token
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      console.log('Session:', session ? 'Found' : 'Not found') // Debug log
+      
+      if (!session) {
+        throw new Error('No active session')
+      }
+
+      console.log('Calling API:', '/api/admin/export', 'Type:', exportType) // Debug log
+
+      const response = await fetch('/api/admin/export', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ type: exportType }),
+      })
+
+      console.log('Response status:', response.status) // Debug log
+      console.log('Response headers:', response.headers.get('content-type')) // Debug log
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Export failed')
+        } else {
+          const text = await response.text()
+          console.error('Non-JSON response:', text.substring(0, 200)) // Show first 200 chars
+          throw new Error('Server returned an invalid response')
+        }
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${exportType}_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      setExportSuccess(`${exportType} data exported successfully!`)
+      setTimeout(() => setExportSuccess(''), 5000)
+    } catch (err: any) {
+      console.error('Export error:', err)
+      setExportError(err.message || 'Failed to export data')
+      setTimeout(() => setExportError(''), 5000)
+    } finally {
+      setExportLoading(null)
+    }
+  }
   if (loadingAuth || authLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen text-center">
@@ -366,6 +432,84 @@ export default function AdminDashboard() {
                   Inventory Check
                 </button>
               </div>
+            </div>
+
+            {/* Export Data for Power BI */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <div className="flex items-center gap-2 mb-4">
+                <FileSpreadsheet className="h-5 w-5 text-indigo-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Export Data</h2>
+              </div>
+
+              {exportSuccess && (
+                <div className="mb-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <span className="text-sm text-green-800">{exportSuccess}</span>
+                </div>
+              )}
+
+              {exportError && (
+                <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-3">
+                  <span className="text-sm text-red-800">{exportError}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleExport('orders')}
+                  disabled={exportLoading !== null}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {exportLoading === 'orders' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Orders
+                </button>
+
+                <button
+                  onClick={() => handleExport('clients')}
+                  disabled={exportLoading !== null}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {exportLoading === 'clients' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Clients
+                </button>
+
+                <button
+                  onClick={() => handleExport('inventory')}
+                  disabled={exportLoading !== null}
+                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {exportLoading === 'inventory' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Inventory
+                </button>
+
+                <button
+                  onClick={() => handleExport('drivers')}
+                  disabled={exportLoading !== null}
+                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {exportLoading === 'drivers' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Drivers
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 mt-3">
+                Export data as Excel files for Power BI analysis
+              </p>
             </div>
 
             {/* System Status */}
