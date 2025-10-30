@@ -106,12 +106,12 @@ type OrderData = {
 }
 
 const ORDER_STATUSES = [
-  { value: 'order_placed', label: 'Order Placed', color: '#718096' },
+  { value: 'order_placed', label: 'Order Placed', color: '#ed8936' }, 
   { value: 'driver_assigned', label: 'Driver Assigned', color: '#3182ce' },
   { value: 'truck_left_warehouse', label: 'Truck Left Warehouse', color: '#d69e2e' },
   { value: 'arrived_at_pickup', label: 'Arrived at Pickup', color: '#ed8936' },
   { value: 'delivered', label: 'Delivered', color: '#38a169' },
-  { value: 'cancelled', label: 'Cancelled', color: '#e53e3e' },
+  { value: 'cancelled', label: 'Cancelled', color: '#718096' }, 
 ]
 
 // Generate a consistent color for each driver
@@ -518,19 +518,28 @@ const handleAutoAssign = async () => {
     }
   }
 
-  const getEventColor = (event: DriverEvent) => {
-    if (event.type === 'availability') {
-      const driver = drivers.find(d => d.id === event.driverId)
-      return driver?.color || '#3182ce'
-    } else {
-      if (event.status === 'unassigned') return '#ed8936'
-      if (event.driverId) {
-        const driver = drivers.find(d => d.id === event.driverId)
-        return driver?.color || '#38a169'
+ const getEventColor = (event: DriverEvent) => {
+  if (event.type === 'availability') {
+    const driver = drivers.find(d => d.id === event.driverId)
+    return driver?.color || '#3182ce'
+  } else {
+    // Use actual order status from the order object
+    if (event.order?.status) {
+      const statusConfig = ORDER_STATUSES.find(s => s.value === event.order.status)
+      if (statusConfig) {
+        return statusConfig.color
       }
-      return '#38a169'
     }
+    
+    // Fallback to old logic
+    if (event.status === 'unassigned') return '#ed8936'
+    if (event.driverId) {
+      const driver = drivers.find(d => d.id === event.driverId)
+      return driver?.color || '#38a169'
+    }
+    return '#38a169'
   }
+}
 
   const calendarStyle = {
     height: currentView === 'month' ? '600px' : '400px',
