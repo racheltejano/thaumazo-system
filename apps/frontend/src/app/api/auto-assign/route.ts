@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { format as formatDate } from 'date-fns'
 import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz'
+import { getCancellationEmailMessage } from '@/components/Dispatcher/cancellationConfig'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const serviceRoleKey = process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY
@@ -105,6 +106,74 @@ async function notifyDriverAssignment(
   }
 }
 
+// ADD AFTER notifyDriverAssignment function
+async function autoCancelPastOrder(
+  supabase: any,
+  order: Order,
+  clientEmail: string | null,
+  clientName: string
+) {
+  try {
+    console.log(`  🚫 Auto-cancelling past order ${order.id}`)
+    
+    // Update order status to cancelled
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ status: 'cancelled' })
+      .eq('id', order.id)
+
+    if (updateError) {
+      console.error(`  ❌ Failed to cancel order:`, updateError)
+      return false
+    }
+
+    // Add status log
+    const reason = 'Unfortunately, your scheduled pickup date has passed and we were unable to assign a driver to your order.'
+    
+    const { error: logError } = await supabase
+      .from('order_status_logs')
+      .insert({
+        order_id: order.id,
+        status: 'cancelled',
+        description: `Order auto-cancelled by system. Reason: ${reason}`,
+        timestamp: new Date().toISOString()
+      })
+
+    if (logError) {
+      console.error(`  ❌ Failed to create status log:`, logError)
+    }
+
+    // Send cancellation email if client has email
+    if (clientEmail) {
+      console.log(`  📧 Sending auto-cancellation email to ${clientEmail}`)
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/send-dispatcher-cancellation-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: clientEmail,
+          trackingId: order.tracking_id,
+          contactPerson: clientName,
+          reason: reason,
+          cancellationType: 'past_date_unassigned'
+        })
+      })
+
+      if (response.ok) {
+        console.log(`  ✅ Cancellation email sent`)
+      } else {
+        console.error(`  ⚠️  Email failed to send`)
+      }
+    }
+
+    console.log(`  ✅ Order cancelled successfully`)
+    return true
+  } catch (error) {
+    console.error(`  ❌ Error in autoCancelPastOrder:`, error)
+    return false
+  }
+}
+
 export async function POST() {
   console.log('🚀 ===== AUTO-ASSIGNMENT STARTED =====')
   
@@ -142,36 +211,66 @@ export async function POST() {
       return NextResponse.json({ message: 'No unassigned orders found.' }, { status: 200 })
     }
 
-    // Filter out orders that are in the past (before today)
-    console.log('🔍 Filtering out past orders...')
-    const validOrders = orders.filter(order => {
-      if (!order.pickup_timestamp) {
-        console.log(`⚠️  Order ${order.id}: No pickup_timestamp`)
-        return false
-      }
-      
-      const pickupUtc = new Date(order.pickup_timestamp)
-      const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
-      const pickupDateStr = formatDate(pickupPH, 'yyyy-MM-dd')
-      
-      const isValid = pickupDateStr >= todayPH
-      console.log(`  Order ${order.id}: pickup=${pickupDateStr}, valid=${isValid}`)
-      
-      return isValid
-    })
+    // Filter out orders that are in the past AND auto-cancel them
+console.log('🔍 Processing orders - filtering past orders and auto-cancelling...')
 
-    console.log(`✅ Found ${orders.length} total orders, ${validOrders.length} are not in the past`)
+const validOrders: Order[] = []
+const pastOrdersCancelled: string[] = []
 
-    if (validOrders.length === 0) {
-      console.log('⚠️  No valid orders found (all orders are in the past).')
-      return NextResponse.json({ 
-        message: 'No valid orders found (all orders are in the past).',
-        totalOrders: orders.length,
-        validOrders: 0,
-        successfulAssignments: 0,
-        skippedPastOrders: orders.length
-      }, { status: 200 })
+for (const order of orders) {
+  if (!order.pickup_timestamp) {
+    console.log(`⚠️  Order ${order.id}: No pickup_timestamp - skipping`)
+    continue
+  }
+  
+  const pickupUtc = new Date(order.pickup_timestamp)
+  const pickupPH = utcToZonedTime(pickupUtc, TIMEZONE)
+  const pickupDateStr = formatDate(pickupPH, 'yyyy-MM-dd')
+  
+  const isPast = pickupDateStr < todayPH
+  console.log(`  Order ${order.id}: pickup=${pickupDateStr}, isPast=${isPast}`)
+  
+  if (isPast) {
+    // Auto-cancel past orders
+    console.log(`  🚫 Order ${order.id} is in the past - attempting auto-cancel`)
+    
+    // Fetch client info for email
+    const { data: client } = await supabase
+      .from('clients')
+      .select('email, contact_person')
+      .eq('id', order.client_id)
+      .single()
+    
+    const cancelled = await autoCancelPastOrder(
+      supabase,
+      order,
+      client?.email || null,
+      client?.contact_person || 'Valued Customer'
+    )
+    
+    if (cancelled) {
+      pastOrdersCancelled.push(order.id)
     }
+  } else {
+    validOrders.push(order)
+  }
+}
+
+console.log(`✅ Processed ${orders.length} total orders:`)
+console.log(`   - Valid orders (not past): ${validOrders.length}`)
+console.log(`   - Past orders cancelled: ${pastOrdersCancelled.length}`)
+
+if (validOrders.length === 0) {
+  console.log('⚠️  No valid orders to assign.')
+  return NextResponse.json({ 
+    message: `No valid orders to assign. ${pastOrdersCancelled.length} past orders were auto-cancelled.`,
+    totalOrders: orders.length,
+    validOrders: 0,
+    successfulAssignments: 0,
+    pastOrdersCancelled: pastOrdersCancelled.length,
+    cancelledOrderIds: pastOrdersCancelled
+  }, { status: 200 })
+}
 
     // Get all drivers
     console.log('🔍 Fetching drivers...')
@@ -341,12 +440,13 @@ export async function POST() {
     }
 
     const response = {
-      message: `Successfully assigned ${successCount} out of ${validOrders.length} valid orders.`,
+      message: `Successfully assigned ${successCount} out of ${validOrders.length} valid orders. ${pastOrdersCancelled.length} past orders were auto-cancelled.`,
       totalOrders: orders.length,
       validOrders: validOrders.length,
       successfulAssignments: successCount,
       failedAssignments: failedAssignments.length,
-      skippedPastOrders: orders.length - validOrders.length,
+      pastOrdersCancelled: pastOrdersCancelled.length,
+      cancelledOrderIds: pastOrdersCancelled,
       failedOrderIds: failedAssignments
     }
 

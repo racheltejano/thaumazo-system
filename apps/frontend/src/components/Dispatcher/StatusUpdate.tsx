@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { CancellationModal } from './CancellationModal' 
+import { getCancellationEmailMessage, type CancellationReasonKey } from './cancellationConfig'
 
 const ORDER_STATUSES = [
   { value: 'order_placed', label: 'Order Placed', color: '#718096' },
@@ -19,6 +21,7 @@ type Driver = {
 
 type Order = {
   id: string
+  tracking_id?: string
   pickup_date: string
   pickup_time: string
   status: string
@@ -73,7 +76,9 @@ export function StatusUpdate({ currentStatus, onStatusUpdate, loading, order }: 
   const [loadingDrivers, setLoadingDrivers] = useState(false)
   const [showDriverDropdown, setShowDriverDropdown] = useState(false)
   const [assigningDriver, setAssigningDriver] = useState(false)
-
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [orderClient, setOrderClient] = useState<{ email: string; contact_person: string } | null>(null)
+  
   const availableStatuses = getAvailableNextStatuses(currentStatus)
 
   useEffect(() => {
@@ -364,11 +369,43 @@ export function StatusUpdate({ currentStatus, onStatusUpdate, loading, order }: 
     }
   }
 
+  const fetchClientInfo = async () => {
+    try {
+      const { data: orderData } = await supabase
+        .from('orders')
+        .select(`
+          clients!client_id (
+            email,
+            contact_person
+          )
+        `)
+        .eq('id', order.id)
+        .single()
+      
+      if (orderData?.clients) {
+        setOrderClient({
+          email: orderData.clients.email,
+          contact_person: orderData.clients.contact_person
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching client info:', error)
+    }
+  }
+
   const handleStatusUpdate = (status: string) => {
     console.log('🔄 [handleStatusUpdate] Status update requested:', status)
+    
     if (status === 'driver_assigned') {
       console.log('👥 [handleStatusUpdate] Opening driver selection dropdown')
       setShowDriverDropdown(true)
+      return
+    }
+    
+    if (status === 'cancelled') {
+      console.log('🚫 [handleStatusUpdate] Opening cancellation modal')
+      fetchClientInfo() 
+      setShowCancelModal(true)
       return
     }
     
@@ -491,6 +528,53 @@ export function StatusUpdate({ currentStatus, onStatusUpdate, loading, order }: 
             </>
           )}
         </div>
+      )}
+
+      {/* Cancellation Modal */}
+      {showCancelModal && (
+        <CancellationModal
+          orderId={order.id}
+          trackingId={order.tracking_id || order.id}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={async (reason, customMessage) => {
+            try {
+              const emailMessage = getCancellationEmailMessage(reason, customMessage)
+
+              const { error: logError } = await supabase
+                .from('order_status_logs')
+                .insert({
+                  order_id: order.id,
+                  status: 'cancelled',
+                  description: `Order cancelled by dispatcher. Reason: ${emailMessage}`,
+                  timestamp: new Date().toISOString()
+                })
+
+              if (logError) throw logError
+
+              if (orderClient?.email) {
+                await fetch('/api/send-dispatcher-cancellation-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: orderClient.email,
+                    trackingId: order.tracking_id || order.id,
+                    contactPerson: orderClient.contact_person,
+                    reason: emailMessage,
+                    cancellationType: reason
+                  })
+                })
+              }
+
+              await onStatusUpdate('cancelled')
+              
+              alert('✅ Order cancelled successfully. Client has been notified via email.')
+              setShowCancelModal(false)
+            } catch (err) {
+              console.error('Error cancelling order:', err)
+              alert('❌ Failed to cancel order. Please try again.')
+            }
+          }}
+        />
       )}
     </div>
   )

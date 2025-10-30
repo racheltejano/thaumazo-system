@@ -4,6 +4,8 @@ import { OrderInfo } from './OrderInfo'
 import { ClientInfo } from './ClientInfo'
 import { DropoffInfo } from './DropoffInfo'
 import { StatusUpdate } from './StatusUpdate'
+import { CancellationModal } from './CancellationModal'
+import { getCancellationEmailMessage, type CancellationReasonKey } from './cancellationConfig'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 const TIMEZONE = 'Asia/Manila'
@@ -152,7 +154,7 @@ export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: Ord
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
   const [updatedOrder, setUpdatedOrder] = useState<Order>(selectedOrder)
-  // Driver assignment state
+  const [showCancelModal, setShowCancelModal] = useState(false)
   const [availableDrivers, setAvailableDrivers] = useState<DriverWithSlots[]>([])
   const [selectedDriverId, setSelectedDriverId] = useState<string>('')
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('')
@@ -883,6 +885,7 @@ for (const order of lastOrders || []) {
         
         {/* Cancel Order Button */}
         <button
+          onClick={() => setShowCancelModal(true)}
           className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 rounded-lg transition"
         >
           Cancel Order
@@ -920,7 +923,61 @@ for (const order of lastOrders || []) {
             Close
           </button>
         </div>
+
+        {/* Cancellation Modal */}
+        {showCancelModal && (
+          <CancellationModal
+            orderId={updatedOrder.id}
+            trackingId={updatedOrder.tracking_id}
+            onClose={() => setShowCancelModal(false)}
+            onConfirm={async (reason, customMessage) => {
+              try {
+                const { error: updateError } = await supabase
+                  .from('orders')
+                  .update({ status: 'cancelled' })
+                  .eq('id', updatedOrder.id)
+
+                if (updateError) throw updateError
+
+                const emailMessage = getCancellationEmailMessage(reason, customMessage)
+
+                const { error: logError } = await supabase
+                  .from('order_status_logs')
+                  .insert({
+                    order_id: updatedOrder.id,
+                    status: 'cancelled',
+                    description: `Order cancelled by dispatcher. Reason: ${emailMessage}`,
+                    timestamp: new Date().toISOString()
+                  })
+
+                if (logError) throw logError
+
+                if (client?.email) {
+                  await fetch('/api/send-dispatcher-cancellation-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      email: client.email,
+                      trackingId: updatedOrder.tracking_id,
+                      contactPerson: client.contact_person,
+                      reason: emailMessage,
+                      cancellationType: reason
+                    })
+                  })
+                }
+
+                alert('✅ Order cancelled successfully. Client has been notified via email.')
+                setShowCancelModal(false)
+                onOrderUpdate()
+                onClose()
+              } catch (err) {
+                console.error('Error cancelling order:', err)
+                alert('❌ Failed to cancel order. Please try again.')
+              }
+            }}
+          />
+        )}
       </div>
-    </div> 
+    </div>
   )
 }
