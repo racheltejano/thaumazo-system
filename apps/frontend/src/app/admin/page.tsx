@@ -206,7 +206,7 @@ export default function AdminDashboard() {
           {/* Main Content - 3 columns */}
           <div className="lg:col-span-3 space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -251,7 +251,7 @@ export default function AdminDashboard() {
                       {statsLoading ? (
                         <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
                       ) : (
-                        `$${dashboardStats.revenue?.toFixed(2) || '0.00'}`
+                        `₱${dashboardStats.revenue?.toFixed(2) || '0.00'}`
                       )}
                     </div>
                   </div>
@@ -261,43 +261,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div
-                className={`bg-white rounded-xl shadow-md p-6 border ${
-                  dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0
-                    ? 'border-red-200'
-                    : 'border-gray-100'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Create User Accounts</p>
-                    {statsLoading ? (
-                      <span className="animate-pulse bg-gray-200 h-8 w-16 rounded inline-block"></span>
-                    ) : dashboardStats.pendingApprovals === 0 ? (
-                      <p className="text-xs text-green-600">✓ All clear</p>
-                    ) : (
-                      <p className={`text-3xl font-bold text-red-600`}>
-                        {dashboardStats.pendingApprovals?.toLocaleString() || '0'}
-                      </p>
-                    )}
-                  </div>
-                  <div
-                    className={`p-3 rounded-lg ${
-                      dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0
-                        ? 'bg-red-100'
-                        : 'bg-green-100'
-                    }`}
-                  >
-                    <AlertCircle
-                      className={`h-6 w-6 ${
-                        dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0
-                          ? 'text-red-600'
-                          : 'text-green-600'
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Send Order Form Card (replaces Generate Tracking ID) */}
@@ -401,22 +364,6 @@ export default function AdminDashboard() {
                 >
                   <Package className="h-4 w-4" />
                   Inventory Check
-                </button>
-                <button
-                  onClick={() => router.push('/admin/new-user')}
-                  className={`w-full py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md ${
-                    dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0
-                      ? 'bg-red-600 hover:bg-red-700 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  <AlertCircle className="h-4 w-4" />
-                  Review Approvals
-                  {dashboardStats.pendingApprovals !== null && dashboardStats.pendingApprovals > 0 && (
-                    <span className="ml-auto bg-white text-red-600 px-2 py-1 rounded-full text-xs font-bold">
-                      {dashboardStats.pendingApprovals}
-                    </span>
-                  )}
                 </button>
               </div>
             </div>
