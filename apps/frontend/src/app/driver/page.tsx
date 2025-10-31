@@ -213,6 +213,14 @@ export default function DriverCalendarPage() {
 
       console.log('📦 Orders data:', orderData)
 
+      if (orderData && orderData.length > 0) {
+        console.log('🕐 First order raw data:', {
+          tracking_id: orderData[0].tracking_id,
+          pickup_timestamp: orderData[0].pickup_timestamp,
+          pickup_timestamp_type: typeof orderData[0].pickup_timestamp
+        })
+      }
+
       if (availError || orderError) {
         console.error('❌ Supabase query error:', availError || orderError)
         setError('Failed to load calendar data.')
@@ -220,27 +228,28 @@ export default function DriverCalendarPage() {
         return
       }
 
-      // Create availability events
+// Create availability events
       const availEvents: DriverEvent[] = (availabilityData || []).map((e) => ({
         id: e.id,
         title: e.title || 'Available',
-        start: new Date(e.start_time + 'Z'),
-        end: new Date(e.end_time + 'Z'),
+        start: moment.tz(e.start_time, 'UTC').tz('Asia/Manila').toDate(),
+        end: moment.tz(e.end_time, 'UTC').tz('Asia/Manila').toDate(),
         type: 'availability',
       }))
 
-      // Create order events - updated to use new timestamp fields
+      // Create order events - parse UTC timestamps and convert to Manila time
       const orderEvents: DriverEvent[] = (orderData || []).map((o) => {
-        const pickupDateTime = new Date(o.pickup_timestamp)
+        // Parse UTC timestamp and convert to Manila time
+        const pickupDateTime = moment.tz(o.pickup_timestamp, 'UTC').tz('Asia/Manila').toDate()
         let endDateTime = new Date(pickupDateTime)
         
         // Use estimated_end_timestamp if available, otherwise fall back to delivery window or add 2 hours
         if (o.estimated_end_timestamp) {
-          endDateTime = new Date(o.estimated_end_timestamp)
+          endDateTime = moment.tz(o.estimated_end_timestamp, 'UTC').tz('Asia/Manila').toDate()
         } else if (o.delivery_window_end) {
-          // Extract date from pickup_timestamp and combine with delivery_window_end time
-          const pickupDate = moment(o.pickup_timestamp).format('YYYY-MM-DD')
-          endDateTime = new Date(`${pickupDate}T${o.delivery_window_end}`)
+          // Extract date from pickup_timestamp (in Manila time) and combine with delivery_window_end time
+          const pickupDate = moment.tz(o.pickup_timestamp, 'UTC').tz('Asia/Manila').format('YYYY-MM-DD')
+          endDateTime = moment.tz(`${pickupDate}T${o.delivery_window_end}`, 'Asia/Manila').toDate()
         } else {
           // Default: add 2 hours to pickup time
           endDateTime = new Date(pickupDateTime.getTime() + 2 * 60 * 60 * 1000)
@@ -257,6 +266,23 @@ export default function DriverCalendarPage() {
       })
 
       console.log('✅ Events created:', { availEvents: availEvents.length, orderEvents: orderEvents.length })
+
+      console.log('📅 Order events details:', orderEvents.map(e => ({
+      tracking: e.title,
+      startRaw: e.start,
+      startFormatted: moment(e.start).format('YYYY-MM-DD HH:mm:ss'),
+      endFormatted: moment(e.end).format('YYYY-MM-DD HH:mm:ss'),
+      isToday: moment(e.start).isSame(moment(), 'day'),
+      isIn7Days: moment(e.start).isBetween(moment().startOf('day'), moment().add(7, 'days').endOf('day'), null, '[]')
+    })))
+
+    console.log('🕐 Current time info:', {
+      now: moment().format('YYYY-MM-DD HH:mm:ss'),
+      today: moment().format('YYYY-MM-DD'),
+      startOf7Days: moment().startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+      endOf7Days: moment().add(7, 'days').endOf('day').format('YYYY-MM-DD HH:mm:ss')
+    })
+      
       setEvents([...availEvents, ...orderEvents])
     } catch (err) {
       console.error('❌ Unexpected error fetching data:', err)

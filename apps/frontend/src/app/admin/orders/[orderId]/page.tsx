@@ -20,12 +20,61 @@ import {
   FileText
 } from 'lucide-react'
 import Link from 'next/link'
+import EditOrder from '@/components/Admin/EditOrder'
 
-interface Order {
+type Client = {
+  tracking_id: string
+  contact_person: string
+  contact_number: string
+  email: string
+  pickup_address: string
+  landmark: string
+  business_name: string
+  client_type: string
+}
+
+type Profile = {
+  first_name: string
+  last_name: string
+  contact_number: string
+  email: string
+}
+
+type OrderDropoff = {
+  dropoff_name: string
+  dropoff_address: string
+  dropoff_contact: string
+  dropoff_phone: string
+  sequence: number
+  estimated_duration_mins: number
+}
+
+type OrderProduct = {
+  quantity: number
+  products: {
+    name: string
+    weight: number
+    volume: number
+    is_fragile: boolean
+  }
+}
+
+type OrderPricingComponent = {
+  label: string
+  amount: number
+}
+
+type OrderStatusLog = {
+  status: string
+  description: string
+  timestamp: string
+}
+
+type Order = {
   id: string
   status: string
   created_at: string
-  pickup_timestamp: string  
+  pickup_timestamp: string
   vehicle_type: string
   special_instructions: string
   estimated_cost: number
@@ -35,48 +84,13 @@ interface Order {
   delivery_window_start: string
   delivery_window_end: string
   estimated_total_duration: number
-  clients: {
-    tracking_id: string
-    contact_person: string
-    contact_number: string
-    email: string
-    pickup_address: string
-    landmark: string
-    business_name: string
-    client_type: string
-  }
-  profiles: {
-    first_name: string
-    last_name: string
-    contact_number: string
-    email: string
-  } | null
-  order_dropoffs: Array<{
-    dropoff_name: string
-    dropoff_address: string
-    dropoff_contact: string
-    dropoff_phone: string
-    sequence: number
-    estimated_duration_mins: number
-  }>
-  order_products: Array<{
-    quantity: number
-    products: {
-      name: string
-      weight: number
-      volume: number
-      is_fragile: boolean
-    }
-  }>
-  order_pricing_components: Array<{
-    label: string
-    amount: number
-  }>
-  order_status_logs: Array<{
-    status: string
-    description: string
-    timestamp: string
-  }>
+  driver_id: string | null
+  clients: Client
+  profiles: Profile | null
+  order_dropoffs: OrderDropoff[]
+  order_products: OrderProduct[]
+  order_pricing_components: OrderPricingComponent[]
+  order_status_logs: OrderStatusLog[]
 }
 
 const statusConfig = {
@@ -106,6 +120,9 @@ export default function OrderDetailsPage() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+
+  
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -270,57 +287,72 @@ export default function OrderDetailsPage() {
   }
 
   const handleCancelOrder = async () => {
-    if (!cancelReason.trim()) {
-      alert('Please provide a reason for cancellation')
-      return
-    }
-
-    setCancelling(true)
-    try {
-      // Update order status to cancelled
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({ status: 'cancelled' })
-        .eq('id', orderId)
-
-      if (updateError) throw updateError
-
-      // Add status log
-      const { error: logError } = await supabase
-        .from('order_status_logs')
-        .insert({
-          order_id: orderId,
-          status: 'cancelled',
-          description: `Order cancelled by admin. Reason: ${cancelReason}`,
-          timestamp: new Date().toISOString()
-        })
-
-      if (logError) throw logError
-
-      // Send cancellation email to client
-      if (order.clients?.email) {
-        await fetch('/api/send-cancellation-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: order.clients.email,
-            trackingId: order.tracking_id,
-            contactPerson: order.clients.contact_person,
-            reason: cancelReason
-          })
-        })
+      if (!cancelReason.trim()) {
+        alert('Please provide a reason for cancellation')
+        return
       }
 
-      // Refresh order data
-      window.location.reload()
-    } catch (err) {
-      console.error('Error cancelling order:', err)
-      alert('Failed to cancel order. Please try again.')
-    } finally {
-      setCancelling(false)
-      setShowCancelModal(false)
+      setCancelling(true)
+      try {
+        // Release driver slot if driver was assigned
+        if (order.driver_id) {
+          const { error: slotErr } = await supabase
+            .from('driver_time_slots')
+            .update({ status: 'available', order_id: null })
+            .eq('order_id', orderId)
+            .eq('driver_id', order.driver_id)
+          
+          if (slotErr) throw slotErr
+        }
+
+        // Update order status to cancelled      
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({
+            status: 'cancelled',
+            driver_id: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', orderId)
+
+        if (updateError) throw updateError
+
+        // Add status log
+        const { error: logError } = await supabase
+          .from('order_status_logs')
+          .insert({
+            order_id: orderId,
+            status: 'cancelled',
+            description: `Order cancelled by admin. Reason: ${cancelReason}`,
+            timestamp: new Date().toISOString()
+          })
+
+        if (logError) throw logError
+
+        // Send cancellation email to client
+        if (order.clients?.email) {
+          await fetch('/api/send-cancellation-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: order.clients.email,
+              trackingId: order.tracking_id,
+              contactPerson: order.clients.contact_person,
+              reason: cancelReason
+            })
+          })
+        }
+
+        // Refresh order data
+        window.location.reload()
+      } catch (err) {
+        console.error('Error cancelling order:', err)
+        alert('Failed to cancel order. Please try again.')
+      } finally {
+        setCancelling(false)
+        setShowCancelModal(false)
+      }
     }
-  }
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -571,7 +603,6 @@ export default function OrderDetailsPage() {
                 </div>
               </div>
             )}
-
             {/* Products */}
             {order.order_products && order.order_products.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border">
@@ -714,9 +745,21 @@ export default function OrderDetailsPage() {
                 >
                   Track Order
                 </button>
-                <button className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
+                <button 
+                  onClick={() => setShowEditModal(true)}
+                  className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
+                >
                   Edit Order
                 </button>
+
+                {showEditModal && (
+                  <EditOrder
+                    order={order}
+                    onClose={() => setShowEditModal(false)}
+                    onSuccess={() => window.location.reload()}
+                  />
+                )}
+
                 <button 
                   onClick={() => setShowCancelModal(true)}
                   disabled={order.status === 'cancelled' || order.status === 'delivered'}
