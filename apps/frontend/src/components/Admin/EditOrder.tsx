@@ -67,6 +67,7 @@
       return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:00`
     }
 
+  const [currentPage, setCurrentPage] = useState(1)
 
   const [formData, setFormData] = useState(() => {
       // Extract date and time from pickup_timestamp if it exists
@@ -236,14 +237,14 @@
       }
     }
 
-    const handleStatusChange = (newStatus: string) => {
-      if (newStatus === 'cancelled' || (order.status === 'cancelled' && newStatus === 'order_placed')) {
-        setPendingStatus(newStatus)
-        setShowReasonModal(true)
-      } else {
-        setFormData({ ...formData, status: newStatus })
+      const handleStatusChange = (newStatus: string) => {
+        if (newStatus === 'cancelled' || (order.status === 'cancelled' && newStatus === 'order_placed')) {
+          setPendingStatus(newStatus)
+          setShowReasonModal(true)
+        } else {
+          setFormData({ ...formData, status: newStatus })
+        }
       }
-    }
 
     const confirmStatusChange = () => {
       if (!statusChangeReason.trim()) {
@@ -288,9 +289,9 @@
           : null
 
         // convert pickup date and time columns to UTC
-        const utcDate = new Date(pickupTimestamp)
-        formData.pickup_date = utcDate.toISOString().split('T')[0]
-        formData.pickup_time = utcDate.toISOString().split('T')[1].substring(0, 5)
+        // const utcDate = new Date(pickupTimestamp)
+        // formData.pickup_date = utcDate.toISOString().split('T')[0]
+        // formData.pickup_time = utcDate.toISOString().split('T')[1].substring(0, 5)
 
         // Handle status change to cancelled
         if (formData.status === 'cancelled' && order.status !== 'cancelled') {
@@ -300,7 +301,6 @@
               .from('driver_time_slots')
               .update({ status: 'available', order_id: null })
               .eq('order_id', order.id)
-              .eq('driver_id', order.driver_id)
 
             if (slotErr) throw slotErr
           }
@@ -355,40 +355,55 @@
         }
         // Handle driver assignment
         else if (formData.status === 'driver_assigned' && !order.driver_id && formData.driver_id) {
-          const pickupTimestampUTC = phToUTC(formData.pickup_date, formData.pickup_time)
+          const phDate = formData.pickup_date
+          const phTime = formData.pickup_time
+          const pickupTimestampUTC = phToUTC(phDate, phTime)
 
-          // Find available slot for selected driver
-          const { data: slots, error: findErr } = await supabase
+          console.log('🕒 DRIVER ASSIGN START')
+          console.log('📅 PH Date/Time:', `${phDate}T${phTime}`)
+          console.log('🌍 Converted to UTC:', pickupTimestampUTC)
+
+          // 🔹 Query available driver slots using UTC timestamp
+          const { data: slots, error: slotQueryErr } = await supabase
             .from('driver_time_slots')
-            .select('id,driver_id,start_time,end_time,status,order_id')
-            .eq('driver_id', formData.driver_id)
+            .select('id, driver_id, start_time, end_time, status, order_id')
             .eq('status', 'available')
             .is('order_id', null)
             .lte('start_time', pickupTimestampUTC)
-            .gt('end_time', pickupTimestampUTC)  // Changed from gte to gt
+            .gt('end_time', pickupTimestampUTC)
 
-          if (findErr) throw findErr
-          if (!slots || slots.length === 0) throw new Error('No available slot for this driver')
+          if (slotQueryErr) throw slotQueryErr
+          console.log(`✅ Found ${slots?.length || 0} available slot(s)`)
 
-          const slot = slots[0]  // Take the first available slot
+          if (!slots || slots.length === 0) {
+            throw new Error('No available driver slot found for the given pickup time (UTC check).')
+          }
 
-          // Mark slot as scheduled
-          const { error: slotErr } = await supabase
+          const slot = slots[0]
+          console.log('🚗 Assigning driver slot:', {
+            slot_id: slot.id,
+            driver_id: formData.driver_id,
+            slot_start: slot.start_time,
+            slot_end: slot.end_time
+          })
+
+          // 🔹 Mark slot as scheduled
+          const { error: slotUpdateErr } = await supabase
             .from('driver_time_slots')
             .update({ status: 'scheduled', order_id: order.id })
             .eq('id', slot.id)
 
-          if (slotErr) throw slotErr
+          if (slotUpdateErr) throw slotUpdateErr
 
-          // Update order with all timestamp fields
+          // 🔹 Update order details
           const { error: updateErr } = await supabase
             .from('orders')
             .update({
               status: formData.status,
               driver_id: formData.driver_id,
-              pickup_date: formData.pickup_date,
-              pickup_time: formData.pickup_time,
-              pickup_timestamp: pickupTimestamp,
+              pickup_date: phDate, // keep PH time visible in UI
+              pickup_time: phTime,
+              pickup_timestamp: pickupTimestampUTC, // UTC timestamp for backend
               vehicle_type: formData.vehicle_type,
               tail_lift_required: formData.tail_lift_required,
               special_instructions: formData.special_instructions,
@@ -396,24 +411,30 @@
               priority_level: formData.priority_level,
               delivery_window_start: formData.delivery_window_start || null,
               delivery_window_end: formData.delivery_window_end || null,
-              delivery_window_start_tz: deliveryWindowStartTz,
-              delivery_window_end_tz: deliveryWindowEndTz,
+              delivery_window_start_tz: formData.delivery_window_start
+                ? phToUTC(phDate, formData.delivery_window_start)
+                : null,
+              delivery_window_end_tz: formData.delivery_window_end
+                ? phToUTC(phDate, formData.delivery_window_end)
+                : null,
               estimated_total_duration: formData.estimated_total_duration,
-              estimated_end_time: estimatedEndTime,
-              estimated_end_timestamp: estimatedEndTimestamp,
               updated_at: new Date().toISOString()
             })
             .eq('id', order.id)
 
           if (updateErr) {
-            // Rollback slot update
+            // Rollback slot if order update fails
             await supabase
               .from('driver_time_slots')
               .update({ status: 'available', order_id: null })
               .eq('id', slot.id)
             throw updateErr
           }
+
+          console.log('✅ Driver successfully assigned to slot:', slot.id)
         }
+
+
         // Normal update
         else {
           const updateData: any = {
@@ -445,7 +466,6 @@
               .from('driver_time_slots')
               .update({ status: 'available', order_id: null })
               .eq('order_id', order.id)
-              .eq('driver_id', order.driver_id)
           } else {
             updateData.driver_id = formData.driver_id || null
           }
@@ -471,24 +491,21 @@
     const availableStatuses = statusTransitions[order.status] || []
 
     return (
-      <>
-        <div 
-          className="fixed inset-0 flex items-center justify-center z-50 p-4" 
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-        >
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-              <h3 className="text-lg font-semibold text-gray-900">Edit Order</h3>
-              <button
-                onClick={onClose}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {currentPage === 1 ? 'Edit Order Details' : 'Status & Driver Assignment'}
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
+        </div>
 
-            {/* Content */}
+        {/* PAGE 1 */}
+        {currentPage === 1 && (
+          <div className="p-6 space-y-6">
             <div className="p-6 space-y-6">
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
@@ -503,65 +520,6 @@
                 </p>
               </div>
 
-              {/* Status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <div className="space-y-2">
-                  <div className="text-sm text-gray-600 mb-2">
-                    Current: <span className="font-medium">{statusLabels[order.status]}</span>
-                  </div>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value={order.status}>{statusLabels[order.status]}</option>
-                    {availableStatuses.map(status => (
-                      <option key={status} value={status}>
-                        {statusLabels[status]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Driver Assignment (only show if status is driver_assigned) */}
-              {formData.status === 'driver_assigned' && !order.driver_id && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assign Driver *
-                  </label>
-                  {loadingDrivers ? (
-                    <div className="text-sm text-gray-500">Loading available drivers...</div>
-                  ) : drivers.length > 0 ? (
-                    <>
-                      <select
-                        value={formData.driver_id}
-                        onChange={(e) => {
-                          console.log('👤 Driver selected:', e.target.value)
-                          setFormData({ ...formData, driver_id: e.target.value })
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select a driver</option>
-                        {drivers.map(driver => (
-                          <option key={driver.id} value={driver.id}>
-                            {driver.full_name} ({driver.email}) - {driver.slots} slots available
-                          </option>
-                        ))}
-                      </select>
-                      {!formData.driver_id && (
-                        <p className="mt-1 text-sm text-red-600">Please select a driver before saving</p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-sm text-red-600">No drivers available for this pickup time</div>
-                  )}
-                </div>
-              )}
-
               {/* Pickup Date & Time */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -572,7 +530,8 @@
                     type="date"
                     value={formData.pickup_date}
                     onChange={(e) => setFormData({ ...formData, pickup_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={order.status !== 'order_placed' && order.status !== 'cancelled'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500"
                   />
                 </div>
                 <div>
@@ -583,7 +542,8 @@
                     type="time"
                     value={formData.pickup_time}
                     onChange={(e) => setFormData({ ...formData, pickup_time: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={order.status !== 'order_placed' && order.status !== 'cancelled'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500"
                   />
                 </div>
               </div>
@@ -698,71 +658,153 @@
                 />
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 sticky bottom-0 bg-white">
+        {/* PAGE 2 */}
+        {currentPage === 2 && (
+          <div className="p-6 space-y-6">
+          {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <div className="space-y-2">
+                <div className="text-sm text-gray-600 mb-2">
+                  Current: <span className="font-medium">{statusLabels[order.status]}</span>
+                </div>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={order.status}>{statusLabels[order.status]}</option>
+                  {availableStatuses.map(status => (
+                    <option key={status} value={status}>
+                      {statusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+              {/* Driver Assignment (only show if status is driver_assigned) */}
+              {formData.status === 'driver_assigned' && !order.driver_id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Assign Driver *
+                  </label>
+                  {loadingDrivers ? (
+                    <div className="text-sm text-gray-500">Loading available drivers...</div>
+                  ) : drivers.length > 0 ? (
+                    <>
+                      <select
+                        value={formData.driver_id}
+                        onChange={(e) => {
+                          console.log('👤 Driver selected:', e.target.value)
+                          setFormData({ ...formData, driver_id: e.target.value })
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select a driver</option>
+                        {drivers.map(driver => (
+                          <option key={driver.id} value={driver.id}>
+                            {driver.full_name} ({driver.email}) - {driver.slots} slots available
+                          </option>
+                        ))}
+                      </select>
+                      {!formData.driver_id && (
+                        <p className="mt-1 text-sm text-red-600">Please select a driver before saving</p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-red-600">No drivers available for this pickup time</div>
+                  )}
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* Footer buttons */}
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-between bg-white sticky bottom-0">
+          {currentPage > 1 ? (
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            >
+              ← Back
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            >
+              Cancel
+            </button>
+          )}
+
+          {currentPage < 2 ? (
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Next →
+            </button>
+          ) : (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          )}
+        </div>
+      </div>
+      {/* Status Change Reason Modal */}
+      {showReasonModal && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-[60] p-4" 
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Status Change Reason</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Please provide a reason for changing the status to {statusLabels[pendingStatus]}.
+              </p>
+              <textarea
+                value={statusChangeReason}
+                onChange={(e) => setStatusChangeReason(e.target.value)}
+                placeholder="Enter reason..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={4}
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
               <button
-                onClick={onClose}
-                disabled={saving}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                onClick={() => {
+                  setShowReasonModal(false)
+                  setStatusChangeReason('')
+                  setPendingStatus('')
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
+                onClick={confirmStatusChange}
+                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Saving...' : 'Save Changes'}
+                Confirm
               </button>
             </div>
           </div>
         </div>
-
-        {/* Status Change Reason Modal */}
-        {showReasonModal && (
-          <div 
-            className="fixed inset-0 flex items-center justify-center z-[60] p-4" 
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-          >
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Status Change Reason</h3>
-              </div>
-              <div className="p-6">
-                <p className="text-sm text-gray-600 mb-4">
-                  Please provide a reason for changing the status to {statusLabels[pendingStatus]}.
-                </p>
-                <textarea
-                  value={statusChangeReason}
-                  onChange={(e) => setStatusChangeReason(e.target.value)}
-                  placeholder="Enter reason..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  rows={4}
-                />
-              </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                <button
-                  onClick={() => {
-                    setShowReasonModal(false)
-                    setStatusChangeReason('')
-                    setPendingStatus('')
-                  }}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmStatusChange}
-                  className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </>
-    )
+      )}
+    </div>
+  )
   }
