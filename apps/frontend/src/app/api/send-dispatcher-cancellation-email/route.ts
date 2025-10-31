@@ -14,10 +14,11 @@ export async function POST(req: NextRequest) {
     // Use test email override if in test mode
     const recipientEmail = process.env.TEST_EMAIL_OVERRIDE || email
 
-    const trackingUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/track/${trackingId}`
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    const trackingUrl = `${baseUrl}/track/${trackingId}`
     
-    // Placeholder reschedule link (will be implemented later)
-    const rescheduleUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/reschedule?order=${trackingId}`
+    // FIXED: Use trackingId in the URL path
+    const rescheduleUrl = `${baseUrl}/reschedule/${trackingId}`
 
     const { error } = await resend.emails.send({
       from: 'onboarding@resend.dev',
