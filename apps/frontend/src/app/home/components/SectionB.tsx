@@ -169,7 +169,7 @@ function SectionB({ inView }: SectionProps) {
         {/* CTA Section */}
         <AnimatedSection inView={inView} delay={800}>
           <div style={{ marginTop: 80 }}>
-            <a href="/register" style={{ textDecoration: "none" }}>
+            <a href="/client" style={{ textDecoration: "none" }}>
               <button
                 style={{
                   background: "#fff",

@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
       {/* Tab Navigation */}
       <div className="flex space-x-6 mb-4 justify-center">
         <Link href="/login" className="text-gray-500 hover:text-orange-500">SIGN IN</Link>
-        <Link href="/register" className="text-gray-500 hover:text-orange-500">SIGN UP</Link>
+        
       </div>
 
 

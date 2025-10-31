@@ -51,7 +51,7 @@ function HomeNavbar({ hideAuthButtons = false }: { hideAuthButtons?: boolean }) 
               Login
             </button>
           </Link>
-          <Link href="/register" style={{ textDecoration: "none" }}>
+          <Link href="/client" style={{ textDecoration: "none" }}>
             <button
               className="home-navbar-btn home-navbar-signup"
               style={{
@@ -67,7 +67,7 @@ function HomeNavbar({ hideAuthButtons = false }: { hideAuthButtons?: boolean }) 
                 fontSize: 20,
               }}
             >
-              Sign Up
+             I'm a Customer
             </button>
           </Link>
         </div>
