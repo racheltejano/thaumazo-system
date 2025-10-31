@@ -161,7 +161,7 @@ export async function POST(req: Request) {
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="http://localhost:3000/login" 
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login" 
                  style="display: inline-block; background: linear-gradient(135deg, #ef6c00 0%, #ff8f00 100%); color: white; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; box-shadow: 0 2px 4px rgba(239, 108, 0, 0.3);">
                 Log In Now →
               </a>

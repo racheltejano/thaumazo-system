@@ -124,7 +124,7 @@ export async function GET(req: Request) {
           <div class="card">
             <h1>Oops! One-Time Link Used</h1>
             <p>${message}</p>
-            <a href="http://localhost:3000/home" target="_blank">Contact Thaumazo</a>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/home" target="_blank">Contact Thaumazo</a>
           </div>
         </body>
       </html>
@@ -178,7 +178,7 @@ export async function GET(req: Request) {
 
     await supabase.from('pending_client_emails').delete().eq('token', token)
 
-    const redirectUrl = `http://localhost:3000/create-order/${trackingId}`
+    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/create-order/${trackingId}`
     return NextResponse.redirect(redirectUrl)
   } catch (error) {
     console.error('Unexpected error in GET:', error)
