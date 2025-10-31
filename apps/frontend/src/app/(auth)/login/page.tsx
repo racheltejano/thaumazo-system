@@ -166,9 +166,8 @@ export default function LoginPage() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex space-x-6 mb-4 justify-center">
-        <span className="font-bold border-b-2 border-orange-500 text-orange-600">SIGN IN</span>
-        <Link href="/register" className="text-gray-500 hover:text-orange-500">SIGN UP</Link>
+      <div className="mb-4 text-center">
+        <span className="font-bold text-orange-600 text-xl">SIGN IN</span>
       </div>
 
       <input
