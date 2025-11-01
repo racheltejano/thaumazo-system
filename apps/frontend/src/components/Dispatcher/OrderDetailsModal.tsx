@@ -146,9 +146,10 @@ interface OrderDetailsModalProps {
   selectedOrder: Order
   onClose: () => void
   onOrderUpdate: () => void
+  role?: string  
 }
 
-export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate }: OrderDetailsModalProps) {
+export function OrderDetailsModal({ selectedOrder, onClose, onOrderUpdate, role = ''   }: OrderDetailsModalProps) {
   const [client, setClient] = useState<Client | null>(null)
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
