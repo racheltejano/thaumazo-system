@@ -83,6 +83,22 @@ const sidebarMenus: SidebarMenus = {
       ),
       href: '/admin/inventory/add',
     },
+    {
+      label: 'Data Analytics',
+      icon: (
+        <svg
+          width="24"
+          height="24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          <path d="M4 19h16M4 15h10M4 11h6M4 7h2" />
+        </svg>
+      ),
+      href: '/admin/data-analytics',
+    },
   ],
   inventory: [
     {
