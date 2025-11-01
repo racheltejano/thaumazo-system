@@ -406,34 +406,6 @@ export default function AdminDashboard() {
 
           {/* Sidebar - 1 column */}
           <div className="space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-              <div className="space-y-3">
-                <button
-                  onClick={() => router.push('/admin/orders')}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md"
-                >
-                  <Users className="h-4 w-4" />
-                  View All Orders
-                </button>
-                <button
-                  onClick={() => router.push('/admin/staff')}
-                  className="w-full bg-slate-600 hover:bg-slate-700 text-white py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md"
-                >
-                  <Users className="h-4 w-4" />
-                  Manage Staff
-                </button>
-                <button
-                  onClick={() => router.push('/admin/inventory')}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-full font-medium transition-colors flex items-center gap-3 shadow-sm hover:shadow-md"
-                >
-                  <Package className="h-4 w-4" />
-                  Inventory Check
-                </button>
-              </div>
-            </div>
-
             {/* Export Data for Power BI */}
             <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
               <div className="flex items-center gap-2 mb-4">
