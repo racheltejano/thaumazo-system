@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   try {
     // ✅ Generate token & save to database
     const token = Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60) // expires in 1 hour
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24) 
 
     const { error: insertError } = await supabase.from('pending_client_emails').insert({
       email,
@@ -112,11 +112,11 @@ export async function POST(req: Request) {
 
             <div style="background: #fff8e1; border-left: 4px solid #ef6c00; padding: 15px; margin: 25px 0; border-radius: 0 6px 6px 0;">
               <p style="margin: 0; color: #795548; font-size: 14px;">
-                <strong>⏳ Note:</strong> The One-Time Order link will expire in 1 hour for your security.
+                <strong>⏳ Note:</strong> The One-Time Order link will expire in 24 hours for your security.
               </p>
             </div>
 
-            <p>Should you require any assistance, please reply to this email or contact our support team. We look forward to serving you!</p>
+            <p>Should you require any assistance, please contact our support team. We look forward to serving you!</p>
 
             <div style="border-top: 2px solid #ef6c00; padding-top: 20px;">
               <p style="margin: 0; font-weight: 600;">Best regards,</p>
