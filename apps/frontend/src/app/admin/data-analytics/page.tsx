@@ -64,28 +64,21 @@ export default function DataAnalyticsPage() {
             {tabs.map(tab => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
-              const isDisabled = tab.id === 'inventory' || tab.id === 'procurement'
               
               return (
                 <button
                   key={tab.id}
-                  onClick={() => !isDisabled && setActiveTab(tab.id)}
-                  disabled={isDisabled}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`
                     flex items-center gap-2 px-6 py-3 font-medium transition-all rounded-t-lg
                     ${isActive 
                       ? 'bg-white text-blue-600 border-b-2 border-blue-600' 
-                      : isDisabled
-                      ? 'text-gray-400 cursor-not-allowed'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                     }
                   `}
                 >
                   <Icon className="h-5 w-5" />
                   {tab.label}
-                  {isDisabled && (
-                    <span className="text-xs bg-gray-200 px-2 py-0.5 rounded">Soon</span>
-                  )}
                 </button>
               )
             })}
@@ -95,8 +88,8 @@ export default function DataAnalyticsPage() {
         {/* Section Content */}
         {activeTab === 'logistics' && <LogisticsSection dateRange={dateRange} />}
         {activeTab === 'sales' && <SalesSection dateRange={dateRange} />}
-        {activeTab === 'inventory' && <InventorySection />}
-        {activeTab === 'procurement' && <ProcurementSection />}
+        {activeTab === 'inventory' && <InventorySection dateRange={dateRange} />}
+        {activeTab === 'procurement' && <ProcurementSection dateRange={dateRange} />}
       </div>
     </div>
   )
