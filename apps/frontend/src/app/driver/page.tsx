@@ -132,7 +132,8 @@ function formatTime(timestamp: string): string {
 }
 
 export default function DriverCalendarPage() {
-  const [events, setEvents] = useState<DriverEvent[]>([])
+  const [availabilityEvents, setAvailabilityEvents] = useState<DriverEvent[]>([])
+  const [orderEvents, setOrderEvents] = useState<DriverEvent[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [client, setClient] = useState<Client | null>(null)
   const [dropoffs, setDropoffs] = useState<Dropoff[]>([])
@@ -150,6 +151,7 @@ export default function DriverCalendarPage() {
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState('')
   const [showPickupConfirmation, setShowPickupConfirmation] = useState(false)
+  const [calendarFilter, setCalendarFilter] = useState<'orders' | 'availability'>('orders')
 
   useEffect(() => {
     const fetchSessionThenData = async () => {
@@ -283,7 +285,8 @@ export default function DriverCalendarPage() {
       endOf7Days: moment().add(7, 'days').endOf('day').format('YYYY-MM-DD HH:mm:ss')
     })
       
-      setEvents([...availEvents, ...orderEvents])
+      setAvailabilityEvents(availEvents)
+      setOrderEvents(orderEvents)
     } catch (err) {
       console.error('❌ Unexpected error fetching data:', err)
       setError('An unexpected error occurred.')
@@ -326,6 +329,10 @@ export default function DriverCalendarPage() {
       console.error('❌ Error fetching order details:', err)
     }
   }
+
+  const getCurrentEvents = () => {
+  return calendarFilter === 'orders' ? orderEvents : availabilityEvents
+}
 
   const fetchEstimatedTravelTime = async (clientData: Client, dropoffData: Dropoff[]) => {
     if (
@@ -515,17 +522,17 @@ export default function DriverCalendarPage() {
 }
 
   const getTotalHours = () => {
-    return events
-      .filter(e => e.type === 'availability' && !e.title.includes('Unavailable'))
-      .reduce((total, event) => {
-        const hours = (event.end.getTime() - event.start.getTime()) / (1000 * 60 * 60)
-        return total + hours
-      }, 0)
-  }
+  return availabilityEvents
+    .filter(e => !e.title.includes('Unavailable'))
+    .reduce((total, event) => {
+      const hours = (event.end.getTime() - event.start.getTime()) / (1000 * 60 * 60)
+      return total + hours
+    }, 0)
+}
 
   const getOrderCount = () => {
-    return events.filter(e => e.type === 'order').length
-  }
+  return orderEvents.length
+}
 
   const toggleDropoffMap = (dropoffId: string) => {
     setShowDropoffMaps(prev => ({
@@ -582,17 +589,10 @@ export default function DriverCalendarPage() {
     )
   }, [])
 
-  const upcomingOrders = events
-    .filter(e => e.type === 'order' && moment(e.start).isBetween(moment().startOf('day'), moment().add(7, 'days').endOf('day'), null, '[]'))
-    .sort((a, b) => a.start.getTime() - b.start.getTime())
+  const upcomingOrders = orderEvents
+  .filter(e => moment(e.start).isBetween(moment().startOf('day'), moment().add(7, 'days').endOf('day'), null, '[]'))
+  .sort((a, b) => a.start.getTime() - b.start.getTime())
 
-  const filteredAvailability = events.filter((e) => {
-    if (e.type === 'availability') {
-      const startMoment = moment(e.start);
-      return startMoment.isBetween(startOfWeek, endOfWeek, 'days', '[]');
-    }
-    return false;
-  });
 
   if (loading) {
     return (
@@ -632,7 +632,7 @@ return (
       {/* Orders Delivered */}
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 text-center hover:shadow-md transition-shadow">
         <div className="text-3xl font-bold text-green-600 mb-1">
-          {events.filter(e => e.type === 'order' && e.order?.status === 'delivered').length}
+          {orderEvents.filter(e => e.order?.status === 'delivered').length}
         </div>
         <div className="text-sm text-gray-600 font-medium">Orders Delivered</div>
       </div>
@@ -683,15 +683,15 @@ return (
             <span>📦</span>
             Orders for Today
           </h2>
-          {events.filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day')).length === 0 ? (
+          {orderEvents.filter(e => moment(e.start).isSame(moment(), 'day')).length === 0 ? (
             <div className="text-center py-4">
               <div className="text-gray-400 text-2xl mb-2">📅</div>
               <p className="text-sm text-gray-500 italic">No orders scheduled for today</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {events
-                .filter(e => e.type === 'order' && moment(e.start).isSame(moment(), 'day'))
+              {orderEvents
+                .filter(e => moment(e.start).isSame(moment(), 'day'))
                 .map(order => (
                   <div key={order.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                        onClick={() => handleEventClick(order)}>
@@ -715,17 +715,30 @@ return (
           )}
         </div>
       </div>
-
+      
       {/* Calendar View */}
       <div className="lg:col-span-3">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-semibold text-gray-900">Calendar View</h2>
-          </div>
+            {/* Calendar Controls */}
+      <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900">Calendar View</h2>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">Show:</label>
+          <select
+            value={calendarFilter}
+            onChange={(e) => setCalendarFilter(e.target.value as 'orders' | 'availability')}
+            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+          >
+            <option value="orders">📦 Assigned Orders</option>
+            <option value="availability">📅 My Availability</option>
+          </select>
+        </div>
+      </div>
+      
           <div className="p-4">
             <Calendar
               localizer={localizer}
-              events={events}
+              events={getCurrentEvents()}
               startAccessor="start"
               endAccessor="end"
               view={currentView}
@@ -759,6 +772,32 @@ return (
               }}
             />
           </div>
+          {/* Calendar Legend */}
+<div className="p-4 bg-gray-50 border-t border-gray-200">
+  <div className="flex flex-wrap gap-4">
+    {calendarFilter === 'availability' ? (
+      <>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-500 rounded"></div>
+          <span className="text-sm text-gray-700">Available</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-500 rounded"></div>
+          <span className="text-sm text-gray-700">Unavailable</span>
+        </div>
+      </>
+    ) : (
+      <>
+        {ORDER_STATUSES.map(status => (
+          <div key={status.value} className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: status.color }}></div>
+            <span className="text-sm text-gray-700">{status.label}</span>
+          </div>
+        ))}
+      </>
+    )}
+  </div>
+</div>
         </div>
       </div>
     </div>
