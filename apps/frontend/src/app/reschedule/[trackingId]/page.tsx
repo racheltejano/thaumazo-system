@@ -97,8 +97,8 @@ export default function RescheduleOrderPage() {
         throw new Error('Order not found')
       }
 
-      if (data.status !== 'cancelled') {
-        throw new Error('Only cancelled orders can be rescheduled')
+      if (data.status !== 'cancelled' && data.status !== 'order_placed') {
+        throw new Error('This order cannot be rescheduled')
       }
 
       setOrder(data)
@@ -324,7 +324,9 @@ export default function RescheduleOrderPage() {
         <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
           <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Important Information</h3>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Your order will change from "Cancelled" to "Order Placed"</li>
+            {order?.status === 'cancelled' && (
+              <li>• Your order will change from "Cancelled" to "Order Placed"</li>
+            )}
             <li>• A new driver will be assigned to your rescheduled order</li>
             <li>• All times are in Philippine Time (UTC+8)</li>
             <li>• Pickup must be scheduled at least 24 hours in advance</li>
@@ -343,7 +345,9 @@ export default function RescheduleOrderPage() {
             </div>
             <div className="flex items-start">
               <span className="text-gray-600 w-32">Status:</span>
-              <span className="font-medium text-red-600">Cancelled</span>
+              <span className={`font-medium ${order?.status === 'cancelled' ? 'text-red-600' : 'text-blue-600'}`}>
+                {order?.status === 'cancelled' ? 'Cancelled' : 'Order Placed'}
+              </span>
             </div>
             <div className="flex items-start">
               <span className="text-gray-600 w-32">Original Pickup:</span>

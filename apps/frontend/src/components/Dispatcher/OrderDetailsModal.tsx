@@ -863,15 +863,43 @@ for (const order of lastOrders || []) {
             <p className="text-sm text-gray-500">All drivers are fully booked for this time slot.</p>
           </div>
           <button
-            onClick={() => {
-              // Component to be imported later
-              console.log('Request reschedule clicked')
-            }}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
-          >
-            <span>📅</span>
-            <span>Request Reschedule to Client</span>
-          </button>
+  onClick={async () => {
+    if (!client?.email) {
+      alert('❌ Client email not found')
+      return
+    }
+    
+    if (confirm(`Send reschedule request to ${client.contact_person} (${client.email})?`)) {
+      try {
+        const response = await fetch('/api/send-reschedule-request-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: client.email,
+            trackingId: updatedOrder.tracking_id,
+            contactPerson: client.contact_person,
+            pickupDate: updatedOrder.pickup_date,
+            pickupTime: updatedOrder.pickup_time
+          })
+        })
+        
+        if (response.ok) {
+          alert('✅ Reschedule request sent to client!\n\n📧 They will receive an email with a link to reschedule their order.')
+          onClose()
+        } else {
+          alert('❌ Failed to send email. Please try again.')
+        }
+      } catch (error) {
+        console.error('Error sending reschedule request:', error)
+        alert('❌ Failed to send email. Please try again.')
+      }
+    }
+  }}
+  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
+>
+  <span>📅</span>
+  <span>Request Reschedule to Client</span>
+</button>
           <button
             onClick={() => {
               setNoDriversFound(false)
