@@ -452,6 +452,47 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     return null
   }
 
+  const sortDropoffsByDistance = (
+  pickupCoords: { lat: number; lon: number },
+  dropoffsList: Dropoff[]
+): Dropoff[] => {
+  // Calculate distance using Haversine formula
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    const R = 6371 // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180)
+    const dLon = (lon2 - lon1) * (Math.PI / 180)
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
+
+  // Filter dropoffs with valid coordinates and calculate distances
+  const dropoffsWithDistance = dropoffsList
+    .filter(d => d.latitude && d.longitude)
+    .map(d => ({
+      ...d,
+      distanceFromPickup: calculateDistance(
+        pickupCoords.lat,
+        pickupCoords.lon,
+        d.latitude!,
+        d.longitude!
+      )
+    }))
+
+  // Sort by distance (nearest first)
+  return dropoffsWithDistance.sort((a, b) => a.distanceFromPickup - b.distanceFromPickup)
+}
+
   
     const calculateAndStoreTravelTimes = async (
       orderId: string, 
@@ -535,7 +576,6 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
               .from('order_dropoffs')
               .update({ 
                 estimated_duration_mins: duration,
-                sequence: i + 1,
               })
               .match({
                 order_id: orderId,
@@ -675,7 +715,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     
     const clientData = {
       tracking_id: trackingId,
-      client_type: form.client_type,
+      client_type: 'first_time',
       client_pin: form.client_pin,
       business_name: form.business_name,
       contact_person: form.contact_person,
@@ -825,27 +865,42 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
       }
     }
 
-    // Step 4: Create dropoffs with coordinates
-    const dropoffEntries = await Promise.all(
-      dropoffs.filter(d => d.address.trim()).map(async (d, index) => {
-        const coords = d.latitude && d.longitude
-          ? { lat: d.latitude, lon: d.longitude }
-          : await geocodePhilippineAddress(d.address)
+    // Step 4: Create dropoffs with coordinates and sort by distance
+const dropoffsWithCoords = await Promise.all(
+  dropoffs.filter(d => d.address.trim()).map(async (d) => {
+    // Use existing coordinates or geocode if missing
+    let latitude = d.latitude
+    let longitude = d.longitude
+    
+    if (!latitude || !longitude) {
+      const coords = await geocodePhilippineAddress(d.address)
+      latitude = coords?.lat
+      longitude = coords?.lon
+    }
+    
+    return {
+      ...d,
+      latitude,
+      longitude,
+    }
+  })
+)
 
+// Sort dropoffs by distance from pickup
+const sortedDropoffs = sortDropoffsByDistance(pickupCoords, dropoffsWithCoords)
 
-        return {
-          order_id: order.id,
-          dropoff_name: d.name,
-          dropoff_address: d.address,
-          dropoff_contact: d.contact,
-          dropoff_phone: d.phone,
-          latitude: coords?.lat,
-          longitude: coords?.lon,
-          sequence: index + 1, // Add sequence number
-          estimated_duration_mins: null, // Will be updated by travel time calculation
-        }
-      })
-    )
+// Create dropoff entries with sorted sequence
+const dropoffEntries = sortedDropoffs.map((d, index) => ({
+  order_id: order.id,
+  dropoff_name: d.name,
+  dropoff_address: d.address,
+  dropoff_contact: d.contact,
+  dropoff_phone: d.phone,
+  latitude: d.latitude,
+  longitude: d.longitude,
+  sequence: index + 1, // Sequence based on distance (nearest first)
+  estimated_duration_mins: null, // Will be updated by travel time calculation
+}))
 
     if (dropoffEntries.length > 0) {
       const { error: dropoffError } = await supabase
@@ -860,8 +915,7 @@ export default function CreateOrderForm({ trackingId }: { trackingId: string }) 
     }
 
     // Step 5: Calculate and store travel times
-   const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
-    
+ const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, sortedDropoffs)
    // Step 6: Send order confirmation email
     if (form.email) {
       try {
