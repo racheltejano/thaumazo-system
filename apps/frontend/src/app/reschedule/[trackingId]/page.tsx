@@ -218,7 +218,7 @@ export default function RescheduleOrderPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-lg p-8 text-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading order details...</p>
@@ -230,7 +230,7 @@ export default function RescheduleOrderPage() {
   // Error state
   if (error && !order) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
           <div className="text-center">
             <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
@@ -251,8 +251,8 @@ export default function RescheduleOrderPage() {
   // Success state
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
           <div className="text-center">
             <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
               <CheckCircle className="w-12 h-12 text-green-600" />
@@ -263,8 +263,8 @@ export default function RescheduleOrderPage() {
             <p className="text-gray-600 mb-2">
               Your order has been reopened and scheduled for:
             </p>
-            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
-              <p className="text-lg font-semibold text-green-800">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4 mb-6">
+              <p className="text-lg font-semibold text-orange-800">
                 📅 {new Date(pickupDate).toLocaleDateString('en-US', { 
                   weekday: 'long', 
                   year: 'numeric', 
@@ -281,7 +281,7 @@ export default function RescheduleOrderPage() {
             </p>
             <button
               onClick={() => router.push(`/track/${order?.tracking_id}`)}
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="w-full px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
             >
               Track Your Order
             </button>
@@ -293,37 +293,45 @@ export default function RescheduleOrderPage() {
 
   // Main form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-lg mb-6 p-6">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back
-          </button>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Reschedule Your Order
-              </h1>
-              <p className="text-gray-600">
-                Tracking ID: <span className="font-mono font-semibold text-blue-600">
-                  {order?.tracking_id}
-                </span>
-              </p>
+        <div className="bg-white rounded-xl shadow-2xl mb-6 overflow-hidden">
+          <div className="bg-white px-6 py-5 border-b border-gray-200">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              Back
+            </button>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800 mb-">
+                  Reschedule Your Order
+                </h1>
+                <p className="text-gray-600">
+                  Tracking ID: <span className="font-semibold text-orange-600 font-mono">
+                    {order?.tracking_id}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Status: <span className="inline-block px-2 py-1 bg-gray-500 text-white rounded-full text-xs font-medium">
+                    {order?.status === 'cancelled' ? 'CANCELLED' : 'ORDER PLACED'}
+                  </span>
+                </p>
+              </div>
+              <Calendar className="w-16 h-16 text-orange-600" />
             </div>
-            <Calendar className="w-16 h-16 text-blue-600" />
           </div>
+
         </div>
 
         {/* Info Alert */}
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Important Information</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
+        <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4 mb-6">
+          <h3 className="font-semibold text-orange-900 mb-2">ℹ️ Important Information</h3>
+          <ul className="text-sm text-orange-800 space-y-1">
             {order?.status === 'cancelled' && (
               <li>• Your order will change from "Cancelled" to "Order Placed"</li>
             )}
@@ -334,8 +342,8 @@ export default function RescheduleOrderPage() {
         </div>
 
         {/* Current Order Info */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Order Details</h2>
+        <div className="bg-white rounded-xl shadow-2xl p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">📝Current Order Details</h2>
           <div className="grid md:grid-cols-2 gap-4 text-sm">
             <div className="flex items-start">
               <span className="text-gray-600 w-32">Client:</span>
@@ -345,7 +353,7 @@ export default function RescheduleOrderPage() {
             </div>
             <div className="flex items-start">
               <span className="text-gray-600 w-32">Status:</span>
-              <span className={`font-medium ${order?.status === 'cancelled' ? 'text-red-600' : 'text-blue-600'}`}>
+              <span className={`font-medium ${order?.status === 'cancelled' ? 'text-red-600' : 'text-orange-600'}`}>
                 {order?.status === 'cancelled' ? 'Cancelled' : 'Order Placed'}
               </span>
             </div>
@@ -365,121 +373,123 @@ export default function RescheduleOrderPage() {
         </div>
 
         {/* Reschedule Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-6 space-y-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">New Schedule Details</h2>
+<form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-2xl overflow-hidden">
+          <div className="p-6 space-y-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">🔄 New Schedule Details</h2>
 
-          {error && (
-            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start">
-              <AlertCircle className="h-5 w-5 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-red-800">{error}</p>
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start">
+                <AlertCircle className="h-5 w-5 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
+
+            {/* Pickup Date & Time */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="inline h-4 w-4 mr-1" />
+                  New Pickup Date *
+                </label>
+                <input
+                  type="date"
+                  value={pickupDate}
+                  min={getMinDate()}
+                  onChange={(e) => setPickupDate(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Clock className="inline h-4 w-4 mr-1" />
+                  New Pickup Time (PH Time) *
+                </label>
+                <input
+                  type="time"
+                  value={pickupTime}
+                  onChange={(e) => setPickupTime(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
             </div>
-          )}
 
-          {/* Pickup Date & Time */}
-          <div className="grid md:grid-cols-2 gap-6">
+            {/* Delivery Window (Optional) */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Delivery Window Start (Optional)
+                </label>
+                <input
+                  type="time"
+                  value={deliveryWindowStart}
+                  onChange={(e) => setDeliveryWindowStart(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Delivery Window End (Optional)
+                </label>
+                <input
+                  type="time"
+                  value={deliveryWindowEnd}
+                  onChange={(e) => setDeliveryWindowEnd(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Special Instructions */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="inline h-4 w-4 mr-1" />
-                New Pickup Date *
+                Special Instructions (Optional)
               </label>
-              <input
-                type="date"
-                value={pickupDate}
-                min={getMinDate()}
-                onChange={(e) => setPickupDate(e.target.value)}
+              <textarea
+                value={specialInstructions}
+                onChange={(e) => setSpecialInstructions(e.target.value)}
+                placeholder="Any special instructions for the driver..."
+                rows={3}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+              />
+            </div>
+
+            {/* Reason for Rescheduling */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for Rescheduling *
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Please explain why you're rescheduling this order..."
+                rows={4}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Clock className="inline h-4 w-4 mr-1" />
-                New Pickup Time (PH Time) *
-              </label>
-              <input
-                type="time"
-                value={pickupTime}
-                onChange={(e) => setPickupTime(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <p className="text-xs text-gray-500 mt-1">
+                This will be logged for our records
+              </p>
             </div>
           </div>
 
-          {/* Delivery Window (Optional) */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Delivery Window Start (Optional)
-              </label>
-              <input
-                type="time"
-                value={deliveryWindowStart}
-                onChange={(e) => setDeliveryWindowStart(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Delivery Window End (Optional)
-              </label>
-              <input
-                type="time"
-                value={deliveryWindowEnd}
-                onChange={(e) => setDeliveryWindowEnd(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Special Instructions */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Special Instructions (Optional)
-            </label>
-            <textarea
-              value={specialInstructions}
-              onChange={(e) => setSpecialInstructions(e.target.value)}
-              placeholder="Any special instructions for the driver..."
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-
-          {/* Reason for Rescheduling */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Reason for Rescheduling *
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Please explain why you're rescheduling this order..."
-              rows={4}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              This will be logged for our records
-            </p>
-          </div>
-
-          {/* Submit Button */}
-          <div className="flex gap-4 pt-4">
+          {/* Footer */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex gap-3">
             <button
               type="button"
               onClick={() => router.back()}
               disabled={submitting}
-              className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+              className="flex-1 px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !pickupDate || !pickupTime || !reason.trim()}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="flex-1 px-6 py-2.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-all duration-200 font-semibold shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {submitting ? (
                 <>
