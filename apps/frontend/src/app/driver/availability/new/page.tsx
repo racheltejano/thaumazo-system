@@ -82,7 +82,10 @@ export default function DriverAvailabilityForm() {
   const [checkingExisting, setCheckingExisting] = useState(false)
 
   useEffect(() => {
+    // Use the selected date directly as the week start (assuming user picks Sunday)
+    // Or find the Sunday of the week containing the selected date
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 })
+    
     const days = Array.from({ length: 7 }, (_, i) => {
       const date = addDays(weekStart, i)
       return {
@@ -96,7 +99,62 @@ export default function DriverAvailabilityForm() {
     
     // Check for existing entries when week changes
     checkExistingEntries(weekStart)
+    loadExistingAvailability(weekStart)
   }, [selectedDate])
+
+  const loadExistingAvailability = async (weekStart: Date) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
+    const weekStartUTC = createUTCFromPHTime(format(weekStart, 'yyyy-MM-dd'), '00:00')
+    const weekEndUTC = createUTCFromPHTime(format(weekEnd, 'yyyy-MM-dd'), '23:59')
+
+    const { data, error } = await supabase
+      .from('driver_availability')
+      .select('*')
+      .eq('driver_id', user.id)
+      .gte('start_time', weekStartUTC.toISOString())
+      .lte('start_time', weekEndUTC.toISOString())
+
+    if (!error && data) {
+      setWeekData(prev => prev.map(d => {
+        const existing = data.find(avail => {
+          const availDate = new Date(avail.start_time)
+          availDate.setHours(availDate.getHours() + 8) // Convert to PH time
+          return availDate.toISOString().split('T')[0] === d.day
+        })
+
+        if (existing) {
+          // Check if unavailable
+          if (existing.title?.includes('Unavailable')) {
+            const reason = existing.title.split(' - ')[1]?.toLowerCase().replace(/\s/g, '')
+            return {
+              ...d,
+              available: false,
+              unavailableReason: reason || '',
+              shift: ''
+            }
+          }
+
+          // Find matching shift preset
+          const matchingShift = Object.entries(SHIFT_PRESETS).find(([_, preset]) => 
+            existing.title?.includes(preset.label)
+          )
+
+          if (matchingShift) {
+            return {
+              ...d,
+              shift: matchingShift[0] as keyof typeof SHIFT_PRESETS,
+              available: true
+            }
+          }
+        }
+
+        return d
+      }))
+    }
+  }
 
   const checkExistingEntries = async (weekStart: Date) => {
     setCheckingExisting(true)
@@ -156,6 +214,23 @@ export default function DriverAvailabilityForm() {
     setWeekData(prev =>
       prev.map(d => (d.day === day ? { ...d, unavailableReason: reason } : d))
     )
+  }
+
+  // Helper to check if a day is in the past or today
+  const isDayPastOrToday = (dayString: string) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const dayDate = new Date(dayString)
+    dayDate.setHours(0, 0, 0, 0)
+    return dayDate <= today
+  }
+
+  const isToday = (dayString: string) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const dayDate = new Date(dayString)
+    dayDate.setHours(0, 0, 0, 0)
+    return dayDate.getTime() === today.getTime()
   }
 
   const totalHours = weekData.reduce((acc, d) => {
@@ -336,9 +411,15 @@ export default function DriverAvailabilityForm() {
         <input
           type="date"
           value={format(selectedDate, 'yyyy-MM-dd')}
-          onChange={(e) => setSelectedDate(new Date(e.target.value))}
+          onChange={(e) => {
+            const selected = new Date(e.target.value + 'T12:00:00') // Add time to avoid timezone issues
+            setSelectedDate(selected)
+          }}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
         />
+        <p className="text-xs text-gray-400 mt-1">
+          Week: {format(startOfWeek(selectedDate, { weekStartsOn: 1 }), 'MMM d')} - {format(endOfWeek(selectedDate, { weekStartsOn: 1 }), 'MMM d, yyyy')}
+        </p>
         
         {checkingExisting ? (
           <p className="text-xs text-gray-400 mt-2">Checking for existing entries...</p>
@@ -354,71 +435,106 @@ export default function DriverAvailabilityForm() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {weekData.map((d, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-xl shadow p-4 border border-gray-200 space-y-4"
-          >
-            <h2 className="text-lg font-semibold text-gray-700">
-              {new Date(d.day).toLocaleDateString(undefined, {
-                weekday: 'long',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </h2>
+        {weekData.map((d, i) => {
+          const isPastOrToday = isDayPastOrToday(d.day)
+          const isTodayDay = isToday(d.day)
+          const isPast = isPastOrToday && !isTodayDay
 
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={d.available}
-                onChange={(e) => handleAvailabilityToggle(d.day, e.target.checked)}
-                className="accent-orange-500"
-              />
-              Available
-            </label>
+          return (
+            <div
+              key={i}
+              className={`bg-white rounded-xl shadow p-4 border space-y-4 relative ${
+                isPastOrToday ? 'border-gray-300 opacity-60' : 'border-gray-200'
+              }`}
+            >
+              {isTodayDay && (
+                <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded">
+                  TODAY
+                </div>
+              )}
 
-            {d.available ? (
-              <>
-                <select
-                  value={d.shift}
-                  onChange={(e) =>
-                    handleShiftChange(d.day, e.target.value as keyof typeof SHIFT_PRESETS)
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  <option value="">-- Select Shift --</option>
-                  {Object.entries(SHIFT_PRESETS).map(([key, s]) => (
-                    <option key={key} value={key}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-                {d.shift && (
-                  <p className="text-xs text-gray-500">
-                    {SHIFT_PRESETS[d.shift].hours * 2} time slots will be created
+              <h2 className="text-lg font-semibold text-gray-700">
+                {new Date(d.day).toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </h2>
+
+              {isPastOrToday ? (
+                <div className="text-center py-4 space-y-2">
+                  <p className="text-sm font-medium text-gray-600">
+                    {isTodayDay ? 'Day has already started' : 'Day has passed'}
                   </p>
-                )}
-              </>
-            ) : (
-              <select
-                value={d.unavailableReason}
-                onChange={(e) => handleReasonChange(d.day, e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              >
-                <option value="">-- Unavailable Reason --</option>
-                {UNAVAILABLE_REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r === 'vl'
-                      ? 'Vacation Leave'
-                      : r === 'sl'
-                      ? 'Sick Leave'
-                      : 'Out of Office'}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        ))}
+                  <p className="text-xs text-gray-500">Cannot modify availability</p>
+                  {d.shift && (
+                    <div className="mt-3 p-2 bg-gray-50 rounded">
+                      <p className="text-xs text-gray-600 font-medium">
+                        {SHIFT_PRESETS[d.shift].label}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {SHIFT_PRESETS[d.shift].hours} hours scheduled
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={d.available}
+                      onChange={(e) => handleAvailabilityToggle(d.day, e.target.checked)}
+                      className="accent-orange-500"
+                    />
+                    Available
+                  </label>
+
+                  {d.available ? (
+                    <>
+                      <select
+                        value={d.shift}
+                        onChange={(e) =>
+                          handleShiftChange(d.day, e.target.value as keyof typeof SHIFT_PRESETS)
+                        }
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      >
+                        <option value="">-- Select Shift --</option>
+                        {Object.entries(SHIFT_PRESETS).map(([key, s]) => (
+                          <option key={key} value={key}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                      {d.shift && (
+                        <p className="text-xs text-gray-500">
+                          {SHIFT_PRESETS[d.shift].hours * 2} time slots will be created
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <select
+                      value={d.unavailableReason}
+                      onChange={(e) => handleReasonChange(d.day, e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    >
+                      <option value="">-- Unavailable Reason --</option>
+                      {UNAVAILABLE_REASONS.map((r) => (
+                        <option key={r} value={r}>
+                          {r === 'vl'
+                            ? 'Vacation Leave'
+                            : r === 'sl'
+                            ? 'Sick Leave'
+                            : 'Out of Office'}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <div className="mt-6 text-right text-sm text-gray-600">
