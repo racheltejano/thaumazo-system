@@ -47,12 +47,12 @@ export default function DriverAvailabilityView() {
       const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 })
       const weekEnd = addDays(weekStart, 6)
 
-      const { data, error: fetchError } = await supabase
+        const { data, error: fetchError } = await supabase
         .from('driver_availability')
         .select('*')
         .eq('driver_id', user.id)
-        .gte('start_time', weekStart.toISOString().split('T')[0])
-        .lte('start_time', weekEnd.toISOString().split('T')[0])
+        .gte('start_time', weekStart.toISOString())
+        .lte('start_time', addDays(weekEnd, 1).toISOString())
         .order('start_time', { ascending: true })
 
       if (fetchError) {
@@ -64,10 +64,15 @@ export default function DriverAvailabilityView() {
       // Create week view with availability data
       const weekView: WeekView[] = Array.from({ length: 7 }, (_, i) => {
         const date = addDays(weekStart, i)
-        const dateString = date.toISOString().split('T')[0]
-        const availability = data?.find(entry => 
-          entry.start_time.split('T')[0] === dateString
-        ) || null
+        const dateString = format(date, 'yyyy-MM-dd')
+        
+        // Convert UTC start_time to PH time before comparing dates
+        const availability = data?.find(entry => {
+          const utcDate = new Date(entry.start_time)
+          const phDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000))
+          const phDateString = format(phDate, 'yyyy-MM-dd')
+          return phDateString === dateString
+        }) || null
 
         return {
           date,
@@ -213,7 +218,7 @@ export default function DriverAvailabilityView() {
               {day.availability && (
                 <div className="flex justify-between items-center text-xs text-gray-500">
                   <span>
-                    Added: {format(new Date(day.availability.created_at), 'MMM d, h:mm a')}
+                    Added: {format(new Date(new Date(day.availability.created_at).getTime() + (8 * 60 * 60 * 1000)), 'MMM d, h:mm a')}
                   </span>
                   <button
                     onClick={() => deleteAvailability(day.availability!.id)}
