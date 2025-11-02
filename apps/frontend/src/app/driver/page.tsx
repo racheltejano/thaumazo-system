@@ -402,91 +402,122 @@ export default function DriverCalendarPage() {
   }, [client, dropoffs])
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    setStatusLoading(true)
-    console.log('🔄 Attempting to update order:', { orderId, newStatus })
-    
-    try {
-      // First, let's check if the user is authenticated
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (!user || userError) {
-        console.error('❌ User not authenticated:', userError)
-        alert('You must be logged in to update orders.')
-        return
-      }
-      console.log('✅ User authenticated:', user.id)
-
-      // Check if this order belongs to the current driver
-      const { data: orderCheck, error: checkError } = await supabase
-        .from('orders')
-        .select('id, tracking_id, driver_id, status')
-        .eq('id', orderId)
-        .single()
-
-      if (checkError) {
-        console.error('❌ Error checking order:', checkError)
-        alert('Failed to verify order: ' + checkError.message)
-        return
-      }
-
-      if (!orderCheck) {
-        console.error('❌ Order not found:', orderId)
-        alert('Order not found.')
-        return
-      }
-
-      if (orderCheck.driver_id !== user.id) {
-        console.error('❌ Order does not belong to current driver:', {
-          orderDriverId: orderCheck.driver_id,
-          currentUserId: user.id
-        })
-        alert('You can only update your own orders.')
-        return
-      }
-
-      console.log('✅ Order verification passed:', orderCheck)
-
-      // Now attempt the update
-      const { data, error } = await supabase
-        .from('orders')
-        .update({ 
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId)
-        .select()
-
-      if (error) {
-        console.error('❌ Supabase update error:', error)
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        })
-        alert('Failed to update order status: ' + error.message)
-      } else {
-        console.log('✅ Update successful:', data)
-        alert('Order status updated successfully!')
-        
-        // Update the selected order state immediately
-        if (selectedOrder) {
-          setSelectedOrder({
-            ...selectedOrder,
-            status: newStatus
-          })
-        }
-        
-        // Refresh the calendar data
-        await fetchDriverData()
-        setSelectedOrder(null)
-      }
-    } catch (err) {
-      console.error('❌ Unexpected error:', err)
-      alert('An unexpected error occurred while updating order status')
-    } finally {
-      setStatusLoading(false)
+  setStatusLoading(true)
+  console.log('🔄 Attempting to update order:', { orderId, newStatus })
+  
+  try {
+    // First, let's check if the user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (!user || userError) {
+      console.error('❌ User not authenticated:', userError)
+      alert('You must be logged in to update orders.')
+      return
     }
+    console.log('✅ User authenticated:', user.id)
+
+    // Check if this order belongs to the current driver
+    const { data: orderCheck, error: checkError } = await supabase
+      .from('orders')
+      .select('id, tracking_id, driver_id, status, client_id')
+      .eq('id', orderId)
+      .single()
+
+    if (checkError) {
+      console.error('❌ Error checking order:', checkError)
+      alert('Failed to verify order: ' + checkError.message)
+      return
+    }
+
+    if (!orderCheck) {
+      console.error('❌ Order not found:', orderId)
+      alert('Order not found.')
+      return
+    }
+
+    if (orderCheck.driver_id !== user.id) {
+      console.error('❌ Order does not belong to current driver:', {
+        orderDriverId: orderCheck.driver_id,
+        currentUserId: user.id
+      })
+      alert('You can only update your own orders.')
+      return
+    }
+
+    console.log('✅ Order verification passed:', orderCheck)
+
+    // Now attempt the update
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ 
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', orderId)
+      .select()
+
+    if (error) {
+      console.error('❌ Supabase update error:', error)
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      alert('Failed to update order status: ' + error.message)
+      return
+    }
+
+    console.log('✅ Order status update successful:', data)
+
+    // 📧 NEW: Send delivery & feedback email when order is delivered
+    if (newStatus === 'delivered' && client?.email) {
+      console.log('📧 Sending delivery completion & feedback email...')
+      
+      try {
+        const emailResponse = await fetch('/api/send-delivered-and-feedback-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: client.email,
+            trackingId: orderCheck.tracking_id,
+            contactPerson: client.contact_person
+          })
+        })
+
+        if (emailResponse.ok) {
+          console.log('✅ Delivery & feedback email sent successfully')
+          alert('✅ Order marked as delivered!\n📧 Client has been notified and invited to share feedback.')
+        } else {
+          console.warn('⚠️ Status updated but email failed to send')
+          alert('✅ Order marked as delivered.\n⚠️ However, the notification email failed to send.')
+        }
+      } catch (emailError) {
+        console.error('❌ Error sending delivery email:', emailError)
+        alert('✅ Order marked as delivered.\n⚠️ However, the notification email failed to send.')
+      }
+    } else {
+      alert(`✅ Order status updated to: ${newStatus.replace(/_/g, ' ').toUpperCase()}`)
+    }
+    
+    // Update the selected order state immediately
+    if (selectedOrder) {
+      setSelectedOrder({
+        ...selectedOrder,
+        status: newStatus
+      })
+    }
+    
+    // Refresh the calendar data
+    await fetchDriverData()
+    setSelectedOrder(null)
+
+  } catch (err) {
+    console.error('❌ Unexpected error:', err)
+    alert('An unexpected error occurred while updating order status')
+  } finally {
+    setStatusLoading(false)
   }
+}
 
   const handlePickupScanSuccess = async (orderId: string) => {
   console.log('✅ Pickup confirmed for order:', orderId)

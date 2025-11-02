@@ -30,7 +30,9 @@ type DriverEvent = {
 type Order = {
   id: string
   tracking_id: string
-  pickup_timestamp: string
+  pickup_timestamp: string | null 
+  pickup_date: string | null        
+  pickup_time: string | null  
   estimated_end_timestamp: string | null
   delivery_window_start: string | null
   delivery_window_end: string | null
@@ -125,22 +127,24 @@ export default function DriverCalendarPage() {
 
       // Fetch orders assigned to this driver
       const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          tracking_id,
-          pickup_timestamp,
-          estimated_end_timestamp,
-          delivery_window_start,
-          delivery_window_end,
-          special_instructions,
-          client_id,
-          status,
-          vehicle_type,
-          tail_lift_required,
-          driver_id
-        `)
-        .eq('driver_id', user.id)
+      .from('orders')
+      .select(`
+        id,
+        tracking_id,
+        pickup_timestamp,
+        pickup_date,
+        pickup_time,
+        estimated_end_timestamp,
+        delivery_window_start,
+        delivery_window_end,
+        special_instructions,
+        client_id,
+        status,
+        vehicle_type,
+        tail_lift_required,
+        driver_id
+      `)
+      .eq('driver_id', user.id)
 
       if (availError || orderError) {
         console.error('❌ Supabase error:', availError || orderError)
@@ -159,28 +163,47 @@ export default function DriverCalendarPage() {
       }))
 
       // Create order events
-      const ordEvents: DriverEvent[] = (orderData || []).map((o) => {
-        const pickupDateTime = new Date(o.pickup_timestamp)
-        let endDateTime = new Date(pickupDateTime)
-        
-        if (o.estimated_end_timestamp) {
-          endDateTime = new Date(o.estimated_end_timestamp)
-        } else if (o.delivery_window_end) {
-          const pickupDate = moment(o.pickup_timestamp).format('YYYY-MM-DD')
-          endDateTime = new Date(`${pickupDate}T${o.delivery_window_end}`)
-        } else {
-          endDateTime = new Date(pickupDateTime.getTime() + 2 * 60 * 60 * 1000)
-        }
+     const ordEvents: DriverEvent[] = (orderData || []).map((o) => {
+  let pickupDateTime: Date;
+  
+  // Try to use pickup_timestamp first (for inventory_staff orders)
+  if (o.pickup_timestamp) {
+    pickupDateTime = new Date(o.pickup_timestamp);
+  } 
+  // Fallback: combine pickup_date + pickup_time (for client_portal orders)
+  else if (o.pickup_date && o.pickup_time) {
+    // Combine date and time strings
+    pickupDateTime = moment.tz(
+      `${o.pickup_date} ${o.pickup_time}`, 
+      'Asia/Manila'
+    ).toDate();
+  } 
+  // Last resort: use current date (shouldn't happen)
+  else {
+    console.warn(`Order ${o.tracking_id} missing pickup timestamp/date`);
+    pickupDateTime = new Date();
+  }
+  
+  let endDateTime = new Date(pickupDateTime);
+  
+  if (o.estimated_end_timestamp) {
+    endDateTime = new Date(o.estimated_end_timestamp);
+  } else if (o.delivery_window_end) {
+    const pickupDate = moment(pickupDateTime).format('YYYY-MM-DD');
+    endDateTime = new Date(`${pickupDate}T${o.delivery_window_end}`);
+  } else {
+    endDateTime = new Date(pickupDateTime.getTime() + 2 * 60 * 60 * 1000);
+  }
 
-        return {
-          id: o.id,
-          title: `Tracking #${o.tracking_id}`,
-          start: pickupDateTime,
-          end: endDateTime,
-          type: 'order',
-          order: o,
-        }
-      })
+  return {
+    id: o.id,
+    title: `Tracking #${o.tracking_id}`,
+    start: pickupDateTime,
+    end: endDateTime,
+    type: 'order',
+    order: o,
+  };
+});
 
       setAvailabilityEvents(availEvents)
       setOrderEvents(ordEvents)
@@ -612,13 +635,27 @@ export default function DriverCalendarPage() {
                     </h4>
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Pickup Date:</span>
-                        <span className="text-gray-900">{formatDate(selectedOrder.pickup_timestamp)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Pickup Time:</span>
-                        <span className="text-gray-900">{formatTime(selectedOrder.pickup_timestamp)}</span>
-                      </div>
+  <span className="font-medium text-gray-700">Pickup Date:</span>
+  <span className="text-gray-900">
+    {selectedOrder.pickup_timestamp 
+      ? formatDate(selectedOrder.pickup_timestamp)
+      : selectedOrder.pickup_date 
+        ? formatDate(selectedOrder.pickup_date)
+        : 'N/A'
+    }
+  </span>
+</div>
+<div className="flex justify-between">
+  <span className="font-medium text-gray-700">Pickup Time:</span>
+  <span className="text-gray-900">
+    {selectedOrder.pickup_timestamp 
+      ? formatTime(selectedOrder.pickup_timestamp)
+      : selectedOrder.pickup_time 
+        ? selectedOrder.pickup_time
+        : 'N/A'
+    }
+  </span>
+</div>
                       {selectedOrder.delivery_window_start && (
                         <div className="flex justify-between">
                           <span className="font-medium text-gray-700">Delivery Window:</span>
