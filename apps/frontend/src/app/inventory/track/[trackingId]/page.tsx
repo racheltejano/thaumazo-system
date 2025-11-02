@@ -10,7 +10,7 @@ import { useDriverLocationSubscription } from '@/hooks/useDriverLocationSubscrip
 import TrackingHistory from '@/components/Client/TrackingHistory'
 import LiveTrackingMap from '@/components/Client/LiveTrackingMap'
 import { toast } from 'sonner'
-import { Navigation, Truck, Clock, ArrowLeft, Package } from 'lucide-react'
+import { Navigation, Truck, Clock, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
@@ -68,7 +68,6 @@ type Order = {
     entries: { time: string; label: string }[]
   }[]
   dropoffs: OrderDropoff[]
-  order_products: OrderProduct[]
   order_status_logs: OrderStatusLog[]
   mapUrl?: string
 }
@@ -250,7 +249,7 @@ export default function InventoryTrackingPage() {
         return
       }
 
-              const [driverData, fullClientData, dropoffs, orderProductsData] = await Promise.all([
+      const [driverData, fullClientData, dropoffs] = await Promise.all([
         rawOrder.driver_id
           ? supabase
               .from('profiles')
@@ -272,19 +271,6 @@ export default function InventoryTrackingPage() {
           .select('*')
           .eq('order_id', rawOrder.id)
           .order('sequence', { ascending: true }),
-
-        supabase
-          .from('order_products')
-          .select(`
-            quantity,
-            products (
-              name,
-              weight,
-              volume,
-              is_fragile
-            )
-          `)
-          .eq('order_id', rawOrder.id)
       ])
 
       const logsResponse = await supabase
@@ -342,7 +328,6 @@ export default function InventoryTrackingPage() {
         special_instructions: rawOrder.special_instructions,
         timeline,
         dropoffs: dropoffs.data || [],
-        order_products: orderProductsData.data || [],
         order_status_logs: rawLogs, 
         mapUrl,
         estimated_total_duration: rawOrder.estimated_total_duration || null,
