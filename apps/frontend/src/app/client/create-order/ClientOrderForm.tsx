@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { ArrowLeft, Package, MapPin, Clock, User, Truck } from 'lucide-react'
+import { usePricingCalculator, PriceBreakdown } from '@/components/PricingCalculator'
 
 // Initialize dayjs plugins
 dayjs.extend(utc)
@@ -54,7 +55,6 @@ type ClientOrderForm = {
   truck_type?: string
   tail_lift_required?: boolean
   special_instructions?: string
-  estimated_cost?: number
   pickup_latitude?: number
   pickup_longitude?: number
 }
@@ -74,7 +74,6 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     truck_type: '',
     tail_lift_required: false,
     special_instructions: '',
-    estimated_cost: 2500,
   })
   const [products, setProducts] = useState<Product[]>([])
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([
@@ -143,6 +142,16 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     // Convert to UTC and return ISO string
     return manilaDateTime.utc().toISOString()
   }
+
+  // Dynamic pricing calculator
+  const { estimatedCost, distanceBreakdown } = usePricingCalculator({
+    pickupLatitude: form.pickup_latitude,
+    pickupLongitude: form.pickup_longitude,
+    dropoffs,
+    orderProducts,
+    truckType: form.truck_type,
+    tailLiftRequired: form.tail_lift_required
+  })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -403,7 +412,14 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     setDropoffs(updated)
   }
 
-  const addDropoff = () => setDropoffs([...dropoffs, { name: '', address: '', contact: '', phone: '' }])
+  const addDropoff = () => {
+    setDropoffs([...dropoffs, { name: '', address: '', contact: '', phone: '' }])
+    setAddressValidation(prev => ({
+      ...prev,
+      dropoffs: [...prev.dropoffs, { isValid: false, isValidating: false }]
+    }))
+  }
+  
   const addOrderProduct = () => setOrderProducts([...orderProducts, { product_id: null, product_name: '', quantity: 1, isNewProduct: false, weight: undefined, volume: undefined, is_fragile: false }])
 
   const removeOrderProduct = (index: number) => {
@@ -431,7 +447,53 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     return null
   }
 
-  const calculateAndStoreTravelTimes = async (orderId: string, pickupCoords: any, dropoffsList: Dropoff[]) => {
+  // Sort dropoffs by distance from pickup (nearest first)
+  const sortDropoffsByDistance = (
+    pickupCoords: { lat: number; lon: number },
+    dropoffsList: Dropoff[]
+  ): Dropoff[] => {
+    // Calculate distance using Haversine formula
+    const calculateDistance = (
+      lat1: number,
+      lon1: number,
+      lat2: number,
+      lon2: number
+    ): number => {
+      const R = 6371 // Earth's radius in km
+      const dLat = (lat2 - lat1) * (Math.PI / 180)
+      const dLon = (lon2 - lon1) * (Math.PI / 180)
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) *
+          Math.cos(lat2 * (Math.PI / 180)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2)
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+      return R * c
+    }
+
+    // Filter dropoffs with valid coordinates and calculate distances
+    const dropoffsWithDistance = dropoffsList
+      .filter(d => d.latitude && d.longitude)
+      .map(d => ({
+        ...d,
+        distanceFromPickup: calculateDistance(
+          pickupCoords.lat,
+          pickupCoords.lon,
+          d.latitude!,
+          d.longitude!
+        )
+      }))
+
+    // Sort by distance (nearest first)
+    return dropoffsWithDistance.sort((a, b) => a.distanceFromPickup - b.distanceFromPickup)
+  }
+
+  const calculateAndStoreTravelTimes = async (
+    orderId: string, 
+    pickupCoords: { lat: number; lon: number }, 
+    dropoffsList: Dropoff[]
+  ) => {
     try {
       // Validate pickup coordinates
       if (!pickupCoords?.lat || !pickupCoords?.lon) {
@@ -440,7 +502,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       }
 
       // Filter dropoffs with valid coordinates
-      const validDropoffs = dropoffsList.filter(d => d.latitude && d.longitude)
+      const validDropoffs = dropoffsList.filter((d: Dropoff) => d.latitude && d.longitude)
       
       if (validDropoffs.length === 0) {
         console.log('No dropoffs with valid coordinates')
@@ -450,7 +512,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       // Build waypoints: pickup + all valid dropoffs
       const allPoints = [
         [pickupCoords.lon, pickupCoords.lat], // Pickup point
-        ...validDropoffs.map(d => [d.longitude, d.latitude]) // Dropoffs
+        ...validDropoffs.map((d: Dropoff) => [d.longitude, d.latitude]) // Dropoffs
       ]
 
       const waypoints = allPoints.map(([lon, lat]) => `${lon},${lat}`).join(';')
@@ -509,7 +571,6 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
             .from('order_dropoffs')
             .update({ 
               estimated_duration_mins: duration,
-              sequence: i + 1,
             })
             .match({
               order_id: orderId,
@@ -615,16 +676,16 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     console.log(`Pickup coordinates: ${JSON.stringify(pickupCoords)}`)
     
     // Validate that coordinates are available
-    if (!pickupCoords.lat || !pickupCoords.lon) {
+    if (!pickupCoords.lat || !pickupCoords.lon || isNaN(pickupCoords.lat) || isNaN(pickupCoords.lon)) {
       console.log(`⚠️ Missing pickup coordinates. Attempting to geocode again...`)
       const coords = await geocodeAddress(form.pickup_address)
-      if (coords) {
+      if (coords && !isNaN(coords.lat) && !isNaN(coords.lon)) {
         pickupCoords.lat = coords.lat
         pickupCoords.lon = coords.lon
         console.log(`✅ Successfully geocoded pickup address: ${coords.lat}, ${coords.lon}`)
       } else {
         console.log(`❌ Failed to geocode pickup address: ${form.pickup_address}`)
-        setError('Unable to get coordinates for pickup address. Please try a more general location.')
+        setError('Unable to get coordinates for pickup address. Please try a more general address.')
         setSubmitting(false)
         return
       }
@@ -684,6 +745,26 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
 
     console.log(`Client saved with ID: ${client.id}`)
     console.log('Client will be automatically linked to user account via trigger')
+
+    // Step 1.5: Save address to client_addresses table for future reference
+    if (pickupCoords?.lat && pickupCoords?.lon) {
+      const addressData = {
+        client_id: client.id,
+        address: form.pickup_address,
+        latitude: pickupCoords.lat,
+        longitude: pickupCoords.lon,
+        address_type: 'pickup'
+      }
+
+      const { error: addressError } = await supabase
+        .from('client_addresses')
+        .insert(addressData)
+
+      if (addressError) {
+        console.warn('Failed to save client address:', addressError)
+        // Don't fail the entire order for this, just log the warning
+      }
+    }
     
     // Step 2: Create order with combined timestamp
     console.log('Creating order...')
@@ -695,7 +776,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       vehicle_type: form.truck_type,
       tail_lift_required: form.tail_lift_required || false,
       special_instructions: form.special_instructions,
-      estimated_cost: form.estimated_cost,
+      estimated_cost: estimatedCost,
       status: 'order_placed',
       tracking_id: trackingId,
       estimated_total_duration: null, // Will be calculated and updated
@@ -749,6 +830,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
         if (productError) {
           console.log(`Product creation error: ${JSON.stringify(productError)}`)
           setError(`❌ Failed to create product "${op.product_name}": ${productError.message}`)
+          setSubmitting(false)
           return
         }
 
@@ -778,37 +860,50 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       if (orderProductError) {
         console.log(`Order product error: ${JSON.stringify(orderProductError)}`)
         setError(`❌ Failed to save order products: ${orderProductError.message}`)
+        setSubmitting(false)
         return
       } else {
         console.log(`${orderProductEntries.length} order products created`)
       }
     }
 
-    // Step 4: Create dropoffs with coordinates
+    // Step 4: Create dropoffs with coordinates and sort by distance
     console.log('Creating dropoffs with coordinates...')
-    const dropoffEntries = await Promise.all(
-      dropoffs.filter(d => d.address.trim()).map(async (d, index) => {
-        const coords = d.latitude && d.longitude
-          ? { lat: d.latitude, lon: d.longitude }
-          : await geocodeAddress(d.address)
-
-        if (!coords) {
-          console.log(`⚠️ No coordinates found for dropoff: ${d.address}`)
+    const dropoffsWithCoords = await Promise.all(
+      dropoffs.filter(d => d.address.trim()).map(async (d) => {
+        // Use existing coordinates or geocode if missing
+        let latitude = d.latitude
+        let longitude = d.longitude
+        
+        if (!latitude || !longitude) {
+          const coords = await geocodePhilippineAddress(d.address)
+          latitude = coords?.lat
+          longitude = coords?.lon
         }
-
+        
         return {
-          order_id: order.id,
-          dropoff_name: d.name,
-          dropoff_address: d.address,
-          dropoff_contact: d.contact,
-          dropoff_phone: d.phone,
-          latitude: coords?.lat,
-          longitude: coords?.lon,
-          sequence: index + 1, // Add sequence number
-          estimated_duration_mins: null, // Will be updated by travel time calculation
+          ...d,
+          latitude,
+          longitude,
         }
       })
     )
+
+    // Sort dropoffs by distance from pickup
+    const sortedDropoffs = sortDropoffsByDistance(pickupCoords, dropoffsWithCoords)
+
+    // Create dropoff entries with sorted sequence
+    const dropoffEntries = sortedDropoffs.map((d, index) => ({
+      order_id: order.id,
+      dropoff_name: d.name,
+      dropoff_address: d.address,
+      dropoff_contact: d.contact,
+      dropoff_phone: d.phone,
+      latitude: d.latitude,
+      longitude: d.longitude,
+      sequence: index + 1, // Sequence based on distance (nearest first)
+      estimated_duration_mins: null, // Will be updated by travel time calculation
+    }))
 
     if (dropoffEntries.length > 0) {
       const { error: dropoffError } = await supabase
@@ -818,6 +913,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       if (dropoffError) {
         console.log(`Dropoff error: ${JSON.stringify(dropoffError)}`)
         setError(`❌ Failed to create dropoffs: ${dropoffError.message}`)
+        setSubmitting(false)
         return
       } else {
         console.log(`${dropoffEntries.length} dropoffs created`)
@@ -825,7 +921,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     }
 
     // Step 5: Calculate and store travel times
-    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, dropoffs)
+    const travelTimeResult = await calculateAndStoreTravelTimes(order.id, pickupCoords, sortedDropoffs)
     
     if (travelTimeResult.success) {
       console.log(`🎉 Order created successfully with travel time data!`)
@@ -833,6 +929,88 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
     } else {
       console.log(`⚠️ Order created but travel time calculation failed: ${travelTimeResult.reason}`)
       // Note: We don't treat this as a fatal error since the order was created successfully
+    }
+
+    // Step 6: Send order confirmation email
+    if (clientProfile?.email) {
+      try {
+        const emailResponse = await fetch('/api/send-order-confirmation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: clientProfile.email,
+            trackingId: trackingId,
+            orderDetails: {
+              contactPerson: `${clientProfile.first_name} ${clientProfile.last_name}`,
+              businessName: clientProfile.business_name || '',
+              contactNumber: clientProfile.contact_number,
+              pickupAddress: form.pickup_address,
+              pickupDate: form.pickup_date,
+              pickupTime: form.pickup_time,
+              truckType: form.truck_type,
+              estimatedCost: estimatedCost,
+              specialInstructions: form.special_instructions,
+              products: orderProducts.map(op => ({
+                name: op.isNewProduct ? op.product_name : products.find(p => p.id === op.product_id)?.name || 'Unknown',
+                quantity: op.quantity,
+                weight: op.weight,
+                isFragile: op.is_fragile,
+              })),
+              dropoffs: dropoffs.map(d => ({
+                address: d.address,
+                contact: d.contact,
+                phone: d.phone,
+              })),
+            },
+          }),
+        })
+
+        if (!emailResponse.ok) {
+          console.warn('Failed to send order confirmation email')
+        } else {
+          console.log('✅ Order confirmation email sent successfully')
+        }
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError)
+        // Don't fail the order creation if email fails
+      }
+    }
+
+    // Step 7: Notify all dispatchers about new order
+    try {
+      // Get all dispatcher user IDs
+      const { data: dispatchers, error: dispatcherError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'dispatcher')
+
+      if (dispatcherError) {
+        console.error('Failed to fetch dispatchers:', dispatcherError)
+      } else if (dispatchers && dispatchers.length > 0) {
+        // Create notification for each dispatcher
+        const notifications = dispatchers.map(dispatcher => ({
+          user_id: dispatcher.id,
+          order_id: order.id,
+          title: 'New Order Created',
+          message: 'Click here to assign a driver and schedule delivery',
+          type: 'order',
+          read: false,
+          link: '/dispatcher/calendar',
+        }))
+
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert(notifications)
+
+        if (notificationError) {
+          console.error('Failed to create notifications:', notificationError)
+        } else {
+          console.log(`✅ Created notifications for ${dispatchers.length} dispatchers`)
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to create dispatcher notifications:', notificationError)
+      // Don't fail order creation if notifications fail
     }
 
     console.log('Order submission completed successfully!')
@@ -1017,7 +1195,7 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-sm text-gray-700">Product #{i + 1}</h3>
               {orderProducts.length > 1 && (
-                                  <button type="button" onClick={() => removeOrderProduct(i)} className="text-sm text-red-600 hover:underline">x Remove</button>
+                <button type="button" onClick={() => removeOrderProduct(i)} className="text-sm text-red-600 hover:underline">x Remove</button>
               )}
             </div>
             
@@ -1127,12 +1305,49 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-sm text-gray-700">Drop-off #{i + 1}</h3>
               {dropoffs.length > 1 && (
-                                  <button type="button" onClick={() => setDropoffs(dropoffs.filter((_, idx) => idx !== i))} className="text-sm text-red-600 hover:underline">x Remove</button>
+                <button type="button" onClick={() => setDropoffs(dropoffs.filter((_, idx) => idx !== i))} className="text-sm text-red-600 hover:underline">x Remove</button>
               )}
             </div>
             <input value={d.name} onChange={e => updateDropoff(i, 'name', e.target.value)} placeholder="Recipient Name" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
-            <input value={d.address} onChange={e => updateDropoff(i, 'address', e.target.value)} onBlur={e => handleDropoffBlur(i, e.target.value)} placeholder="Address*" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
-            {d.latitude && d.longitude && (
+            <div className="relative">
+              <input 
+                value={d.address} 
+                onChange={e => updateDropoff(i, 'address', e.target.value)} 
+                onBlur={e => handleDropoffBlur(i, e.target.value)} 
+                placeholder="Address*" 
+                className={`border p-3 w-full rounded text-gray-900 pr-10 ${
+                  addressValidation.dropoffs[i]?.isValidating 
+                    ? 'border-yellow-400 bg-yellow-50' 
+                    : addressValidation.dropoffs[i]?.isValid 
+                    ? 'border-green-400 bg-green-50' 
+                    : fieldsTouched.dropoffs[i] && d.address.trim() && !addressValidation.dropoffs[i]?.isValid
+                    ? 'border-red-400 bg-red-50'
+                    : 'border-gray-400'
+                }`}
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                {addressValidation.dropoffs[i]?.isValidating && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+                )}
+                {!addressValidation.dropoffs[i]?.isValidating && addressValidation.dropoffs[i]?.isValid && (
+                  <span className="text-green-600">✓</span>
+                )}
+                {!addressValidation.dropoffs[i]?.isValidating && fieldsTouched.dropoffs[i] && d.address.trim() && !addressValidation.dropoffs[i]?.isValid && (
+                  <span className="text-red-600">x</span>
+                )}
+              </div>
+            </div>
+            {addressValidation.dropoffs[i]?.coordinates && (
+              <div className="text-xs text-green-600 mt-1">
+                📍 Coordinates: {addressValidation.dropoffs[i]?.coordinates?.lat.toFixed(6)}, {addressValidation.dropoffs[i]?.coordinates?.lon.toFixed(6)}
+              </div>
+            )}
+            {fieldsTouched.dropoffs[i] && d.address.trim() && !addressValidation.dropoffs[i]?.isValid && !addressValidation.dropoffs[i]?.isValidating && (
+              <div className="text-xs text-red-600 mt-1">
+                x Unable to geocode this address. Please try a more general location.
+              </div>
+            )}
+            {d.latitude && d.longitude && addressValidation.dropoffs[i]?.isValid && (
               <div className="relative w-full h-40 my-2 rounded overflow-hidden shadow">
                 <Image src={getMapboxMapUrl(d.latitude, d.longitude)} alt="Drop-off Map" layout="fill" objectFit="cover" />
               </div>
@@ -1158,7 +1373,15 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
           Tail Lift Required
         </label>
         <textarea name="special_instructions" value={form.special_instructions || ''} onChange={handleChange} placeholder="Special Instructions" className="border border-gray-400 p-3 w-full rounded text-gray-900" />
-        <p className="text-sm text-gray-700">Estimated Cost: ₱{form.estimated_cost?.toFixed(2)}</p>
+        <PriceBreakdown
+          pickupLatitude={form.pickup_latitude}
+          pickupLongitude={form.pickup_longitude}
+          dropoffs={dropoffs}
+          orderProducts={orderProducts}
+          truckType={form.truck_type}
+          tailLiftRequired={form.tail_lift_required}
+          estimatedCost={estimatedCost}
+        />
       </fieldset>
 
       <button 
@@ -1174,4 +1397,4 @@ export default function ClientOrderForm({ clientProfile }: ClientOrderFormProps)
       </button>
     </form>
   )
-} 
+}
