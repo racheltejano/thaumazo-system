@@ -9,6 +9,7 @@ const SHIFT_PRESETS = {
   morning: { label: 'Morning (8AM–12PM)', start: '08:00', end: '12:00', hours: 4 },
   afternoon: { label: 'Afternoon (1PM–5PM)', start: '13:00', end: '17:00', hours: 4 },
   night: { label: 'Night (8PM–12AM)', start: '20:00', end: '00:00', hours: 4 },
+  graveyard: { label: 'Graveyard (8PM–5AM)', start: '20:00', end: '05:00', hours: 9 },
   full_day: { label: 'Full Day (8AM–5PM)', start: '08:00', end: '17:00', hours: 9 },
 }
 
@@ -225,7 +226,8 @@ export default function DriverAvailabilityForm() {
         console.log('🌍 UTC Time:', startTime.toISOString())
         console.log('---')
         
-        if (shift.end === '00:00') {
+        // Handle shifts that end on the next day (midnight or graveyard)
+        if (shift.end === '00:00' || (shift.start > shift.end)) {
           const nextDay = new Date(d.day)
           nextDay.setDate(nextDay.getDate() + 1)
           endTime = createUTCFromPHTime(nextDay.toISOString().split('T')[0], shift.end)
