@@ -38,7 +38,9 @@ type WeatherData = {
 type Order = {
   id: string
   tracking_id: string
-  pickup_timestamp: string
+  pickup_timestamp: string | null
+  pickup_date: string | null        
+  pickup_time: string | null    
   estimated_end_timestamp: string | null
   delivery_window_start: string | null
   delivery_window_end: string | null
@@ -201,6 +203,8 @@ export default function DriverCalendarPage() {
           id,
           tracking_id,
           pickup_timestamp,
+          pickup_date,     
+          pickup_time, 
           estimated_end_timestamp,
           delivery_window_start,
           delivery_window_end,
@@ -241,19 +245,34 @@ export default function DriverCalendarPage() {
 
       // Create order events - parse UTC timestamps and convert to Manila time
       const orderEvents: DriverEvent[] = (orderData || []).map((o) => {
-        // Parse UTC timestamp and convert to Manila time
-        const pickupDateTime = moment.tz(o.pickup_timestamp, 'UTC').tz('Asia/Manila').toDate()
+        let pickupDateTime: Date;
+        
+        // Try to use pickup_timestamp first (for inventory_staff orders)
+        if (o.pickup_timestamp) {
+          pickupDateTime = moment.tz(o.pickup_timestamp, 'UTC').tz('Asia/Manila').toDate()
+        } 
+        // Fallback: combine pickup_date + pickup_time (for client_portal orders)
+        else if (o.pickup_date && o.pickup_time) {
+          pickupDateTime = moment.tz(
+            `${o.pickup_date} ${o.pickup_time}`, 
+            'Asia/Manila'
+          ).toDate();
+        } 
+        // Last resort: use current date (shouldn't happen)
+        else {
+          console.warn(`Order ${o.tracking_id} missing pickup timestamp/date`);
+          pickupDateTime = new Date();
+        }
+        
         let endDateTime = new Date(pickupDateTime)
         
         // Use estimated_end_timestamp if available, otherwise fall back to delivery window or add 2 hours
         if (o.estimated_end_timestamp) {
           endDateTime = moment.tz(o.estimated_end_timestamp, 'UTC').tz('Asia/Manila').toDate()
         } else if (o.delivery_window_end) {
-          // Extract date from pickup_timestamp (in Manila time) and combine with delivery_window_end time
-          const pickupDate = moment.tz(o.pickup_timestamp, 'UTC').tz('Asia/Manila').format('YYYY-MM-DD')
+          const pickupDate = moment(pickupDateTime).format('YYYY-MM-DD')
           endDateTime = moment.tz(`${pickupDate}T${o.delivery_window_end}`, 'Asia/Manila').toDate()
         } else {
-          // Default: add 2 hours to pickup time
           endDateTime = new Date(pickupDateTime.getTime() + 2 * 60 * 60 * 1000)
         }
 
@@ -911,11 +930,25 @@ return (
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-700">Pickup Date:</span>
-                      <span className="text-gray-900">{formatDate(selectedOrder.pickup_timestamp)}</span>
+                      <span className="text-gray-900">
+                        {selectedOrder.pickup_timestamp 
+                          ? formatDate(selectedOrder.pickup_timestamp)
+                          : selectedOrder.pickup_date 
+                            ? formatDate(selectedOrder.pickup_date)
+                            : 'N/A'
+                        }
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-700">Pickup Time:</span>
-                      <span className="text-gray-900">{formatTime(selectedOrder.pickup_timestamp)}</span>
+                      <span className="text-gray-900">
+                        {selectedOrder.pickup_timestamp 
+                          ? formatTime(selectedOrder.pickup_timestamp)
+                          : selectedOrder.pickup_time 
+                            ? selectedOrder.pickup_time
+                            : 'N/A'
+                        }
+                      </span>
                     </div>
                     {selectedOrder.delivery_window_start && (
                       <div className="flex justify-between">

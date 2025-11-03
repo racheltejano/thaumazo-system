@@ -72,41 +72,44 @@ export default function FeedbackPage() {
   }
 
   const handleSubmit = async () => {
-    if (formData.overallRating === 0) {
-      alert('Please provide an overall rating')
-      return
-    }
-
-    setSubmitting(true)
-
-    try {
-      const { error: insertError } = await supabase
-        .from('order_feedback')
-        .insert({
-          order_id: order.id,
-          tracking_id: trackingId,
-          client_email: order.clients.email,
-          client_name: order.clients.contact_person,
-          overall_rating: formData.overallRating,
-          driver_rating: formData.driverRating || null,
-          timeliness_rating: formData.timelinessRating || null,
-          communication_rating: formData.communicationRating || null,
-          comments: formData.comments || null,
-          suggestions: formData.suggestions || null,
-          would_recommend: formData.wouldRecommend
-        })
-
-      if (insertError) throw insertError
-
-      console.log('✅ Feedback submitted successfully')
-      setSubmitted(true)
-    } catch (err) {
-      console.error('Error submitting feedback:', err)
-      alert('Failed to submit feedback. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
+  if (formData.overallRating === 0) {
+    alert('Please provide an overall rating')
+    return
   }
+
+  setSubmitting(true)
+
+  try {
+    const { data, error: insertError } = await supabase
+      .from('order_feedback')
+      .insert({
+        order_id: order.id,
+        tracking_id: trackingId,
+        submitted_by_email: order.clients.email || null,
+        submitted_by_name: order.clients.contact_person || null,
+        rating: formData.overallRating,  // Changed from overall_rating
+        driver_rating: formData.driverRating || null,
+        timeliness_rating: formData.timelinessRating || null,
+        service_rating: formData.communicationRating || null,  // Changed from communication_rating
+        comment: formData.comments || null,  // Changed from comments (check your schema)
+        suggestions: formData.suggestions || null,
+        would_recommend: formData.wouldRecommend
+      })
+
+    if (insertError) {
+      console.error('Supabase error details:', insertError)
+      throw insertError
+    }
+
+    console.log('✅ Feedback submitted successfully', data)
+    setSubmitted(true)
+  } catch (err) {
+    console.error('Error submitting feedback:', err)
+    alert('Failed to submit feedback. Please try again.')
+  } finally {
+    setSubmitting(false)
+  }
+}
 
   const StarRating = ({ rating, onChange, label }: { rating: number; onChange: (r: number) => void; label: string }) => (
     <div className="mb-6">
