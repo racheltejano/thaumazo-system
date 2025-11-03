@@ -503,8 +503,11 @@ export default function TrackingPage() {
               orderId={order.id}
               trackingId={trackingId}
               currentStatus={order.status}
+              driverId={order.driver_id}
               onViewRoute={handleViewRoute}
               onDownloadReport={() => exportHtmlToPdf('report-page')}
+              clientEmail={order.client?.email}        
+              clientName={order.client?.contact_person} 
             />
           </div>
 
