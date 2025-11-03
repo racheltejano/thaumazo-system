@@ -4,7 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { InventoryItem, NewInventoryVariant } from '@/types/inventory.types';
-import { ArrowLeft, Save, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Save, HelpCircle, ChevronDown } from 'lucide-react';
+
+interface Supplier {
+  id: string;
+  name: string;
+  email: string | null;
+  phone_number: string | null;
+}
 
 export default function AddVariantPage() {
   const params = useParams();
@@ -37,6 +44,11 @@ export default function AddVariantPage() {
     supplierEmail: '',
     supplierNumber: ''
   });
+
+  // Supplier states
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(true); // Default to creating new
 
   // Success message states
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
@@ -98,9 +110,52 @@ export default function AddVariantPage() {
     setVariantDetails({ ...variantDetails, sku: newSku });
   };
 
+  // Function to get or create supplier
+  const getOrCreateSupplier = async () => {
+    try {
+      // Check if supplier exists by name
+      const { data: existingSupplier, error: searchError } = await supabase
+        .from('inventory_suppliers')
+        .select('*')
+        .eq('name', supplierInfo.supplierName.trim())
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        // PGRST116 is "no rows returned" - any other error is a problem
+        throw searchError;
+      }
+
+      if (existingSupplier) {
+        // Supplier exists, return its ID
+        return existingSupplier.id;
+      }
+
+      // Supplier doesn't exist, create new one
+      const { data: newSupplier, error: insertError } = await supabase
+        .from('inventory_suppliers')
+        .insert({
+          name: supplierInfo.supplierName.trim(),
+          email: supplierInfo.supplierEmail.trim() || null,
+          phone_number: supplierInfo.supplierNumber.trim() || null
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      return newSupplier.id;
+    } catch (err) {
+      console.error('Error in getOrCreateSupplier:', err);
+      throw err;
+    }
+  };
+
   useEffect(() => {
     if (itemId) {
       fetchItemData();
+      fetchSuppliers();
     }
   }, [itemId]);
 
@@ -154,6 +209,49 @@ export default function AddVariantPage() {
     }
   };
 
+  const fetchSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_suppliers')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching suppliers:', error);
+        return;
+      }
+
+      setSuppliers(data || []);
+    } catch (err) {
+      console.error('Error fetching suppliers:', err);
+    }
+  };
+
+  const handleSupplierChange = (supplierId: string) => {
+    if (supplierId === 'new') {
+      setIsCreatingNewSupplier(true);
+      setSelectedSupplierId('');
+      setSupplierInfo({
+        supplierName: '',
+        supplierEmail: '',
+        supplierNumber: ''
+      });
+    } else {
+      setIsCreatingNewSupplier(false);
+      setSelectedSupplierId(supplierId);
+      
+      // Auto-fill supplier details
+      const supplier = suppliers.find(s => s.id === supplierId);
+      if (supplier) {
+        setSupplierInfo({
+          supplierName: supplier.name,
+          supplierEmail: supplier.email || '',
+          supplierNumber: supplier.phone_number || ''
+        });
+      }
+    }
+  };
+
   const handleCreateVariant = async () => {
     if (!variantDetails.sku.trim() || !variantDetails.variantName.trim()) {
       setError('SKU and Variant Name are required');
@@ -176,18 +274,24 @@ export default function AddVariantPage() {
     setSaving(true);
     setError('');
 
-        try {
+    try {
       const stockQuantity = parseInt(inventoryPricing.stockQuantity) || 0;
       
-      // Create the variant
+      // Get or create supplier and get its ID
+      const supplierId = await getOrCreateSupplier();
+      
+      // Create the variant with both old and new supplier fields
       const { data: insertedVariant, error: variantError } = await supabase
         .from('inventory_items_variants')
         .insert([{
           item_id: itemId,
           variant_name: variantDetails.variantName,
+          // Keep old supplier fields for backward compatibility
           supplier_name: supplierInfo.supplierName,
           supplier_email: supplierInfo.supplierEmail || null,
           supplier_number: supplierInfo.supplierNumber || null,
+          // New supplier foreign key
+          supplier_id: supplierId,
           packaging_type: variantDetails.packagingType || null,
           cost_price: costPrice,
           selling_price: sellingPrice,
@@ -208,18 +312,18 @@ export default function AddVariantPage() {
 
       // If there's initial stock, record the movement
       if (stockQuantity > 0) {
-      const { error: movementError } = await supabase
-        .from('inventory_items_movements')
-        .insert({
-          variant_id: insertedVariant.id,
-          movement_type: 'stock_in',
-          quantity: stockQuantity,
-          old_stock: 0,
-          new_stock: stockQuantity,
-          price_at_movement: costPrice,
-          reference_type: 'initial_stock',
-          remarks: 'Initial stock'
-        });
+        const { error: movementError } = await supabase
+          .from('inventory_items_movements')
+          .insert({
+            variant_id: insertedVariant.id,
+            movement_type: 'stock_in',
+            quantity: stockQuantity,
+            old_stock: 0,
+            new_stock: stockQuantity,
+            price_at_movement: costPrice,
+            reference_type: 'initial_stock',
+            remarks: 'Initial stock'
+          });
 
         if (movementError) {
           console.error('Error recording initial stock movement:', movementError);
@@ -231,8 +335,8 @@ export default function AddVariantPage() {
       setShowSuccessMessage(true);
       setSaving(false);
     } catch (err) {
+      console.error('Error creating variant:', err);
       setError('An unexpected error occurred. Please try again.');
-    } finally {
       setSaving(false);
     }
   };
@@ -534,18 +638,44 @@ export default function AddVariantPage() {
           </div>
           
           <div className="p-6 space-y-6">
+            {/* Supplier Selection Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Supplier
+              </label>
+              <div className="relative">
+                <select
+                  value={isCreatingNewSupplier ? 'new' : selectedSupplierId}
+                  onChange={(e) => handleSupplierChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                  disabled={formDisabled}
+                >
+                  <option value="new">+ Create New Supplier</option>
+                  {suppliers.map(supplier => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Supplier Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Supplier Name {supplierInfo.supplierName.trim() === '' && <span className="text-red-500">*</span>}
+                  Supplier Name {(isCreatingNewSupplier && supplierInfo.supplierName.trim() === '') && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="text"
                   value={supplierInfo.supplierName}
                   onChange={(e) => setSupplierInfo({ ...supplierInfo, supplierName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={formDisabled || !isCreatingNewSupplier}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    !isCreatingNewSupplier || formDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                   placeholder="Supplier name"
-                  disabled={formDisabled}
                 />
               </div>
               
@@ -557,9 +687,11 @@ export default function AddVariantPage() {
                   type="email"
                   value={supplierInfo.supplierEmail}
                   onChange={(e) => setSupplierInfo({ ...supplierInfo, supplierEmail: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={formDisabled || !isCreatingNewSupplier}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    !isCreatingNewSupplier || formDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                   placeholder="supplier@example.com"
-                  disabled={formDisabled}
                 />
               </div>
               
@@ -571,12 +703,22 @@ export default function AddVariantPage() {
                   type="tel"
                   value={supplierInfo.supplierNumber}
                   onChange={(e) => setSupplierInfo({ ...supplierInfo, supplierNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={formDisabled || !isCreatingNewSupplier}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    !isCreatingNewSupplier || formDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                   placeholder="+63 912 345 6789"
-                  disabled={formDisabled}
                 />
               </div>
             </div>
+
+            {!isCreatingNewSupplier && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  ℹ️ Using existing supplier. Select "Create New Supplier" to add a different one.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -673,4 +815,4 @@ export default function AddVariantPage() {
       </div>
     </div>
   );
-} 
+}

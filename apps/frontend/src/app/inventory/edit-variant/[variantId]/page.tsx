@@ -17,8 +17,16 @@ import {
   Phone,
   AlertTriangle,
   Trash2,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react';
+
+interface Supplier {
+  id: string;
+  name: string;
+  email: string | null;
+  phone_number: string | null;
+}
 
 export default function EditVariantPage() {
   const params = useParams();
@@ -35,21 +43,22 @@ export default function EditVariantPage() {
   const [isVisible, setIsVisible] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Supplier states
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(false);
+
   // Dynamic back navigation
   const handleBackNavigation = () => {
-    // Check if we have a referrer stored in sessionStorage
     const referrer = sessionStorage.getItem('editVariantReferrer');
     
     if (referrer) {
-      // Clear the stored referrer
       sessionStorage.removeItem('editVariantReferrer');
       router.push(referrer);
     } else {
-      // Fallback to browser history
       if (window.history.length > 1) {
         router.back();
       } else {
-        // Default fallback
         router.push(`/inventory/item/${variant?.inventory_items?.id}`);
       }
     }
@@ -74,14 +83,32 @@ export default function EditVariantPage() {
   useEffect(() => {
     if (variantId) {
       fetchVariant();
+      fetchSuppliers();
     }
   }, [variantId]);
 
   useEffect(() => {
-    // Trigger animation after component mounts
     const timer = setTimeout(() => setIsVisible(true), 200);
     return () => clearTimeout(timer);
   }, []);
+
+  const fetchSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_suppliers')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching suppliers:', error);
+        return;
+      }
+
+      setSuppliers(data || []);
+    } catch (err) {
+      console.error('Error fetching suppliers:', err);
+    }
+  };
 
   const fetchVariant = async () => {
     setLoading(true);
@@ -132,6 +159,14 @@ export default function EditVariantPage() {
         size: data.size || ''
       });
 
+      // Set selected supplier if exists
+      if (data.supplier_id) {
+        setSelectedSupplierId(data.supplier_id);
+        setIsCreatingNewSupplier(false);
+      } else {
+        setIsCreatingNewSupplier(true);
+      }
+
     } catch (err) {
       setError('An unexpected error occurred');
     } finally {
@@ -147,12 +182,87 @@ export default function EditVariantPage() {
     setHasChanges(true);
   };
 
+  const handleSupplierChange = (supplierId: string) => {
+    if (supplierId === 'new') {
+      setIsCreatingNewSupplier(true);
+      setSelectedSupplierId('');
+      setFormData(prev => ({
+        ...prev,
+        supplier_name: '',
+        supplier_email: '',
+        supplier_number: ''
+      }));
+    } else {
+      setIsCreatingNewSupplier(false);
+      setSelectedSupplierId(supplierId);
+      
+      // Auto-fill supplier details
+      const supplier = suppliers.find(s => s.id === supplierId);
+      if (supplier) {
+        setFormData(prev => ({
+          ...prev,
+          supplier_name: supplier.name,
+          supplier_email: supplier.email || '',
+          supplier_number: supplier.phone_number || ''
+        }));
+      }
+    }
+    setHasChanges(true);
+  };
+
+  const getOrCreateSupplier = async () => {
+    try {
+      // If using existing supplier, return its ID
+      if (!isCreatingNewSupplier && selectedSupplierId) {
+        return selectedSupplierId;
+      }
+
+      // Check if supplier exists by name
+      const { data: existingSupplier, error: searchError } = await supabase
+        .from('inventory_suppliers')
+        .select('*')
+        .eq('name', formData.supplier_name.trim())
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        throw searchError;
+      }
+
+      if (existingSupplier) {
+        return existingSupplier.id;
+      }
+
+      // Create new supplier
+      const { data: newSupplier, error: insertError } = await supabase
+        .from('inventory_suppliers')
+        .insert({
+          name: formData.supplier_name.trim(),
+          email: formData.supplier_email.trim() || null,
+          phone_number: formData.supplier_number.trim() || null
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      return newSupplier.id;
+    } catch (err) {
+      console.error('Error in getOrCreateSupplier:', err);
+      throw err;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
 
     try {
+      // Get or create supplier
+      const supplierId = await getOrCreateSupplier();
+
       const updateData = {
         variant_name: formData.variant_name,
         sku: formData.sku,
@@ -161,9 +271,12 @@ export default function EditVariantPage() {
         current_stock: formData.current_stock ? parseInt(formData.current_stock) : 0,
         packaging_type: formData.packaging_type,
         is_fragile: formData.is_fragile,
+        // Keep old supplier fields for backward compatibility
         supplier_name: formData.supplier_name,
         supplier_email: formData.supplier_email,
         supplier_number: formData.supplier_number,
+        // New supplier foreign key
+        supplier_id: supplierId,
         color: formData.color,
         size: formData.size,
         updated_at: new Date().toISOString()
@@ -180,12 +293,11 @@ export default function EditVariantPage() {
         return;
       }
 
-      // Navigate back to the item details page
       router.push(`/inventory/item/${variant?.inventory_items?.id}`);
       
     } catch (err) {
+      console.error('Error updating variant:', err);
       setError('An unexpected error occurred');
-    } finally {
       setSaving(false);
     }
   };
@@ -221,7 +333,6 @@ export default function EditVariantPage() {
         return;
       }
 
-      // Navigate back to the item details page
       router.push(`/inventory/item/${variant?.inventory_items?.id}`);
       
     } catch (err) {
@@ -241,7 +352,6 @@ export default function EditVariantPage() {
     setDeleteCountdown(10);
   };
 
-  // Countdown effect
   useEffect(() => {
     if (showDeleteConfirm && deleteCountdown > 0) {
       const timer = setTimeout(() => {
@@ -485,8 +595,6 @@ export default function EditVariantPage() {
                   />
                 </div>
               </div>
-
-
             </div>
           </div>
 
@@ -500,45 +608,88 @@ export default function EditVariantPage() {
             </div>
 
             <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                {/* Supplier Selection Dropdown */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supplier Name
+                    Select Supplier
                   </label>
-                  <input
-                    type="text"
-                    value={formData.supplier_name}
-                    onChange={(e) => handleInputChange('supplier_name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Supplier company name"
-                  />
+                  <div className="relative">
+                    <select
+                      value={isCreatingNewSupplier ? 'new' : selectedSupplierId}
+                      onChange={(e) => handleSupplierChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                    >
+                      <option value="new">+ Create New Supplier</option>
+                      {suppliers.map(supplier => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supplier Email
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.supplier_email}
-                    onChange={(e) => handleInputChange('supplier_email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="supplier@example.com"
-                  />
+                {/* Supplier Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Supplier Name {isCreatingNewSupplier && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.supplier_name}
+                      onChange={(e) => handleInputChange('supplier_name', e.target.value)}
+                      disabled={!isCreatingNewSupplier}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        !isCreatingNewSupplier ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
+                      placeholder="Supplier company name"
+                      required={isCreatingNewSupplier}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Supplier Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.supplier_email}
+                      onChange={(e) => handleInputChange('supplier_email', e.target.value)}
+                      disabled={!isCreatingNewSupplier}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        !isCreatingNewSupplier ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
+                      placeholder="supplier@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Supplier Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.supplier_number}
+                      onChange={(e) => handleInputChange('supplier_number', e.target.value)}
+                      disabled={!isCreatingNewSupplier}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        !isCreatingNewSupplier ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
+                      placeholder="+63 912 345 6789"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supplier Phone
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.supplier_number}
-                    onChange={(e) => handleInputChange('supplier_number', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="+63 912 345 6789"
-                  />
-                </div>
+                {!isCreatingNewSupplier && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      ℹ️ Using existing supplier. Select "Create New Supplier" to add a different one.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -580,6 +731,7 @@ export default function EditVariantPage() {
           {/* Action Buttons */}
           <div className="flex justify-end items-center gap-3 pt-6 border-t border-gray-200">
             <button
+              type="button"
               onClick={() => router.push(`/inventory/item/${variant?.inventory_items?.id}`)}
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
@@ -587,7 +739,7 @@ export default function EditVariantPage() {
             </button>
             
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={saving || !hasChanges}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
                 saving || !hasChanges
@@ -611,7 +763,6 @@ export default function EditVariantPage() {
               className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl relative"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close button */}
               <button
                 onClick={handleCloseModal}
                 className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 transition-colors"

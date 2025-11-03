@@ -152,6 +152,24 @@ const sidebarMenus: SidebarMenus = {
       ),
       href: '/inventory/add',
     },
+    {
+      label: 'Suppliers',
+      icon: (
+        <svg
+          width="24"
+          height="24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          <path d="M3 7h18M3 12h18M3 17h18" />
+          <circle cx="12" cy="5" r="2" />
+        </svg>
+      ),
+      href: '/inventory/suppliers',
+    },
+
   ],
   driver: [
   {
